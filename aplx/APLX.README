@@ -1,4 +1,13 @@
 TODO:
+0. Implement RLE
 1. Implement gray-scaling
 2. Implement fault-tolerance
 
+
+In this version, let's use this approach:
+1. The number of blocks is fixed:
+   in Spin3: 4 blocks
+   in Spin5: 48 blocks
+   Formerly, we use generic approach where the number can be changed
+   via SDP. But we rarely use this, so, to make life simple, we make
+   it fix now.
