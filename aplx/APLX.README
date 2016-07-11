@@ -5,9 +5,8 @@ TODO:
 
 
 In this version, let's use this approach:
-1. The number of blocks is fixed:
+1. The number of blocks is set with default:
    in Spin3: 4 blocks
    in Spin5: 48 blocks
-   Formerly, we use generic approach where the number can be changed
-   via SDP. But we rarely use this, so, to make life simple, we make
-   it fix now.
+   This value can be set with command sent via SDP_PORT_CONFIG.
+2. We'll use chain mechanism for all data sent via SDP

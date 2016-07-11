@@ -10,13 +10,22 @@ void initCheck()
 		if(ip!=253) {
 			io_printf(IO_STD, "Invalid target board!\n");
 			rt_error(RTE_ABORT);
+			spin1_exit(1);
 		}
 #else
 		if(ip != 1) {
 			io_printf(IO_STD, "Invalid target board!\n");
 			rt_error(RTE_ABORT);
+			spin1_exit(1);
 		}
 #endif
+	}
+
+	// check App-ID
+	if(sark_app_id() != SPINNVID_APP_ID) {
+		io_printf(IO_STD, "Invalid App-ID!\n");
+		rt_error(RTE_ABORT);
+		spin1_exit(1);
 	}
 }
 
@@ -29,10 +38,14 @@ void initRouter()
 	uint leader = (1 << (myCoreID+6));	// only for leadAp
 	uint workers = allRoute & ~leader;	// for other workers in the chip
 	uint dest;
+	ushort x, y, d;
 
+	/*-----------------------------------------------*/
+	/*--------- keys for intra-chip routing ---------*/
 	// first, set individual destination, assuming all 17-cores are available
 	uint e = rtr_alloc(17);
 	if(e==0) {
+		io_printf(IO_STD, "initRouter err!\n");
 		rt_error(RTE_ABORT);
 	} else {
 		// each destination core might have its own key association
@@ -40,6 +53,55 @@ void initRouter()
 		for(uint i=0; i<17; i++)
 			// starting from core-1 up to core-17
 			rtr_mc_set(e+i, i+1, 0xFFFFFFFF, (MC_CORE_ROUTE(i+1)));
+	}
+	// other broadcasting keys
+	e = rtr_alloc(2);
+	if(e==0)
+	{
+		io_printf(IO_STD, "initRouter err!\n");
+		rt_error(RTE_ABORT);
+	} else {
+		rtr_mc_set(e, MCPL_BCAST_INFO_KEY, 0xFFFFFFFF, workers); e++;
+		rtr_mc_set(e, MCPL_PING_REPLY, 0xFFFFFFFF, leader); e++;
+	}
+
+	/*-----------------------------------------------*/
+	/*--------- keys for inter-chip routing ---------*/
+	x = CHIP_X(sv->p2p_addr);
+	y = CHIP_Y(sv->p2p_addr);
+
+	// broadcasting from root node like:
+	// MCPL_BCAST_SEND_RESULT, MCPL_BCAST_*pixels and HOST_ACK
+	dest = leader;	// by default, go to leadAP, unless:
+#if(USING_SPIN==5)
+	if(x==y) {
+		if(x==0)
+			dest = 1 + (1 << 1) + (1 << 2);
+		else if(x<7)
+			dest += 1 + (1 << 1) + (1 << 2);
+	}
+	else if(x>y) {
+		d = x - y;
+		if(x<7 && d<4)
+			dest += 1;
+	}
+	else if(x<y) {
+		d = y - x;
+		if(d<3 && y<7)
+			dest += (1 << 2);
+	}
+#elif(USING_SPIN==3)
+	if(sv->p2p_addr==0)
+		dest = 1 + (1<<1) + (1<<2);
+#endif
+	e = rtr_alloc(2);
+	if(e==0)
+	{
+		io_printf(IO_STD, "initRouter err!\n");
+		rt_error(RTE_ABORT);
+	} else {
+		rtr_mc_set(e, MCPL_BCAST_NODES_INFO, 0xFFFFFFFF, dest); e++;
+		rtr_mc_set(e, MCPL_BCAST_OP_INFO, 0xFFFFFFFF, dest); e++;
 	}
 }
 

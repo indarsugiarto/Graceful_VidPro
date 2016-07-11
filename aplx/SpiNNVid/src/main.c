@@ -12,6 +12,11 @@ void c_main(void)
 				// but only leadAp (chip <0,0>) will react on incoming SDP
 
 	if(leadAp) {
+
+        // register timer callback for misc. debugging by leadAp
+        spin1_set_timer_tick(TIMER_TICK_PERIOD_US);
+        spin1_callback_on(TIMER_TICK, hTimer, PRIORITY_TIMER);
+
 		// only leadAp: prepare chip-level image block information
 		blkInfo = sark_xalloc(sv->sysram_heap, sizeof(block_info_t),
 							  sark_app_id(), ALLOC_LOCK);
@@ -20,8 +25,11 @@ void c_main(void)
 			rt_error(RTE_ABORT);
 		}
 		else {
-			// let's setup basic block info to block non-node chips:
-			blkInfo->maxBlock = 0;
+            // let's setup basic/default block info:
+            // blkInfo->maxBlock = 0;   // the old version, to prevent chip(s)
+                                        // to be used for node(s)
+            blkInfo->maxBlock = get_def_Nblocks();
+            blkInfo->nodeBlockID = get_block_id();
 			initImage();	// some of blkInfo are initialized there
 		}
 

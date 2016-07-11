@@ -5,16 +5,31 @@
 // leadAp can use it to count the reply packet from workers.
 uchar get_Nworkers()
 {
-
+	uchar i, nCores = sv->num_cpus, nApp = 0;
+	for(i=0; i<nCores; i++) {
+		if(sv->vcpu_base[i].app_id == SPINNVID_APP_ID) {
+			if(sv->vcpu_base[i].cpu_state >= CPU_STATE_RUN &&
+			   sv->vcpu_base[i].cpu_state < CPU_STATE_EXIT)
+				nApp++;
+		}
+	}
+	return nApp;
 }
 
-void printWID(uint None, uint Neno)
+// get default number of block for different board
+uchar get_def_Nblocks()
 {
-	io_printf(IO_BUF, "Total workers = %d\n", workers.tAvailable);
-	for(uint i=0; i<workers.tAvailable; i++)
-		io_printf(IO_BUF, "wID-%d is core-%d\n", i, workers.wID[i]);
+	ushort N;
+#if(USING_SPIN==3)
+	N = 4;
+#else
+	N = 48;
+#endif
+	return N;
 }
 
+// get_block_id() will use sv->p2p_addr to determine the
+// default node-ID for the current chip
 uchar get_block_id()
 {
 	uchar N;
@@ -47,3 +62,11 @@ uchar get_block_id()
 #endif
 	return N;
 }
+
+void printWID(uint None, uint Neno)
+{
+	io_printf(IO_BUF, "Total workers = %d\n", workers.tAvailable);
+	for(uint i=0; i<workers.tAvailable; i++)
+		io_printf(IO_BUF, "wID-%d is core-%d\n", i, workers.wID[i]);
+}
+
