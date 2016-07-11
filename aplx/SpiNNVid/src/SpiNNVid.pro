@@ -13,7 +13,10 @@ INCLUDEPATH += /opt/spinnaker_tools_134/include
 
 DISTFILES += \
     Makefile \
-    ../../APLX.README
+    ../../APLX.README \
+    ../../tester/testBlockInfo.py \
+    ../../tester/testWorkLoad.py \
+    ../../tester/testMyWID.py
 
 HEADERS += \
     SpiNNVid.h

@@ -28,9 +28,17 @@ void c_main(void)
             // let's setup basic/default block info:
             // blkInfo->maxBlock = 0;   // the old version, to prevent chip(s)
                                         // to be used for node(s)
-            blkInfo->maxBlock = get_def_Nblocks();
-            blkInfo->nodeBlockID = get_block_id();
+			blkInfo->myX = CHIP_X(sv->p2p_addr);
+			blkInfo->myY = CHIP_Y(sv->p2p_addr);
 			initImage();	// some of blkInfo are initialized there
+#ifdef USE_FIX_NODES
+			blkInfo->maxBlock = get_def_Nblocks();
+			blkInfo->nodeBlockID = get_block_id();
+#else
+			// then we need to wait configuration via SDP
+			blkInfo->maxBlock = 0;		// hence, unused chip will be disabled
+			blkInfo->nodeBlockID = 255;
+#endif
 		}
 
 		// only leadAp (chip <0,0> responsible for SDP comm
@@ -41,28 +49,40 @@ void c_main(void)
 		workers.tAvailable = 1;
 		workers.subBlockID = 0;	// leadAp has task ID-0
 
-		nodeCntr = 0;
+		// nodeCntr = 0;
 		initRouter();
 		initIPTag();
 
 		// then say hello so that we know if we run the correct version
 		if(sv->p2p_addr==0) {
-			io_printf(IO_STD, "SpiNNVid-v%d.%d for Spin%d\n",
+#ifdef USE_FIX_NODES
+			io_printf(IO_BUF, "[FIX_NODES] SpiNNVid-v%d.%d for Spin%d\n",
 					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
+#else
+			io_printf(IO_BUF, "[CONFIGURABLE] SpiNNVid-v%d.%d for Spin%d\n",
+					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
+#endif
 		}
-
-		// then trigger worker-ID collection
-		// NOTE: during run time, leadAp may broadcast wID collection for fault-tolerance!
-		blkInfo->Nworkers = get_Nworkers();
-		spin1_schedule_callback(initIDcollection, TRUE, 0, PRIORITY_PROCESSING);
 
 		// wait for other cores to be ready, otherwise they might
 		// not respond to first broadcast for requesting wID
 		sark_delay_us(500000);
+
+		// then trigger worker-ID collection
+		// NOTE: during run time, leadAp may broadcast wID collection for fault-tolerance!
+		blkInfo->Nworkers = get_Nworkers();
+		//give_report(DEBUG_REPORT_NWORKERS, 1);
+		spin1_schedule_callback(initIDcollection, TRUE, 0, PRIORITY_PROCESSING);
+
 	}
 	else {
-		io_printf(IO_BUF, "SpiNNVid-v%d.%d for Spin%d\n",
-				  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
+#ifdef USE_FIX_NODES
+			io_printf(IO_STD, "[FIX_NODES] SpiNNVid-v%d.%d for Spin%d\n",
+					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
+#else
+			io_printf(IO_STD, "[CONFIGURABLE] SpiNNVid-v%d.%d for Spin%d\n",
+					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
+#endif
 	}
 
 	spin1_start(SYNC_NOWAIT);

@@ -63,10 +63,63 @@ uchar get_block_id()
 	return N;
 }
 
-void printWID(uint None, uint Neno)
+void give_report(uint reportType, uint target)
 {
-	io_printf(IO_BUF, "Total workers = %d\n", workers.tAvailable);
-	for(uint i=0; i<workers.tAvailable; i++)
-		io_printf(IO_BUF, "wID-%d is core-%d\n", i, workers.wID[i]);
-}
 
+	char *dest;
+	dest = target==0?IO_BUF:IO_STD;
+#if(DEBUG_LEVEL > 0)
+	// only for leadAp
+	if(leadAp) {
+		if(reportType==DEBUG_REPORT_WID) {
+			io_printf(dest, "Total workers = %d:\n---------------------\n", workers.tAvailable);
+			for(uint i=0; i<workers.tAvailable; i++)
+				io_printf(IO_BUF, "wID-%d is core-%d\n", i, workers.wID[i]);
+			io_printf(dest, "------------------------\n", workers.tAvailable);
+		}
+		else if(reportType==DEBUG_REPORT_NWORKERS) {
+			io_printf(dest, "Found %d active cores\n", get_Nworkers());
+		}
+		else if(reportType==DEBUG_REPORT_BLKINFO) {
+			io_printf(dest, "Node block info\n---------------------\n");
+			io_printf(dest, "Node-ID  = %d\n", blkInfo->nodeBlockID);
+			io_printf(dest, "MaxBlock = %d\n", blkInfo->maxBlock);
+			io_printf(dest, "Nworkers = %d\n", blkInfo->Nworkers);
+			if(blkInfo->opType==0) {
+				if(blkInfo->opFilter==0)
+					io_printf(dest, "OpType   = SOBEL no FILTER\n");
+				else
+					io_printf(dest, "OpType   = SOBEL with FILTER\n");
+			} else {
+				if(blkInfo->opFilter==0)
+					io_printf(dest, "OpType   = LAPLACE no FILTER\n");
+				else
+					io_printf(dest, "OpType   = LAPLACE with FILTER\n");
+			}
+			io_printf(dest, "wFrame   = %d\n", blkInfo->wImg);
+			io_printf(dest, "hFrame   = %d\n", blkInfo->hImg);
+			io_printf(dest, "------------------------\n", workers.tAvailable);
+		}
+	}
+	if(reportType==DEBUG_REPORT_MYWID) {
+		io_printf(dest, "My wID = %d\n", workers.subBlockID);
+	}
+	else if(reportType==DEBUG_REPORT_WLOAD) {
+		// send the workload via tag-3
+		// let's print the resulting workload
+		io_printf(IO_BUF, "blkID-%d, wID-%d, sp = %d, ep = %d\n",
+				  blkInfo->nodeBlockID, workers.subBlockID, workers.startLine, workers.endLine);
+		// printWLoad();
+		// cmd_rc: how many blocks in the network and what's current blockID
+		debugMsg.cmd_rc = (blkInfo->maxBlock << 8) + blkInfo->nodeBlockID;
+		// seq: how many workers in the block and what's current worker ID
+		debugMsg.seq = (blkInfo->Nworkers << 8) + workers.subBlockID;
+		debugMsg.arg1 = (workers.startLine << 16) + workers.endLine;
+		debugMsg.arg2 = (uint)workers.imgRIn;	// not important, just for check
+		debugMsg.arg3 = (uint)workers.imgOut1;	// not important
+		spin1_delay_us((blkInfo->nodeBlockID*17+workers.subBlockID)*100);
+
+		spin1_send_sdp_msg(&debugMsg, 10);
+	}
+#endif
+}

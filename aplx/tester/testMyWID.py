@@ -30,7 +30,8 @@ SDP_CMD_CONFIG_NETWORK 	= 1   # for setting up the network
 SDP_CMD_GIVE_REPORT	= 2
 
 DEBUG_REPORT_BLKINFO	= 3
-
+DEBUG_REPORT_MYWID	= 4
+DEBUG_REPORT_WLOAD	= 5
 
 Num_of_Blocks		= 3
 #Let's try this:
@@ -63,20 +64,8 @@ if __name__=='__main__':
     dc = DEF_LEADAP
     dax = 0
     day = 0
-    cmd = SDP_CMD_CONFIG_NETWORK
-    seq = 0
-    arg1 = 3	# use 3 nodes
-    arg2 = 0
-    arg3 = 0
-    # Let's create nodes order with format: [id0, x0, y0], [id1, x1, y1], ...
-    nodeList = [0,0,0,1,1,0,2,1,1]
-    ba = bytearray(nodeList)
-    print "Sending network configuration...",
-    sendSDP(flags, tag, dp, dc, dax, day, cmd, seq, arg1, arg2, arg3, ba)
-    print "done!"
-    # Afterwards, let's request the report
     cmd = SDP_CMD_GIVE_REPORT
-    seq = DEBUG_REPORT_BLKINFO
+    seq = DEBUG_REPORT_MYWID
     print "Requesting report...",
     sendSDP(flags, tag, dp, dc, dax, day, cmd, seq, 0, 0, 0, None)
     print "done!"

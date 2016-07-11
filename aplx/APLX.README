@@ -10,3 +10,11 @@ In this version, let's use this approach:
    in Spin5: 48 blocks
    This value can be set with command sent via SDP_PORT_CONFIG.
 2. We'll use chain mechanism for all data sent via SDP
+
+
+How to parallelize and decompress?
+1. R channel, G channel and B channel are sent in parallel, and reply message
+   is sent only once, when all channels have been received
+2. Upon receiving, core <0,0,1> will broadcast to core <xxx,xxx,2> for R channel,
+   to core <xxx,xxx,3> for G channel, and to core <xxx,xxx,4> for B channel
+   Hence, core 2,3 and 4 must maintain a special buffer before upload it to memory

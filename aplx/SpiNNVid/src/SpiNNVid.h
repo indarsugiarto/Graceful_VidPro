@@ -7,9 +7,16 @@
 #define MINOR_VERSION			1
 
 #define USING_SPIN				3	// 3 for spin3, 5 for spin5
+#define USE_FIX_NODES			// use 4 chips or 48 chips
 
+// Debugging and reporting definition
 //#define DEBUG_LEVEL				0	// no debugging message at all
 #define DEBUG_LEVEL				1
+#define DEBUG_REPORT_NWORKERS	1		// only leadAp
+#define DEBUG_REPORT_WID		2		// only leadAp
+#define DEBUG_REPORT_BLKINFO	3		// only leadAp
+#define DEBUG_REPORT_MYWID		4		// all cores
+#define DEBUG_REPORT_WLOAD		5		// all cores, report via tag-3
 
 // Basic spin1_api related
 #define PRIORITY_LOWEST         4
@@ -19,6 +26,7 @@
 #define PRIORITY_DMA			0
 #define PRIORITY_MCPL			-1
 
+#define DEF_SDP_TIMEOUT			10			// datasheet says 10 is enough
 #define SDP_TAG_REPLY			1
 #define SDP_UDP_REPLY_PORT		20001
 #define SDP_HOST_IP				0x02F0A8C0	// 192.168.240.2, dibalik!
@@ -36,11 +44,12 @@
 
 //#define SDP_CMD_CONFIG			1	// will be sent via SDP_PORT_CONFIG
 #define SDP_CMD_CONFIG_NETWORK  1   // for setting up the network
+#define SDP_CMD_GIVE_REPORT		2
 
 //#define SDP_CMD_CONFIG_CHAIN	11  // maybe we don't need it?
-#define SDP_CMD_PROCESS			2	// will be sent via SDP_PORT_CONFIG
-#define SDP_CMD_CLEAR			3	// will be sent via SDP_PORT_CONFIG
-#define SDP_CMD_ACK_RESULT		4
+#define SDP_CMD_PROCESS			3	// will be sent via SDP_PORT_CONFIG
+#define SDP_CMD_CLEAR			4	// will be sent via SDP_PORT_CONFIG
+#define SDP_CMD_ACK_RESULT		5
 
 
 #define SPINNVID_APP_ID			16
@@ -61,9 +70,24 @@
 #define MCPL_BCAST_INFO_KEY			0xbca50001	// for broadcasting ping and blkInfo
 #define MCPL_BCAST_OP_INFO          0xbca50002
 #define MCPL_BCAST_NODES_INFO       0xbca50003
+#define MCPL_BCAST_GET_WLOAD		0xbca50004	// trigger workers to compute workload
+#define MCPL_BCAST_FRAME_INFO		0xbca50005
+#define MCPL_BCAST_ALL_REPORT		0xbca50006	// the payload might contain specific reportType
+
 #define MCPL_PING_REPLY				0x1ead0001
 
-// special key with base value 0xbca5FFF
+// special key for core-2,3, and 4, the payload contains address of current sdp buffer
+#define MCPL_PROCEED_R_IMG_DATA		0xbca70002
+#define MCPL_PROCEED_G_IMG_DATA		0xbca70003
+#define MCPL_PROCEED_B_IMG_DATA		0xbca70004
+
+// special key with base value 0xbca?FFFF,
+// where ? can be 8 (for red), 9 (for green) and A (for blue),
+// and FFFF part contains information about dLen
+// if FFFF == 0000, then end of transmission
+#define MCPL_FWD_R_IMG_DATA			0xbca80000
+#define MCPL_FWD_G_IMG_DATA			0xbca90000
+#define MCPL_FWD_B_IMG_DATA			0xbcaA0000
 
 // special key for forwarding image configuration
 
@@ -78,6 +102,8 @@ typedef struct block_info {
 	uchar opType;			// 0==sobel, 1==laplace
 	uchar opFilter;			// 0==no filtering, 1==with filtering
 	uchar nodeBlockID;		// will be send by host
+	uchar myX;				// == CHIP_X(sv->p2p_addr)
+	uchar myY;				// == CHIP_Y(sv->p2p_addr)
 	uchar maxBlock;		// will be send by host
 	uchar Nworkers;			// number of workers, will be collected using get_Nworkers()
 	// then pointers to the image in SDRAM
@@ -110,15 +136,17 @@ typedef struct w_info {
 	// helper pointers
 	ushort wImg;		// just a copy of block_info_t.wImg
 	ushort hImg;		// just a copy of block_info_t.hImg
+
 	uchar *imgRIn;		// each worker has its own value of imgRIn --> workload base
 	uchar *imgGIn;		// idem
 	uchar *imgBIn;		// idem
 	uchar *imgOut1;		// idem
 	uchar *imgOut2;		// idem
 	uchar *imgOut3;		// idem
+
 	uchar *blkImgRIn;	// this will be shared among cores in the same chip
-	uchar *blkImgGIn;	// idem
-	uchar *blkImgBIn;	// idem
+	uchar *blkImgGIn;	// will be used when sending report to host-PC
+	uchar *blkImgBIn;	// hence, only leadAp needs it
 	uchar *blkImgOut1;	// idem
 	uchar *blkImgOut2;	// idem
 	uchar *blkImgOut3;	// idem
@@ -131,13 +159,20 @@ typedef struct chain {
 
 } chain_t;
 
+typedef struct fwdPkt {
+	uchar pxInfo[272];
+	ushort pxLen;
+} fwdPkt_t;
+
+fwdPkt_t fwdPktBuffer[3];	// for each channel
+
 #if(USING_SPIN==3)
 #define MAX_NODES       4
 #elif(USING_SPIN==5)
 #define MAX_NODES       48
 #endif
 
-ushort nodeCntr;				// to count, how many non-root nodes are present/active
+//ushort nodeCntr;				// to count, how many non-root nodes are present/active
 chain_t chips[MAX_NODES];
 
 block_info_t *blkInfo;			// general frame info stored in sysram, to be shared with workers
@@ -147,6 +182,7 @@ uint myCoreID;
 uchar *dtcmImgBuf;
 ushort pixelCntr;
 
+static volatile uchar chCntr = 0;		// channel counter, if it is 3, then send reply to host
 
 // SDP containers
 sdp_msg_t replyMsg;				// prepare the reply message
@@ -175,7 +211,13 @@ uchar get_block_id();			// get the block id, given the number of chips available
 
 void initIDcollection(uint withBlkInfo, uint Unused);
 void bcastWID(uint Unused, uint null);
-void printWID(uint None, uint Neno);
+
+void give_report(uint reportType, uint target);
+void computeWLoad(uint withReport, uint arg1);
+
+void processImgData(uint mBox, uint channel);
+void recvFwdImgData(uint pxData, uint pxLenCh);
+void decompress(uchar channel);
 
 void hTimer(uint tick, uint Unused);
 #endif // SPINNVID_H

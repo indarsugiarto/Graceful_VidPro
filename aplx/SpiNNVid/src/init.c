@@ -55,7 +55,7 @@ void initRouter()
 			rtr_mc_set(e+i, i+1, 0xFFFFFFFF, (MC_CORE_ROUTE(i+1)));
 	}
 	// other broadcasting keys
-	e = rtr_alloc(2);
+	e = rtr_alloc(3);
 	if(e==0)
 	{
 		io_printf(IO_STD, "initRouter err!\n");
@@ -63,7 +63,66 @@ void initRouter()
 	} else {
 		rtr_mc_set(e, MCPL_BCAST_INFO_KEY, 0xFFFFFFFF, workers); e++;
 		rtr_mc_set(e, MCPL_PING_REPLY, 0xFFFFFFFF, leader); e++;
+		rtr_mc_set(e, MCPL_BCAST_GET_WLOAD, 0xFFFFFFFF, allRoute); e++;
 	}
+
+	// special keys for core-2,3 and 4 to decompress data and forward to next nodes
+	uint c2 = 0x100;
+	uint c3 = 0x200;
+	uint c4 = 0x400;
+#if(USING_SPIN==5)
+	if(x==y) {
+		if(x==0) {
+			c2 = 1 + (1<<1) + (1<<2);
+			c3 = 1 + (1<<1) + (1<<2);
+			c4 = 1 + (1<<1) + (1<<2);
+		}
+		else if(x<7) {
+			c2 += 1 + (1<<1) + (1<<2);
+			c3 += 1 + (1<<1) + (1<<2);
+			c4 += 1 + (1<<1) + (1<<2);
+		}
+	}
+	else if(x>y) {
+		d = x - y;
+		if(x<7 && d<4) {
+			c2 += 1;
+			c3 += 1;
+			c4 += 1;
+		}
+	}
+	else if(x<y) {
+		d = y - x;
+		if(d<3 && y<7) {
+			c2 += (1<<2);
+			c3 += (1<<2);
+			c4 += (1<<2);
+		}
+	}
+#elif(USING_SPIN==3)
+	if(sv->p2p_addr==0) {
+		c2 = 1 + (1<<1) + (1<<2);
+		c3 = 1 + (1<<1) + (1<<2);
+		c4 = 1 + (1<<1) + (1<<2);
+	}
+#endif
+	e = rtr_alloc(6);
+	if(e==0)
+	{
+		io_printf(IO_STD, "initRouter err!\n");
+		rt_error(RTE_ABORT);
+	} else {
+		// the following keys should only be used in root node
+		// because the payload contains the address of sdp buffer
+		rtr_mc_set(e, MCPL_PROCEED_R_IMG_DATA, 0xFFFFFFFF, 0x100); e++;	// to core-2
+		rtr_mc_set(e, MCPL_PROCEED_G_IMG_DATA, 0xFFFFFFFF, 0x200); e++;	// to core-3
+		rtr_mc_set(e, MCPL_PROCEED_B_IMG_DATA, 0xFFFFFFFF, 0x400); e++;	// to core-4
+		// the following keys will be used for forwarding
+		rtr_mc_set(e, MCPL_FWD_R_IMG_DATA, 0xFFFF0000, c2); e++;
+		rtr_mc_set(e, MCPL_FWD_G_IMG_DATA, 0xFFFF0000, c3); e++;
+		rtr_mc_set(e, MCPL_FWD_B_IMG_DATA, 0xFFFF0000, c4); e++;
+	}
+
 
 	/*-----------------------------------------------*/
 	/*--------- keys for inter-chip routing ---------*/
@@ -94,7 +153,7 @@ void initRouter()
 	if(sv->p2p_addr==0)
 		dest = 1 + (1<<1) + (1<<2);
 #endif
-	e = rtr_alloc(2);
+	e = rtr_alloc(3);
 	if(e==0)
 	{
 		io_printf(IO_STD, "initRouter err!\n");
@@ -102,6 +161,38 @@ void initRouter()
 	} else {
 		rtr_mc_set(e, MCPL_BCAST_NODES_INFO, 0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_OP_INFO, 0xFFFFFFFF, dest); e++;
+		rtr_mc_set(e, MCPL_BCAST_FRAME_INFO, 0xFFFFFFFF, dest); e++;
+	}
+
+	/*-----------------------------------------------*/
+	/*------------ keys for all routing -------------*/
+	dest = allRoute;
+#if(USING_SPIN==5)
+	if(x==y) {
+		if(x<7)
+			dest += 1 + (1 << 1) + (1 << 2);
+	}
+	else if(x>y) {
+		d = x - y;
+		if(x<7 && d<4)
+			dest += 1;
+	}
+	else if(x<y) {
+		d = y - x;
+		if(d<3 && y<7)
+			dest += (1 << 2);
+	}
+#elif(USING_SPIN==3)
+	if(sv->p2p_addr==0)
+		dest += 1 + (1<<1) + (1<<2);
+#endif
+	e = rtr_alloc(1);
+	if(e==0)
+	{
+		io_printf(IO_STD, "initRouter err!\n");
+		rt_error(RTE_ABORT);
+	} else {
+		rtr_mc_set(e, MCPL_BCAST_ALL_REPORT, 0xFFFFFFFF, dest); e++;
 	}
 }
 
@@ -110,7 +201,8 @@ void initSDP()
 	// prepare the reply message
 	replyMsg.flags = 0x07;	//no reply
 	replyMsg.tag = SDP_TAG_REPLY;
-	replyMsg.srce_port = (SDP_PORT_CONFIG << 5) + myCoreID;
+	//replyMsg.srce_port = (SDP_PORT_CONFIG << 5) + myCoreID;
+	replyMsg.srce_port = (SDP_PORT_B_IMG_DATA << 5) + myCoreID;
 	replyMsg.srce_addr = sv->p2p_addr;
 	replyMsg.dest_port = PORT_ETH;
 	replyMsg.dest_addr = sv->eth_addr;
@@ -153,6 +245,10 @@ void initImage()
 	blkInfo->imgOut3 = (uchar *)IMG_O_BUFF3_BASE;
 	dtcmImgBuf = NULL;
 	pixelCntr = 0;  // for forwarding using MCPL
+
+	// just to make sure that forwarded packet buffer are empty/ready
+	for(uchar ch=0; ch<3; ch++)
+		fwdPktBuffer[ch].pxLen = 0;
 }
 
 void initIPTag()
