@@ -98,6 +98,7 @@ def decompress(ba):
                   result.append(ba[i] - 1)
              i += 2
         else:
+             result.append(val + 1)
              i += 1
     return result
 
