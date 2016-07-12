@@ -16,7 +16,8 @@ DISTFILES += \
     ../../APLX.README \
     ../../tester/testBlockInfo.py \
     ../../tester/testWorkLoad.py \
-    ../../tester/testMyWID.py
+    ../../tester/testMyWID.py \
+    ../../tester/testDecompressing.py
 
 HEADERS += \
     SpiNNVid.h
