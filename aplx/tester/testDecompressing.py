@@ -123,6 +123,7 @@ def sendSDP(flags, tag, dp, dc, dax, day, cmd, seq, arg1, arg2, arg3, bArray):
 
 
 def main():
+    # load already existing RGB files
     rba = compress(rCh)
     gba = compress(gCh)
     bba = compress(bCh)
