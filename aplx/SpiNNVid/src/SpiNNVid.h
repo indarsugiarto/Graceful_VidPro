@@ -3,13 +3,22 @@
 
 #include <spin1_api.h>
 
-#define MAJOR_VERSION			0
-#define MINOR_VERSION			1
+#define MAJOR_VERSION           0
+#define MINOR_VERSION           1
 
 #define USING_SPIN				3	// 3 for spin3, 5 for spin5
-#define USE_FIX_NODES			// use 4 chips or 48 chips
+#define USE_FIX_NODES               // use 4 chips or 48 chips
 
-// Debugging and reporting definition
+#if(USING_SPIN==3)
+#define MAX_NODES               4
+#elif(USING_SPIN==5)
+#define MAX_NODES               48
+#endif
+
+
+/*-----------------------------------------------------------------------------------*/
+/*-----------------------------------------------------------------------------------*/
+/*--------------------- Debugging and reporting definition --------------------------*/
 //#define DEBUG_LEVEL				0	// no debugging message at all
 #define DEBUG_LEVEL				1
 #define DEBUG_REPORT_NWORKERS	1		// only leadAp
@@ -18,7 +27,13 @@
 #define DEBUG_REPORT_MYWID		4		// all cores
 #define DEBUG_REPORT_WLOAD		5		// all cores, report via tag-3
 
-// Basic spin1_api related
+// We use timer to do some debugging facilities
+#define TIMER_TICK_PERIOD_US 	1000000
+
+
+/*-----------------------------------------------------------------------------------*/
+/*-----------------------------------------------------------------------------------*/
+/*----------------------------- Basic spin1_api related -----------------------------*/
 #define PRIORITY_LOWEST         4
 #define PRIORITY_TIMER			3
 #define PRIORITY_PROCESSING		2
@@ -54,27 +69,23 @@
 
 #define SPINNVID_APP_ID			16
 
-// Where will we put the frames
-#define IMG_R_BUFF0_BASE		0x61000000	// for storing R-channel
-#define IMG_G_BUFF0_BASE		0x62000000	// for storing G-channel
-#define IMG_B_BUFF0_BASE		0x63000000	// for storing B-channel
-#define IMG_O_BUFF1_BASE		0x64000000	// the result
-#define IMG_O_BUFF2_BASE		0x65000000	// optional: result after filtering
-#define IMG_O_BUFF3_BASE		0x66000000	// optional:
-
-// We use timer to do some debugging facilities
-#define TIMER_TICK_PERIOD_US 	1000000
-
+/*-----------------------------------------------------------------------------------*/
+/*-----------------------------------------------------------------------------------*/
+/*-------------------------- Parallel Processing Stuffs -----------------------------*/
 // Multicast packet key definition
-//we also has direct key to each core (see initRouter())
+// we also has direct key to each core (see initRouter())
+
+// mechanism for discovery:
 #define MCPL_BCAST_INFO_KEY			0xbca50001	// for broadcasting ping and blkInfo
-#define MCPL_BCAST_OP_INFO          0xbca50002
+#define MCPL_PING_REPLY				0x1ead0001
+
+// mechanism for broadcasting info
+#define MCPL_BCAST_OP_INFO          0xbca50002  // filtering & operator types
 #define MCPL_BCAST_NODES_INFO       0xbca50003
 #define MCPL_BCAST_GET_WLOAD		0xbca50004	// trigger workers to compute workload
 #define MCPL_BCAST_FRAME_INFO		0xbca50005
 #define MCPL_BCAST_ALL_REPORT		0xbca50006	// the payload might contain specific reportType
 
-#define MCPL_PING_REPLY				0x1ead0001
 
 // special key for core-2,3, and 4, the payload contains address of current sdp buffer
 #define MCPL_PROCEED_R_IMG_DATA		0xbca70002
@@ -94,6 +105,18 @@
 //special key (with values)
 
 
+/*-----------------------------------------------------------------------------------*/
+/*-----------------------------------------------------------------------------------*/
+/*-------------------------- Image Processing Stuffs --------------------------------*/
+// Where will we put the frames
+#define IMG_R_BUFF0_BASE		0x61000000	// for storing R-channel
+#define IMG_G_BUFF0_BASE		0x62000000	// for storing G-channel
+#define IMG_B_BUFF0_BASE		0x63000000	// for storing B-channel
+#define IMG_O_BUFF1_BASE		0x64000000	// the result
+#define IMG_O_BUFF2_BASE		0x65000000	// optional: result after filtering
+#define IMG_O_BUFF3_BASE		0x66000000	// optional:
+
+/*------------------------ Struct, Enum, Type definition ----------------------------*/
 // block info
 typedef struct block_info {
 	ushort wImg;
@@ -166,11 +189,15 @@ typedef struct fwdPkt {
 
 fwdPkt_t fwdPktBuffer[3];	// for each channel
 
-#if(USING_SPIN==3)
-#define MAX_NODES       4
-#elif(USING_SPIN==5)
-#define MAX_NODES       48
-#endif
+/*-----------------------------------------------------------------------------------*/
+/*-----------------------------------------------------------------------------------*/
+/*-------------------------- Global/Static Variables --------------------------------*/
+
+// SDP containers
+sdp_msg_t replyMsg;				// prepare the reply message
+sdp_msg_t resultMsg;			// prepare the result data
+sdp_msg_t debugMsg;				// and the debug data
+
 
 //ushort nodeCntr;				// to count, how many non-root nodes are present/active
 chain_t chips[MAX_NODES];
@@ -183,11 +210,6 @@ uchar *dtcmImgBuf;
 ushort pixelCntr;
 
 static volatile uchar chCntr = 0;		// channel counter, if it is 3, then send reply to host
-
-// SDP containers
-sdp_msg_t replyMsg;				// prepare the reply message
-sdp_msg_t resultMsg;			// prepare the result data
-sdp_msg_t debugMsg;				// and the debug data
 
 
 /*------------------------- Forward declarations ----------------------------*/
