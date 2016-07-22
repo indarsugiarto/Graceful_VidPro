@@ -11,7 +11,15 @@ void c_main(void)
 	initSDP();	// all cores need to send reportMsg dan debugMsg
 				// but only leadAp (chip <0,0>) will react on incoming SDP
 
-	if(leadAp) {
+	// Other initialization
+	initOther();	// it initialize: pixelCntr, fwdPktBuffer
+
+	// Currently, we fix to core-1 as the leader
+	//            so that we can use core-2, core-3 and core-4 for handling frames
+	//if(leadAp) {
+	if(myCoreID==1) {
+
+		// TODO: send notification to host, the coreID of leadAP
 
         // register timer callback for misc. debugging by leadAp
         spin1_set_timer_tick(TIMER_TICK_PERIOD_US);
@@ -23,6 +31,7 @@ void c_main(void)
 		if(blkInfo==NULL) {
 			io_printf(IO_BUF, "blkInfo alloc error!\n");
 			rt_error(RTE_ABORT);
+			spin1_exit(RTE_ABORT);
 		}
 		else {
             // let's setup basic/default block info:
@@ -70,12 +79,17 @@ void c_main(void)
 
 		// then trigger worker-ID collection
 		// NOTE: during run time, leadAp may broadcast wID collection for fault-tolerance!
+		// We begin by counting, how many workers are there, so that we can know exactly
+		// how many ping-reply is expected from workers
 		blkInfo->Nworkers = get_Nworkers();
-		//give_report(DEBUG_REPORT_NWORKERS, 1);
-		spin1_schedule_callback(initIDcollection, TRUE, 0, PRIORITY_PROCESSING);
 
+		//give_report(DEBUG_REPORT_NWORKERS, 1);
+		// send the ping command, AND followed by broadcasting blkInfo:
+		spin1_schedule_callback(initIDcollection, TRUE, 0, PRIORITY_PROCESSING);
+		// during run time, blkInfo is not necessary to broadcasted (it has the same content)
 	}
 	else {
+		// TODO: check if leadAp is running
 #ifdef USE_FIX_NODES
 			io_printf(IO_STD, "[FIX_NODES] SpiNNVid-v%d.%d for Spin%d\n",
 					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);

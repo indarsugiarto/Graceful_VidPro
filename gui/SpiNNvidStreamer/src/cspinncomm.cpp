@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QApplication>
 #include <QColor>
+#include <time.h>
 
 //for debugging
 #include <QFileDialog>
@@ -294,6 +295,10 @@ void cSpiNNcomm::sendImgLine(sdp_hdr_t h, uchar *pixel, quint16 len)
     sender->writeDatagram(sdp, ha, DEF_SEND_PORT);
 }
 
+/* Now we have to revise the frameIn() such that it send image data in ordered fashion:
+ * [red_chunk] [green_chunk] [blue_chunk] [red_chunk] [green_chunk] etc...
+ *
+ * */
 // The reply from SpiNNaker will be sent as reportMsg via tag-1 (SDP_TAG_REPLY). It
 // contains cmd_rc SDP_CMD_REPLY_HOST_SEND_IMG
 // Do you know why we cannot use scanline with uchar directly? See this:
@@ -361,7 +366,7 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 
 
 	// prepare the container
-	uchar rArray[4096];	//limited to 1024-wide frame
+	uchar rArray[4096];	//limited to 4096-wide frame
 	uchar gArray[4096];
 	uchar bArray[4096];
 	// and its pointer
@@ -390,7 +395,8 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 		rPtr = rArray;
 		gPtr = gArray;
 		bPtr = bArray;
-		// assumming colorful frame (not greyscale)
+
+		// we work only with color images!!!
 		remaining = wImg;
 		while(remaining > 0) {
 			sz = remaining > 256+16 ? 256+16:remaining;
@@ -422,3 +428,30 @@ void cSpiNNcomm::frameIn(const QImage &frame)
     sendImgLine(hdrb, NULL, 0);
 }
 
+/*-------------------- Helper functions ---------------------*/
+void cSpiNNcomm::giveDelay(quint32 ns)
+{
+	timespec ts, te;
+	quint32 dif;
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
+	do {
+		QApplication::processEvents();
+		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &te);
+		dif = elapsed(ts, te);
+	} while(dif < ns);
+}
+
+quint64 cSpiNNcomm::elapsed(timespec start, timespec end)
+{
+	quint64 result;
+	timespec temp;
+	if ((end.tv_nsec-start.tv_nsec)<0) {
+		temp.tv_sec = end.tv_sec-start.tv_sec-1;
+		temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+	} else {
+		temp.tv_sec = end.tv_sec-start.tv_sec;
+		temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+	}
+	result = temp.tv_sec*1000000000+temp.tv_nsec;
+	return result;
+}

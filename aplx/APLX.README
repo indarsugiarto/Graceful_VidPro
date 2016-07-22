@@ -1,6 +1,6 @@
 TODO:
-0. Implement RLE
-1. Implement gray-scaling
+0. Implement RLE: NO! It useless!!!
+1. Implement gray-scaling: converting RGB to grey
 2. Implement fault-tolerance
 
 
@@ -10,11 +10,42 @@ In this version, let's use this approach:
    in Spin5: 48 blocks
    This value can be set with command sent via SDP_PORT_CONFIG.
 2. We'll use chain mechanism for all data sent via SDP
+3. We decide to use colorful frames and let SpiNNaker convert to grey
 
+
+------------------------------------------------------------------------------------------
+How to achieve highest possible throughput using multi-core (3 cores?)
+host-PC must send the 3 color orderly every time, such as:
+
+[send_R_chunk] [send_G_chunk] [send_B_chunk] [send_R_chunk] [send_G_chunk] ...
+      1              2              3              4              5
+
+So that chunk-1 will be processed by core-2, chunk-2 will be processed by core-3,
+chunk-3 will be processed by core4, chunk-4 will be processed by core-2,
+chunk-5 will be processed by core-3, etc...
+
+(Jadi gantian dengan efek hampir paralel karena core 2,3,4 mungkin lambat dalam
+mengerjakan tugasnya).
+
+------------------------------------------------------------------------------------------
 
 How to parallelize and decompress?
-1. R channel, G channel and B channel are sent in parallel, and reply message
+xxx1xxx. R channel, G channel and B channel are sent in parallel, and reply message
    is sent only once, when all channels have been received
-2. Upon receiving, core <0,0,1> will broadcast to core <xxx,xxx,2> for R channel,
+   --> NO, HANDSHAKING VIA SDP IS SLOW !!!
+
+1. R channel, G channel and B channel are sent in parallel
+
+2. Upon receiving, core <0,0,1> will broadcast the sdp address to core <xxx,xxx,2> for R channel,
    to core <xxx,xxx,3> for G channel, and to core <xxx,xxx,4> for B channel
+   Step-1: core 2,3 and 4 will copy the sdp data locally
+   Step-2: the sdp is released
+   Step-3: core 2,3 and 4 will use dma to copy that buffer to SDRAM
+   Step-4: core 2,3 and 4 will broadcast the pixels to all external nodes
    Hence, core 2,3 and 4 must maintain a special buffer before upload it to memory
+
+   The key format for forwarding packet is:
+   // the key will contains which channel (base_key), total length of current packet (pxLen)
+   // and current length of the chunk (szpx)
+   key = base_key | (fwdPktBuffer[ch].pxLen < 4) | szpx;
+   where base_key is either 0xbca80000, 0xbca90000, or 0xbcaA0000

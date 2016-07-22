@@ -7,6 +7,8 @@
 #define MINOR_VERSION           1
 
 #define USING_SPIN				3	// 3 for spin3, 5 for spin5
+
+// if USE_FIX_NODES is used, the node configuration MUST be supplied in the beginning
 #define USE_FIX_NODES               // use 4 chips or 48 chips
 
 #if(USING_SPIN==3)
@@ -21,6 +23,7 @@
 /*--------------------- Debugging and reporting definition --------------------------*/
 //#define DEBUG_LEVEL				0	// no debugging message at all
 #define DEBUG_LEVEL				1
+// various report for debugging (send by host):
 #define DEBUG_REPORT_NWORKERS	1		// only leadAp
 #define DEBUG_REPORT_WID		2		// only leadAp
 #define DEBUG_REPORT_BLKINFO	3		// only leadAp
@@ -68,6 +71,12 @@
 
 
 #define SPINNVID_APP_ID			16
+
+// dma transfer
+#define DMA_TAG_STORE_FRAME		1
+
+
+
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
@@ -167,6 +176,7 @@ typedef struct w_info {
 	uchar *imgOut2;		// idem
 	uchar *imgOut3;		// idem
 
+	// NOTE: only leadAp needs the following variables (for sending result to host)
 	uchar *blkImgRIn;	// this will be shared among cores in the same chip
 	uchar *blkImgGIn;	// will be used when sending report to host-PC
 	uchar *blkImgBIn;	// hence, only leadAp needs it
@@ -182,12 +192,15 @@ typedef struct chain {
 
 } chain_t;
 
+
 typedef struct fwdPkt {
 	uchar pxInfo[272];
 	ushort pxLen;
 } fwdPkt_t;
 
 fwdPkt_t fwdPktBuffer[3];	// for each channel
+
+// Mungkin cara pakai fwdPkt kurang cepat, maka aku ganti pakai dtcmImgBuf aja...
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
@@ -206,8 +219,11 @@ block_info_t *blkInfo;			// general frame info stored in sysram, to be shared wi
 w_info_t workers;				// specific info each core should hold individually
 uchar needSendDebug;
 uint myCoreID;
-uchar *dtcmImgBuf;
-ushort pixelCntr;
+
+//uchar *dtcmImgBuf = NULL;
+
+uchar dtcmImgBuf[1600];			// one row of UXGA resolution
+ushort pixelCntr;				// how many pixel has been processed?
 
 static volatile uchar chCntr = 0;		// channel counter, if it is 3, then send reply to host
 
@@ -219,6 +235,7 @@ void initRouter();
 void initSDP();
 void initImage();
 void initIPTag();
+void initOther();
 
 // Event handlers
 void hMCPL(uint key, uint payload);
@@ -230,6 +247,9 @@ void initCheck();
 uchar get_Nworkers();			// leadAp might want to know, how many workers are active
 uchar get_def_Nblocks();
 uchar get_block_id();			// get the block id, given the number of chips available
+
+// processing
+void storeDtcmImgBuf(uint ch, uint Unused);
 
 void initIDcollection(uint withBlkInfo, uint Unused);
 void bcastWID(uint Unused, uint null);

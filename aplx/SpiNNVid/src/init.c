@@ -9,8 +9,8 @@ void initCheck()
 #if(USING_SPIN==3)
 		if(ip!=253) {
 			io_printf(IO_STD, "Invalid target board!\n");
-			rt_error(RTE_ABORT);
-			spin1_exit(1);
+			// rt_error(RTE_ABORT);
+			spin1_exit(RTE_ABORT);
 		}
 #else
 		if(ip != 1) {
@@ -24,9 +24,10 @@ void initCheck()
 	// check App-ID
 	if(sark_app_id() != SPINNVID_APP_ID) {
 		io_printf(IO_STD, "Invalid App-ID!\n");
-		rt_error(RTE_ABORT);
-		spin1_exit(1);
+		// rt_error(RTE_ABORT);
+		spin1_exit(RTE_ABORT);
 	}
+
 }
 
 /* initRouter() initialize MCPL routing table by leadAp. Normally, there are two keys:
@@ -64,6 +65,22 @@ void initRouter()
 		rtr_mc_set(e, MCPL_BCAST_INFO_KEY, 0xFFFFFFFF, workers); e++;
 		rtr_mc_set(e, MCPL_PING_REPLY, 0xFFFFFFFF, leader); e++;
 		rtr_mc_set(e, MCPL_BCAST_GET_WLOAD, 0xFFFFFFFF, allRoute); e++;
+	}
+
+	// special keys for core-2,3 and 4 in chip<0,0> sent by core-1
+	if(sv->p2p_addr==0) {
+		e = rtr_alloc(3);
+		if(e==0)
+		{
+			io_printf(IO_STD, "initRouter err!\n");
+			rt_error(RTE_ABORT);
+		} else {
+			// the following keys should only be used in root node
+			// because the payload contains the address of sdp buffer
+			rtr_mc_set(e, MCPL_PROCEED_R_IMG_DATA, 0xFFFFFFFF, 0x100); e++;	// to core-2
+			rtr_mc_set(e, MCPL_PROCEED_G_IMG_DATA, 0xFFFFFFFF, 0x200); e++;	// to core-3
+			rtr_mc_set(e, MCPL_PROCEED_B_IMG_DATA, 0xFFFFFFFF, 0x400); e++;	// to core-4
+		}
 	}
 
 	// special keys for core-2,3 and 4 to decompress data and forward to next nodes
@@ -106,17 +123,12 @@ void initRouter()
 		c4 = 1 + (1<<1) + (1<<2);
 	}
 #endif
-	e = rtr_alloc(6);
+	e = rtr_alloc(3);
 	if(e==0)
 	{
 		io_printf(IO_STD, "initRouter err!\n");
 		rt_error(RTE_ABORT);
 	} else {
-		// the following keys should only be used in root node
-		// because the payload contains the address of sdp buffer
-		rtr_mc_set(e, MCPL_PROCEED_R_IMG_DATA, 0xFFFFFFFF, 0x100); e++;	// to core-2
-		rtr_mc_set(e, MCPL_PROCEED_G_IMG_DATA, 0xFFFFFFFF, 0x200); e++;	// to core-3
-		rtr_mc_set(e, MCPL_PROCEED_B_IMG_DATA, 0xFFFFFFFF, 0x400); e++;	// to core-4
 		// the following keys will be used for forwarding
 		rtr_mc_set(e, MCPL_FWD_R_IMG_DATA, 0xFFFF0000, c2); e++;
 		rtr_mc_set(e, MCPL_FWD_G_IMG_DATA, 0xFFFF0000, c3); e++;
@@ -243,8 +255,11 @@ void initImage()
 	blkInfo->imgOut1 = (uchar *)IMG_O_BUFF1_BASE;
 	blkInfo->imgOut2 = (uchar *)IMG_O_BUFF2_BASE;
 	blkInfo->imgOut3 = (uchar *)IMG_O_BUFF3_BASE;
-	dtcmImgBuf = NULL;
-	pixelCntr = 0;  // for forwarding using MCPL
+}
+
+void initOther()
+{
+	pixelCntr = 0;  // for many purpose, including forwarding using MCPL
 
 	// just to make sure that forwarded packet buffer are empty/ready
 	for(uchar ch=0; ch<3; ch++)

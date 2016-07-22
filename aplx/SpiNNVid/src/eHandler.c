@@ -5,16 +5,23 @@
 /*----------------------------------------------------------------*/
 /*------------------- Main handler functions ---------------------*/
 
+// forward declaration:
 void configure_network(uint mBox);
+
+
 
 void hDMA(uint tag, uint tid)
 {
 
 }
 
+
+
 void hMCPL(uint key, uint payload)
 {
-	/*----------------- Worker's part ------------------*/
+	/*----------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------*/
+	/*---------------------------- Worker's part ---------------------------------*/
 	if(key==MCPL_BCAST_INFO_KEY) {
 		// leadAp sends "0" for ping, workers reply with its core
 		if(payload==0)
@@ -63,9 +70,10 @@ void hMCPL(uint key, uint payload)
 		uint pxLenCh = 0x00020000 | (key & 0xFFFF);
 		spin1_schedule_callback(recvFwdImgData, payload, pxLenCh, PRIORITY_PROCESSING);
 	}
-	/*--------------------------------------*/
 
-	/*------------------ LeadAp part -------------------*/
+	/*----------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------*/
+	/*------------------------------- LeadAp part --------------------------------*/
 	// workers reply the ping
 	else if(key==MCPL_PING_REPLY) {
 		workers.wID[workers.tAvailable] = payload;
@@ -106,6 +114,8 @@ void hMCPL(uint key, uint payload)
 	}
 }
 
+
+
 void hSDP(uint mBox, uint port)
 {
 	// Note: the variable msg might be released somewhere else,
@@ -135,26 +145,28 @@ void hSDP(uint mBox, uint port)
 	}
 	// in this version, the frame is compressed using RLE
 	else if(port==SDP_PORT_R_IMG_DATA) {
-		chCntr++;
+		// chCntr++;
 		// then tell core-2 to proceed
 		spin1_send_mc_packet(MCPL_PROCEED_R_IMG_DATA, mBox, WITH_PAYLOAD);
 		return;	// exit from here, because msg should be freed by core-2
 	}
 	else if(port==SDP_PORT_G_IMG_DATA) {
-		chCntr++;
+		// chCntr++;
 		// then tell core-3 to proceed
 		spin1_send_mc_packet(MCPL_PROCEED_G_IMG_DATA, mBox, WITH_PAYLOAD);
 		return;	// exit from here, because msg should be freed by core-3
 	}
 	else if(port==SDP_PORT_B_IMG_DATA) {
-		chCntr++;
+		// chCntr++;
 		// then tell core-4 to proceed
 		spin1_send_mc_packet(MCPL_PROCEED_B_IMG_DATA, mBox, WITH_PAYLOAD);
-		// then send reply
+		/*
+		// then send reply: NO, IT IS TOO SLOW VIA SDP HANDSHAKING
 		if(chCntr==3) {	// all channels have been received
 			chCntr = 0;
 			spin1_send_sdp_msg(&replyMsg, DEF_SDP_TIMEOUT);
 		}
+		*/
 		return;	// exit from here, because msg should be freed by core-4
 	}
 
@@ -189,6 +201,7 @@ void configure_network(uint mBox)
 		payload = msg->seq;
 		spin1_send_mc_packet(MCPL_BCAST_OP_INFO, payload, WITH_PAYLOAD);
 
+		// additional broadcasting for nodes configuration if not USE_FIX_NODES
 #ifndef USE_FIX_NODES
 		blkInfo->maxBlock = msg->arg1;
 		// here we build chips database for later propagation usage

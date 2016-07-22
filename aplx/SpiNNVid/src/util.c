@@ -19,7 +19,7 @@ uchar get_Nworkers()
 // get default number of block for different board
 uchar get_def_Nblocks()
 {
-	ushort N;
+	uchar N;
 #if(USING_SPIN==3)
 	N = 4;
 #else
@@ -62,6 +62,9 @@ uchar get_block_id()
 #endif
 	return N;
 }
+
+
+
 
 void give_report(uint reportType, uint target)
 {

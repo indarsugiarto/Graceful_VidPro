@@ -1,0 +1,9 @@
+1. During initial phase, leadAp needs to send notification to host about the coreID of leadAP
+   This is useful if we use CONFIGURABLE instead of USE_FIX_NODES
+2. During initial phase, worker cores check if leadAp is running.
+   LeadAp may fail to run (for various reasons), hence it is not necessary for workers to continue.
+
+3. Do the test for reconfigurable network (not USE_FIX_NODES)
+
+
+

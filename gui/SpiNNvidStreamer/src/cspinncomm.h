@@ -57,6 +57,11 @@ typedef struct nodeInfo
 #define SDP_IMAGE_CHUNK	272
 #define SDP_
 
+//struct timespec {
+//	time_t tv_sec; /* seconds */
+//	long tv_nsec; /* nanoseconds */
+//};
+
 class cSpiNNcomm: public QObject
 {
 	Q_OBJECT
@@ -113,6 +118,11 @@ private:
 	volatile bool w272;				// will be used to indicate that the width is special
 	QByteArray pixelBuffer;
 	QByteArray pxBuff[3];
+
+
+	// helper functions & variables
+	void giveDelay(quint32 ns);	// in nanoseconds
+	quint64 elapsed(timespec start, timespec end);
 };
 
 #endif // CSPINNCOMM_H

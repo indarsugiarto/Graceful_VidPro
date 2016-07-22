@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <time.h>
 
 vidStreamer::vidStreamer(QWidget *parent) :
     QWidget(parent),
@@ -15,8 +16,8 @@ vidStreamer::vidStreamer(QWidget *parent) :
     ui->setupUi(this);
 	ui->cbSpiNN->setCurrentIndex(1);
     refresh = new QTimer(this);
-    screen = new cScreen();
-    edge = new cScreen();
+    screen = new cScreen();     // this is for displaying original frame
+    edge = new cScreen();       // this is for displaying result
     spinn = new cSpiNNcomm();
     spinn->setHost(ui->cbSpiNN->currentIndex());
 
@@ -70,7 +71,7 @@ void vidStreamer::errorString(QString err)
 
 void vidStreamer::pbLoadClicked()
 {
-	QString fName = QFileDialog::getOpenFileName(this, "Open Video File", "../../../../videos", "*");
+    QString fName = QFileDialog::getOpenFileName(this, "Open Video File", "../../../../videos", "*");
     if(fName.isEmpty())
         return;
 
@@ -142,6 +143,19 @@ void vidStreamer::videoFinish()
 
 void vidStreamer::pbTestClicked()
 {
+	timespec start, end, temp;
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
+	// compute diff
+	if ((end.tv_nsec-start.tv_nsec)<0) {
+		temp.tv_sec = end.tv_sec-start.tv_sec-1;
+		temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+	} else {
+		temp.tv_sec = end.tv_sec-start.tv_sec;
+		temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+	}
+	qDebug() << QString("Elapsed = %1-ns").arg(temp.tv_sec*1000000000+temp.tv_nsec);
+
     /* Test-1: Send QImage-frame to SpiNNaker and display the result */
     QString fName = QFileDialog::getOpenFileName(this, "Open Image File", "../../../../images", "*");
     if(fName.isEmpty())
@@ -154,7 +168,10 @@ void vidStreamer::pbTestClicked()
     QImage img;
     img.load(fName);
 
-    edge->setSize(img.width(), img.height());   // to show the viewer
+    screen->putFrame(img);
+    screen->show();
+
+    //edge->setSize(img.width(), img.height());   // to show the viewer
     spinn->configSpin(ui->cbSpiNN->currentIndex(), img.width(), img.height());
 
     spinn->frameIn(img);
