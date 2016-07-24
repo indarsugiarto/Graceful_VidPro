@@ -8,6 +8,10 @@ void c_main(void)
 	myCoreID = sark_core_id();
 	spin1_callback_on(MCPL_PACKET_RECEIVED, hMCPL, PRIORITY_MCPL);
 	spin1_callback_on(DMA_TRANSFER_DONE, hDMA, PRIORITY_DMA);
+
+	// main revision: all cores in chip<0,0> may receive frames directly via sdp
+	spin1_callback_on(SDP_PACKET_RX, hSDP, PRIORITY_SDP);
+
 	initSDP();	// all cores need to send reportMsg dan debugMsg
 				// but only leadAp (chip <0,0>) will react on incoming SDP
 
@@ -50,9 +54,6 @@ void c_main(void)
 #endif
 		}
 
-		// only leadAp (chip <0,0> responsible for SDP comm
-		spin1_callback_on(SDP_PACKET_RX, hSDP, PRIORITY_SDP);
-
 		// initialize leadAp as a worker
 		workers.wID[0] = myCoreID;
 		workers.tAvailable = 1;
@@ -65,10 +66,10 @@ void c_main(void)
 		// then say hello so that we know if we run the correct version
 		if(sv->p2p_addr==0) {
 #ifdef USE_FIX_NODES
-			io_printf(IO_BUF, "[FIX_NODES] SpiNNVid-v%d.%d for Spin%d\n",
+			io_printf(IO_STD, "[FIX_NODES] SpiNNVid-v%d.%d for Spin%d\n",
 					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
 #else
-			io_printf(IO_BUF, "[CONFIGURABLE] SpiNNVid-v%d.%d for Spin%d\n",
+			io_printf(IO_STD, "[CONFIGURABLE] SpiNNVid-v%d.%d for Spin%d\n",
 					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
 #endif
 		}
@@ -91,10 +92,10 @@ void c_main(void)
 	else {
 		// TODO: check if leadAp is running
 #ifdef USE_FIX_NODES
-			io_printf(IO_STD, "[FIX_NODES] SpiNNVid-v%d.%d for Spin%d\n",
+			io_printf(IO_BUF, "[FIX_NODES] SpiNNVid-v%d.%d for Spin%d\n",
 					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
 #else
-			io_printf(IO_STD, "[CONFIGURABLE] SpiNNVid-v%d.%d for Spin%d\n",
+			io_printf(IO_BUF, "[CONFIGURABLE] SpiNNVid-v%d.%d for Spin%d\n",
 					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
 #endif
 	}

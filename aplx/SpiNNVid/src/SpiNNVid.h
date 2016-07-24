@@ -1,7 +1,22 @@
+/* For converting rgb to gray, we have to use stdfix.
+ * Here, we have to define the weight for the conversion. For simplicity, we can
+ * use matlab version:
+ * 0.2989 * R + 0.5870 * G + 0.1140 * B
+ * (http://uk.mathworks.com/help/matlab/ref/rgb2gray.html)
+ * */
 #ifndef SPINNVID_H
 #define SPINNVID_H
 
 #include <spin1_api.h>
+
+#include <stdfix.h>
+#define REAL                    accum
+#define REAL_CONST(x)           x##k
+
+// all constants below must be positive
+#define R_GRAY                  REAL_CONST(0.2989)
+#define G_GRAY                  REAL_CONST(0.5870)
+#define B_GRAY                  REAL_CONST(0.1140)
 
 #define MAJOR_VERSION           0
 #define MINOR_VERSION           1
@@ -74,8 +89,10 @@
 
 // dma transfer
 #define DMA_TAG_STORE_FRAME		1
-
-
+#define DMA_TAG_STORE_R_PIXELS	2
+#define DMA_TAG_STORE_G_PIXELS	3
+#define DMA_TAG_STORE_B_PIXELS	4
+#define DMA_TAG_STORE_Y_PIXELS	5
 
 
 /*-----------------------------------------------------------------------------------*/
@@ -101,13 +118,16 @@
 #define MCPL_PROCEED_G_IMG_DATA		0xbca70003
 #define MCPL_PROCEED_B_IMG_DATA		0xbca70004
 
-// special key with base value 0xbca?FFFF,
-// where ? can be 8 (for red), 9 (for green) and A (for blue),
-// and FFFF part contains information about dLen
-// if FFFF == 0000, then end of transmission
-#define MCPL_FWD_R_IMG_DATA			0xbca80000
-#define MCPL_FWD_G_IMG_DATA			0xbca90000
-#define MCPL_FWD_B_IMG_DATA			0xbcaA0000
+// special key with base value 0xF?000000,
+// where ? can be 0(red), 1(green), or 2(blue)
+// Usage: 0xF?xxyyyy
+//        xx   = how many pixels (max is 4), if FF then end transmission
+//		  yyyy = pxSeq
+#define MCPL_FWD_PIXEL_DATA		0xF0000000
+#define MCPL_FWD_PIXEL_MASK		0xF0000000
+
+
+
 
 // special key for forwarding image configuration
 
@@ -200,7 +220,25 @@ typedef struct fwdPkt {
 
 fwdPkt_t fwdPktBuffer[3];	// for each channel
 
+
+
 // Mungkin cara pakai fwdPkt kurang cepat, maka aku ganti pakai dtcmImgBuf aja...
+
+
+
+
+// Coba cara baru, multiple cores receive frames direcly
+typedef struct pxBuf {
+	ushort pxSeq;
+	ushort pxLen;
+	uchar rpxbuf[270];
+	uchar gpxbuf[270];
+	uchar bpxbuf[270];
+	uchar ypxbuf[270];	// the resulting grey pixels
+} pxBuf_t;
+pxBuf_t pxBuffer;
+
+
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
@@ -249,17 +287,21 @@ uchar get_def_Nblocks();
 uchar get_block_id();			// get the block id, given the number of chips available
 
 // processing
-void storeDtcmImgBuf(uint ch, uint Unused);
-
 void initIDcollection(uint withBlkInfo, uint Unused);
 void bcastWID(uint Unused, uint null);
 
 void give_report(uint reportType, uint target);
 void computeWLoad(uint withReport, uint arg1);
 
+void fwdImgData(uint isLastChannel, uint arg1);	// isLastChannel==1 for B-channel
+void processGrayScaling(uint arg0, uint arg1);
+void recvFwdImgData(uint key, uint payload);
+
+/*--------- We change the algorithm into multiple cores processing for frames ---------
+void storeDtcmImgBuf(uint ch, uint Unused);
 void processImgData(uint mBox, uint channel);
-void recvFwdImgData(uint pxData, uint pxLenCh);
-void decompress(uchar channel);
+void decompress(uchar channel);		// we found it useless!!!
+-------------------------------------------------------------------------------------*/
 
 void hTimer(uint tick, uint Unused);
 #endif // SPINNVID_H

@@ -44,7 +44,9 @@ void hMCPL(uint key, uint payload)
 	else if(key==MCPL_BCAST_GET_WLOAD) {
 		spin1_schedule_callback(computeWLoad, 0, 0, PRIORITY_PROCESSING);
 	}
-	/*----- special for core 2,3 and 4 -----*/
+
+	/*------------------------------ Di museum kan ------------------------------
+	/*----- special for core 2,3 and 4 -----*
 	// within root node
 	else if(key==MCPL_PROCEED_R_IMG_DATA) {
 		spin1_schedule_callback(processImgData, payload, 0, PRIORITY_PROCESSING);
@@ -55,9 +57,16 @@ void hMCPL(uint key, uint payload)
 	else if(key==MCPL_PROCEED_B_IMG_DATA) {
 		spin1_schedule_callback(processImgData, payload, 2, PRIORITY_PROCESSING);
 	}
+	*/
+
 	// outside root node
-	// payload contains the forward-ed packet from root node (either from core 2, 3 or 4)
-	// the lower nibble of the key contains pxLen
+	// payload contains the forward-ed packet from root node
+	// the packet contains 4 values: R, G, B, Y
+	else if((key >> 24) == 0xF) {
+		spin1_schedule_callback(recvFwdImgData, key, payload, PRIORITY_PROCESSING);
+	}
+
+	/*---------------- Old processing mechanism for forwarded packet ------------------
 	else if((key & 0xFFFF0000) == MCPL_FWD_R_IMG_DATA) {
 		uint pxLenCh = 0x00000000 | (key & 0xFFFF);
 		spin1_schedule_callback(recvFwdImgData, payload, pxLenCh, PRIORITY_PROCESSING);
@@ -70,6 +79,8 @@ void hMCPL(uint key, uint payload)
 		uint pxLenCh = 0x00020000 | (key & 0xFFFF);
 		spin1_schedule_callback(recvFwdImgData, payload, pxLenCh, PRIORITY_PROCESSING);
 	}
+	*/
+
 
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
@@ -143,23 +154,49 @@ void hSDP(uint mBox, uint port)
 		// then broadcast to all workers (including leadAp) to compute their workload
 		spin1_send_mc_packet(MCPL_BCAST_GET_WLOAD, 0, WITH_PAYLOAD);
 	}
-	// in this version, the frame is compressed using RLE
+
+	/*--------------------------------------------------------------------------------------*/
+	/*--------------------------------------------------------------------------------------*/
+	/*-------------- New revision: several cores may receives frames directly --------------*/
 	else if(port==SDP_PORT_R_IMG_DATA) {
 		// chCntr++;
 		// then tell core-2 to proceed
-		spin1_send_mc_packet(MCPL_PROCEED_R_IMG_DATA, mBox, WITH_PAYLOAD);
-		return;	// exit from here, because msg should be freed by core-2
+
+		//ushort pxLen = msg->length - sizeof(sdp_hdr_t);
+		//io_printf(IO_BUF, "hSDP: got mBox at-0x%x with pxLen=%d\n", msg, pxLen);
+		//spin1_send_mc_packet(MCPL_PROCEED_R_IMG_DATA, mBox, WITH_PAYLOAD);
+		//return;	// exit from here, because msg should be freed by core-2
+
+		pxBuffer.pxSeq = msg->cmd_rc;		// not important, if there's packet lost...
+		pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
+		sark_mem_cpy(pxBuffer.rpxbuf, &msg->seq, pxBuffer.pxLen);
+		// just forward, no grayscaling:
+		spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
 	}
 	else if(port==SDP_PORT_G_IMG_DATA) {
 		// chCntr++;
 		// then tell core-3 to proceed
-		spin1_send_mc_packet(MCPL_PROCEED_G_IMG_DATA, mBox, WITH_PAYLOAD);
-		return;	// exit from here, because msg should be freed by core-3
+
+		//ushort pxLen = msg->length - sizeof(sdp_hdr_t);
+		//io_printf(IO_BUF, "hSDP: got mBox at-0x%x with pxLen=%d\n", msg, pxLen);
+		//spin1_send_mc_packet(MCPL_PROCEED_G_IMG_DATA, mBox, WITH_PAYLOAD);
+		//return;	// exit from here, because msg should be freed by core-3
+
+		pxBuffer.pxSeq = msg->cmd_rc;		// not important, if there's packet lost...
+		pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
+		sark_mem_cpy(pxBuffer.rpxbuf, &msg->seq, pxBuffer.pxLen);
+		// just forward, no grayscaling:
+		spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
+		// TODO: Think about packet lost...
+		//       Note, pxBuffer.pxSeq and/or pxBuffer.pxLen may be different by now
 	}
 	else if(port==SDP_PORT_B_IMG_DATA) {
 		// chCntr++;
 		// then tell core-4 to proceed
-		spin1_send_mc_packet(MCPL_PROCEED_B_IMG_DATA, mBox, WITH_PAYLOAD);
+
+		//ushort pxLen = msg->length - sizeof(sdp_hdr_t);
+		//io_printf(IO_BUF, "hSDP: got mBox at-0x%x with pxLen=%d\n", msg, pxLen);
+		//spin1_send_mc_packet(MCPL_PROCEED_B_IMG_DATA, mBox, WITH_PAYLOAD);
 		/*
 		// then send reply: NO, IT IS TOO SLOW VIA SDP HANDSHAKING
 		if(chCntr==3) {	// all channels have been received
@@ -167,7 +204,13 @@ void hSDP(uint mBox, uint port)
 			spin1_send_sdp_msg(&replyMsg, DEF_SDP_TIMEOUT);
 		}
 		*/
-		return;	// exit from here, because msg should be freed by core-4
+		//return;	// exit from here, because msg should be freed by core-4
+		pxBuffer.pxSeq = msg->cmd_rc;		// So, if there's packet lost before, it won't be processed!!
+		pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
+		sark_mem_cpy(pxBuffer.bpxbuf, &msg->seq, pxBuffer.pxLen);
+		// forward and notify to do grayscaling:
+		spin1_schedule_callback(fwdImgData, 1, 0, PRIORITY_PROCESSING);
+		// TODO: Note: how to handle missing packet?
 	}
 
 	// Note: variable msg might be released somewhere else
@@ -220,4 +263,18 @@ void configure_network(uint mBox)
 		}
 #endif
 	}
+}
+
+void fwdImgData(uint isLastChannel, uint arg1)
+{
+	// special key with base value 0xF?000000,
+	// where ? can be 0(red), 1(green), or 2(blue)
+	// Usage: 0xF?xxyyyy
+	//        xx   = how many pixels (max is 4), if FF then end transmission
+	//		  yyyy = pxSeq
+
+
+	// only if B-channel is received
+	if(isLastChannel == 1)
+		processGrayScaling(0,0);
 }

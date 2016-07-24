@@ -14,18 +14,22 @@ In this version, let's use this approach:
 
 
 ------------------------------------------------------------------------------------------
-How to achieve highest possible throughput using multi-core (3 cores?)
+How to achieve highest possible throughput using multiple-cores (16 cores or more?)
 host-PC must send the 3 color orderly every time, such as:
 
-[send_R_chunk] [send_G_chunk] [send_B_chunk] [send_R_chunk] [send_G_chunk] ...
-      1              2              3              4              5
+[send_R_chunk] [send_G_chunk] [send_B_chunk] [send_R_chunk] [send_G_chunk] [send_B_chunk] ...
+      1              1              1              2              2              2
 
-So that chunk-1 will be processed by core-2, chunk-2 will be processed by core-3,
-chunk-3 will be processed by core4, chunk-4 will be processed by core-2,
-chunk-5 will be processed by core-3, etc...
+So that 3 consecutive chunks will be processed by core-1, core-2, and so on until core-10.
+Whenever a core receives 3 chunks, it processes the grayscalling and store the result to
+sdram directly.
 
-(Jadi gantian dengan efek hampir paralel karena core 2,3,4 mungkin lambat dalam
-mengerjakan tugasnya).
+(Jadi gantian dengan efek hampir paralel karena kalau di-handle satu core aja akan lambat).
+
+Dengan demikian dibutuhkan format khusus:
+- 2 byte didepan digunakan untuk menunjukkan sequence-number supaya core
+  penerima tahu dimana hasilnya harus disimpan.
+  Sequence-number ini diletakkan didepan, jadi pas dibagian cmd_rc
 
 ------------------------------------------------------------------------------------------
 

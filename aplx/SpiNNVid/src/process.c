@@ -103,6 +103,79 @@ void computeWLoad(uint withReport, uint arg1)
 	}
 }
 
+
+
+
+// processGrayScaling() will process pxBuffer
+void processGrayScaling(uint arg0, uint arg1)
+{
+	REAL tmp;
+	ushort grVal;
+	for(ushort i=0; i<pxBuffer.pxLen; i++) {
+		tmp = (REAL)pxBuffer.rpxbuf[i] * R_GRAY +
+			  (REAL)pxBuffer.gpxbuf[i] * G_GRAY +
+			  (REAL)pxBuffer.bpxbuf[i] * B_GRAY;
+		grVal = (ushort)tmp;
+		pxBuffer.ypxbuf[i] = grVal>255?255:grVal;
+	}
+	// then copy to sdram at location pxBuffer.pxSeq
+	// Note: blkInfo->imgOut1 must be initialized already and all cores must
+	//       know it already (ie. blkInfo must be broadcasted in advance)
+	uint dmaDone;
+	do {
+		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_R_PIXELS, blkInfo->imgRIn+(pxBuffer.pxSeq*270),
+					   pxBuffer.rpxbuf, DMA_WRITE, pxBuffer.pxLen);
+	} while(dmaDone==0);
+	do {
+		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_G_PIXELS, blkInfo->imgGIn+(pxBuffer.pxSeq*270),
+					   pxBuffer.gpxbuf, DMA_WRITE, pxBuffer.pxLen);
+	} while(dmaDone==0);
+	do {
+		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_B_PIXELS, blkInfo->imgRIn+(pxBuffer.pxSeq*270),
+					   pxBuffer.rpxbuf, DMA_WRITE, pxBuffer.pxLen);
+	} while(dmaDone==0);
+	do {
+		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_Y_PIXELS, blkInfo->imgOut1+(pxBuffer.pxSeq*270),
+					   pxBuffer.ypxbuf, DMA_WRITE, pxBuffer.pxLen);
+	} while(dmaDone==0);
+
+	// TODO: broadcast the pixels to external chips
+	// Note: jangan broadcast di sini, tapi untuk masing-masing channel dan biarkan
+	//       core tujuan yang menghitung gray-scale nya sendiri !!!!!
+}
+
+// in recvFwdImgData(), payload contains 4 color information of a pixel
+void recvFwdImgData(uint key, uint payload)
+{
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*--------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------*/
+/*-------------------- MUSEUM: from previously failed algorithm ------------------------*/
+/*                                                                                      */
+/* Note: we cannot broadcast the sdp address because IT IS LOCAL DTCM !!!               */
+/*                                                                                      */
+/*--------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------*/
+
+/*
 // TODO: when do you put the chunk data into sdram?
 
 // storeFrame: call dma for dtcmImgBuf and reset its counter
@@ -124,25 +197,43 @@ void storeDtcmImgBuf(uint ch, uint Unused)
 	pixelCntr = 0;
 }
 
-/*--------------------------------------------------------------------------------------*/
-/*-------------------- leadAp forward sdp buffer to core 2,3 and 4 ---------------------*/
+/*--------------------------------------------------------------------------------------*
+/*-------------------- leadAp forward sdp buffer to core 2,3 and 4 ---------------------*
+/*                                                                                      *
+/* processImgData() is executed by core-2,3 and 4 only in root node as a response to
+ * MCPL with keys MCPL_PROCEED_?_IMG_DATA triggered by leadAp after receiving sdp for
+ * frames (through specif frame's port
+ * *
 void processImgData(uint mBox, uint ch) {
+    io_printf(IO_STD, "processImgData with ch-%d is triggered\n", ch);
+
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
 	ushort pxLen = msg->length - sizeof(sdp_hdr_t);
+
+	io_printf(IO_BUF, "in process: got mBox at-0x%x with pxLen=%d\n", msg, pxLen);
+
+	return;
 
 	// step-1: copy the content of mBox to local buffer
 	uchar pxInfo[272];
 	sark_mem_cpy((void *)pxInfo, (void *)&msg->cmd_rc, pxLen);
+	io_printf(IO_BUF, "sdp data is copied...\n");
+
+
 
 	// step-2: then release mBox
 	spin1_msg_free(msg);
+	io_printf(IO_BUF, "sdp is release...\n");
+
+
 
 	// step-3: copy to dtcmImgBuf and if necessary trigger dma
 	sark_mem_cpy((void *)dtcmImgBuf+pixelCntr, pxInfo, pxLen);
+	io_printf(IO_BUF, "copied to dtcmImgBuf...\n");
 	pixelCntr += pxLen;
-	if(pixelCntr==workers.wImg)
+	if(pixelCntr==workers.wImg) {
 		spin1_schedule_callback(storeDtcmImgBuf, ch, 0, PRIORITY_PROCESSING);
-
+	}
 	// then forward to other nodes
 	uchar i, cntr;
 	uint payload, base_key, key;
@@ -173,6 +264,10 @@ void processImgData(uint mBox, uint ch) {
 		spin1_send_mc_packet(key, payload, WITH_PAYLOAD);
 
 		remaining -= szpx;
+
+		// for debugging, remove in release mode:
+		io_printf(IO_BUF, "key-0x%x load-0x%x has been sent!\n", key, payload);
+		sark_delay_us(1000);
 	}
 
 	// TODO: decompress data
@@ -182,10 +277,14 @@ void processImgData(uint mBox, uint ch) {
 
 
 
-/*--------------------------------------------------------------------------------------*/
-/*------- core 2,3 and 4 in other nodes (out of root node) receive fwd-ed packets ------*/
+/*--------------------------------------------------------------------------------------*
+/*------- core 2,3 and 4 in other nodes (out of root node) receive fwd-ed packets ------*
+/*                                                                                      *
+/* recvFwdImgData() is executed by core-2,3 and 4 in nodes other than root. It processes
+ * forwarded packets from core-2,3 and 4 in root node *
 void recvFwdImgData(uint pxData, uint pxLenCh)
 {
+	io_printf(IO_BUF, "recvFwdImgData is triggered\n");
 	uchar  ch = pxLenCh >> 16;
 	ushort pxLen = (pxLenCh & 0xFFFF) >> 4;
 	uchar  szpx = pxLenCh & 0xF;
@@ -196,6 +295,10 @@ void recvFwdImgData(uint pxData, uint pxLenCh)
 
 	// all chunks are collected?
 	if(fwdPktBuffer[ch].pxLen == pxLen) {
+
+		// for debugging:
+		io_printf(IO_BUF, "Core-%d has received the chunk!\n", myCoreID);
+
 		// put to dtcmImgBuf
 		sark_mem_cpy((void *)dtcmImgBuf+pixelCntr, (void *)fwdPktBuffer[ch].pxInfo, pxLen);
 
@@ -217,3 +320,10 @@ void decompress(uchar ch)
 {
 
 }
+
+*/
+
+/*--------------------------------------------------------------------------------------*/
+/*-------------------- MUSEUM: from previously failed algorithm ------------------------*/
+/*--------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------*/

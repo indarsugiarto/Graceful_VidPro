@@ -6,4 +6,6 @@
 3. Do the test for reconfigurable network (not USE_FIX_NODES)
 
 
+4. If there is packet lost during frame transmission, process whatever data it holds currently
 
+5. After grayscaling: broadcast the pixels to external chips
