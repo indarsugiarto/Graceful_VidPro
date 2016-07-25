@@ -123,32 +123,77 @@ void processGrayScaling(uint arg0, uint arg1)
 	//       know it already (ie. blkInfo must be broadcasted in advance)
 	uint dmaDone;
 	do {
-		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_R_PIXELS, blkInfo->imgRIn+(pxBuffer.pxSeq*270),
-					   pxBuffer.rpxbuf, DMA_WRITE, pxBuffer.pxLen);
+		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_R_PIXELS+myCoreID,
+									 blkInfo->imgRIn+(pxBuffer.pxSeq*pxBuffer.pxLen),
+									 pxBuffer.rpxbuf, DMA_WRITE, pxBuffer.pxLen);
 	} while(dmaDone==0);
 	do {
-		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_G_PIXELS, blkInfo->imgGIn+(pxBuffer.pxSeq*270),
-					   pxBuffer.gpxbuf, DMA_WRITE, pxBuffer.pxLen);
+		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_G_PIXELS+myCoreID,
+									 blkInfo->imgGIn+(pxBuffer.pxSeq*pxBuffer.pxLen),
+									 pxBuffer.gpxbuf, DMA_WRITE, pxBuffer.pxLen);
 	} while(dmaDone==0);
 	do {
-		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_B_PIXELS, blkInfo->imgRIn+(pxBuffer.pxSeq*270),
-					   pxBuffer.rpxbuf, DMA_WRITE, pxBuffer.pxLen);
+		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_B_PIXELS+myCoreID,
+									 blkInfo->imgRIn+(pxBuffer.pxSeq*pxBuffer.pxLen),
+									 pxBuffer.rpxbuf, DMA_WRITE, pxBuffer.pxLen);
 	} while(dmaDone==0);
 	do {
-		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_Y_PIXELS, blkInfo->imgOut1+(pxBuffer.pxSeq*270),
-					   pxBuffer.ypxbuf, DMA_WRITE, pxBuffer.pxLen);
+		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_Y_PIXELS+myCoreID,
+									 blkInfo->imgOut1+(pxBuffer.pxSeq*pxBuffer.pxLen),
+									 pxBuffer.ypxbuf, DMA_WRITE, pxBuffer.pxLen);
 	} while(dmaDone==0);
 
-	// TODO: broadcast the pixels to external chips
-	// Note: jangan broadcast di sini, tapi untuk masing-masing channel dan biarkan
+	// Note: jangan broadcast gray pixel, tapi untuk masing-masing channel dan biarkan
 	//       core tujuan yang menghitung gray-scale nya sendiri !!!!!
 }
 
-// in recvFwdImgData(), payload contains 4 color information of a pixel
-void recvFwdImgData(uint key, uint payload)
+// once the core receive chunks for all channels, it forwards them
+void fwdImgData(uint isLastChannel, uint arg1)
 {
+	// NOTE: at this point the core, should received chunks of all channels
+	// TODO: forward pixels data to external chips
 
+	uint payload;
+	// first forward chunk information
+	payload = (pxBuffer.pxLen << 16) + pxBuffer.pxSeq;
+	spin1_send_mc_packet(MCPL_FWD_PIXEL_INFO, payload, WITH_PAYLOAD);
+
+	ushort i, cntr, szpx, ch, remaining;
+	cntr = (pxBuffer.pxLen % 4) == 0 ? pxBuffer.pxLen / 4 : (pxBuffer.pxLen / 4) + 1;
+
+	// then forward chunks for each channels
+	for(ch=0; ch<3; ch++) {
+		remaining = pxBuffer.pxLen;
+		for(i=0; i<cntr; i++) {
+			if(remaining > sizeof(uint))
+				szpx = sizeof(uint);
+			else
+				szpx = remaining;
+			if(i==0) {
+				sark_mem_cpy((void *)&payload, (void *)pxBuffer.rpxbuf + i*4, szpx);
+				// note the 4-byte boundary above; hence, we define rpxbuf as 272 array
+				spin1_send_mc_packet(MCPL_FWD_PIXEL_RDATA, payload, WITH_PAYLOAD);
+			} else if(i==1) {
+				sark_mem_cpy((void *)&payload, (void *)pxBuffer.gpxbuf + i*4, szpx);
+				// note the 4-byte boundary above; hence, we define rpxbuf as 272 array
+				spin1_send_mc_packet(MCPL_FWD_PIXEL_GDATA, payload, WITH_PAYLOAD);
+			} else {
+				sark_mem_cpy((void *)&payload, (void *)pxBuffer.bpxbuf + i*4, szpx);
+				// note the 4-byte boundary above; hence, we define rpxbuf as 272 array
+				spin1_send_mc_packet(MCPL_FWD_PIXEL_BDATA, payload, WITH_PAYLOAD);
+			}
+			remaining -= szpx;
+		}
+	}
+
+	// then, send info end-of-forwarding
+	spin1_send_mc_packet(MCPL_FWD_PIXEL_EOF, 0, WITH_PAYLOAD);
+
+	// and then compute the grayscale for this core:
+	//if(isLastChannel == 1)
+	processGrayScaling(0,0);
 }
+
 
 
 

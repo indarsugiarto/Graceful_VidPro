@@ -71,6 +71,7 @@
 #define SDP_PORT_R_IMG_DATA		1	// port for sending R-channel
 #define SDP_PORT_G_IMG_DATA		2	// port for sending G-channel
 #define SDP_PORT_B_IMG_DATA		3	// port for sending B-channel
+#define SDP_PORT_FRAME_END      4   // instruct spinn to start decoding
 #define SDP_PORT_FRAME_INFO     5   // will be used to send the basic info about frame
 #define SDP_PORT_ACK			6
 #define SDP_PORT_CONFIG			7	// for sending image/frame info
@@ -88,11 +89,11 @@
 #define SPINNVID_APP_ID			16
 
 // dma transfer
-#define DMA_TAG_STORE_FRAME		1
-#define DMA_TAG_STORE_R_PIXELS	2
-#define DMA_TAG_STORE_G_PIXELS	3
-#define DMA_TAG_STORE_B_PIXELS	4
-#define DMA_TAG_STORE_Y_PIXELS	5
+//#define DMA_TAG_STORE_FRAME		10
+#define DMA_TAG_STORE_R_PIXELS	20
+#define DMA_TAG_STORE_G_PIXELS	40
+#define DMA_TAG_STORE_B_PIXELS	60
+#define DMA_TAG_STORE_Y_PIXELS	80
 
 
 /*-----------------------------------------------------------------------------------*/
@@ -111,27 +112,21 @@
 #define MCPL_BCAST_GET_WLOAD		0xbca50004	// trigger workers to compute workload
 #define MCPL_BCAST_FRAME_INFO		0xbca50005
 #define MCPL_BCAST_ALL_REPORT		0xbca50006	// the payload might contain specific reportType
+#define MCPL_BCAST_START_PROC		0xbca50007
 
 
-// special key for core-2,3, and 4, the payload contains address of current sdp buffer
-#define MCPL_PROCEED_R_IMG_DATA		0xbca70002
-#define MCPL_PROCEED_G_IMG_DATA		0xbca70003
-#define MCPL_PROCEED_B_IMG_DATA		0xbca70004
-
-// special key with base value 0xF?000000,
-// where ? can be 0(red), 1(green), or 2(blue)
-// Usage: 0xF?xxyyyy
-//        xx   = how many pixels (max is 4), if FF then end transmission
-//		  yyyy = pxSeq
-#define MCPL_FWD_PIXEL_DATA		0xF0000000
-#define MCPL_FWD_PIXEL_MASK		0xF0000000
+// mechanism for forwarding pixel packets
+// important: MCPL_FWD_PIXEL_INFO must preceed all chunk pixels!!!
+#define MCPL_FWD_PIXEL_INFO			0xbca60000	// broadcast pixel chunk information
+// the payload of MCPL_FWD_PIXEL_INFO will contain:
+// xxxxyyyy, where xxxx = pxLen, yyyy = pxSeq -> see pxBuf_t below !!!
+#define MCPL_FWD_PIXEL_RDATA		0xbca70000	// broadcast pixel chunk data for R-ch
+#define MCPL_FWD_PIXEL_GDATA		0xbca80000	// broadcast pixel chunk data for G-ch
+#define MCPL_FWD_PIXEL_BDATA		0xbca90000	// broadcast pixel chunk data for B-ch
+#define MCPL_FWD_PIXEL_EOF			0xbcaA0000	// end of transfer, start grayscaling!
+#define MCPL_FWD_PIXEL_MASK			0xFFFF0000	// lower word is used for core-ID
 
 
-
-
-// special key for forwarding image configuration
-
-//special key (with values)
 
 
 /*-----------------------------------------------------------------------------------*/
@@ -222,19 +217,20 @@ fwdPkt_t fwdPktBuffer[3];	// for each channel
 
 
 
-// Mungkin cara pakai fwdPkt kurang cepat, maka aku ganti pakai dtcmImgBuf aja...
-
-
-
-
 // Coba cara baru, multiple cores receive frames direcly
 typedef struct pxBuf {
-	ushort pxSeq;
-	ushort pxLen;
-	uchar rpxbuf[270];
+	ushort pxSeq;	// the segment index of the chunk within the overall frame structure
+	ushort pxLen;	// how many pixels are contained in one channel chunk
+	ushort pxCntr[3];	// for receiver only, to track which pixels are broadcasted
+	/*
+	uchar rpxbuf[270];	// 270/4 = 67 with 2 bytes remaining
 	uchar gpxbuf[270];
 	uchar bpxbuf[270];
-	uchar ypxbuf[270];	// the resulting grey pixels
+	*/
+	uchar rpxbuf[272];	// we add 2bytes padding at the end to make 4-byte boundary
+	uchar gpxbuf[272];
+	uchar bpxbuf[272];
+	uchar ypxbuf[272];	// the resulting grey pixels
 } pxBuf_t;
 pxBuf_t pxBuffer;
 
@@ -263,9 +259,6 @@ uint myCoreID;
 uchar dtcmImgBuf[1600];			// one row of UXGA resolution
 ushort pixelCntr;				// how many pixel has been processed?
 
-static volatile uchar chCntr = 0;		// channel counter, if it is 3, then send reply to host
-
-
 /*------------------------- Forward declarations ----------------------------*/
 
 // Initialization
@@ -286,16 +279,19 @@ uchar get_Nworkers();			// leadAp might want to know, how many workers are activ
 uchar get_def_Nblocks();
 uchar get_block_id();			// get the block id, given the number of chips available
 
-// processing
+// processing: worker discovery
 void initIDcollection(uint withBlkInfo, uint Unused);
 void bcastWID(uint Unused, uint null);
 
-void give_report(uint reportType, uint target);
 void computeWLoad(uint withReport, uint arg1);
 
 void fwdImgData(uint isLastChannel, uint arg1);	// isLastChannel==1 for B-channel
 void processGrayScaling(uint arg0, uint arg1);
 void recvFwdImgData(uint key, uint payload);
+
+// debugging and reporting
+void give_report(uint reportType, uint target);
+void hTimer(uint tick, uint Unused);
 
 /*--------- We change the algorithm into multiple cores processing for frames ---------
 void storeDtcmImgBuf(uint ch, uint Unused);
@@ -303,6 +299,5 @@ void processImgData(uint mBox, uint channel);
 void decompress(uchar channel);		// we found it useless!!!
 -------------------------------------------------------------------------------------*/
 
-void hTimer(uint tick, uint Unused);
 #endif // SPINNVID_H
 

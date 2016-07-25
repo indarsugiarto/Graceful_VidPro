@@ -19,6 +19,8 @@ void hDMA(uint tag, uint tid)
 
 void hMCPL(uint key, uint payload)
 {
+	uint key_hdr = 0xFFFF0000 & key;
+	uint key_arg = 0xFFFF & key;
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
 	/*---------------------------- Worker's part ---------------------------------*/
@@ -59,11 +61,28 @@ void hMCPL(uint key, uint payload)
 	}
 	*/
 
-	// outside root node
-	// payload contains the forward-ed packet from root node
-	// the packet contains 4 values: R, G, B, Y
-	else if((key >> 24) == 0xF) {
-		spin1_schedule_callback(recvFwdImgData, key, payload, PRIORITY_PROCESSING);
+	// outside root node: make it core-to-core communication
+	else if(key_hdr == MCPL_FWD_PIXEL_INFO && key_arg == myCoreID) {
+		pxBuffer.pxLen = payload >> 16;
+		pxBuffer.pxSeq = payload & 0xFFFF;
+		pxBuffer.pxCntr[0] = 0;
+		pxBuffer.pxCntr[1] = 0;
+		pxBuffer.pxCntr[2] = 0;
+	}
+	else if(key_hdr == MCPL_FWD_PIXEL_RDATA && key_arg == myCoreID) {
+		sark_mem_cpy(pxBuffer.rpxbuf + pxBuffer.pxCntr[0]*sizeof(uint), &payload, sizeof(uint));
+		pxBuffer.pxCntr[0]++;
+	}
+	else if(key_hdr == MCPL_FWD_PIXEL_GDATA && key_arg == myCoreID) {
+		sark_mem_cpy(pxBuffer.gpxbuf + pxBuffer.pxCntr[1]*sizeof(uint), &payload, sizeof(uint));
+		pxBuffer.pxCntr[1]++;
+	}
+	else if(key_hdr == MCPL_FWD_PIXEL_BDATA && key_arg == myCoreID) {
+		sark_mem_cpy(pxBuffer.bpxbuf + pxBuffer.pxCntr[2]*sizeof(uint), &payload, sizeof(uint));
+		pxBuffer.pxCntr[1]++;
+	}
+	else if(key_hdr == MCPL_FWD_PIXEL_EOF && key_arg == myCoreID) {
+		spin1_schedule_callback(processGrayScaling, 0, 0, PRIORITY_PROCESSING);
 	}
 
 	/*---------------- Old processing mechanism for forwarded packet ------------------
@@ -170,8 +189,8 @@ void hSDP(uint mBox, uint port)
 		pxBuffer.pxSeq = msg->cmd_rc;		// not important, if there's packet lost...
 		pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
 		sark_mem_cpy(pxBuffer.rpxbuf, &msg->seq, pxBuffer.pxLen);
-		// just forward, no grayscaling:
-		spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
+		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
+		// spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
 	}
 	else if(port==SDP_PORT_G_IMG_DATA) {
 		// chCntr++;
@@ -185,8 +204,8 @@ void hSDP(uint mBox, uint port)
 		pxBuffer.pxSeq = msg->cmd_rc;		// not important, if there's packet lost...
 		pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
 		sark_mem_cpy(pxBuffer.rpxbuf, &msg->seq, pxBuffer.pxLen);
-		// just forward, no grayscaling:
-		spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
+		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
+		// spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
 		// TODO: Think about packet lost...
 		//       Note, pxBuffer.pxSeq and/or pxBuffer.pxLen may be different by now
 	}
@@ -211,6 +230,15 @@ void hSDP(uint mBox, uint port)
 		// forward and notify to do grayscaling:
 		spin1_schedule_callback(fwdImgData, 1, 0, PRIORITY_PROCESSING);
 		// TODO: Note: how to handle missing packet?
+	}
+
+	/*--------------------------------------------------------------------------------------*/
+	/*--------------------------------------------------------------------------------------*/
+	/*-------------- Host will send an empty message at port SDP_PORT_FRAME_END ------------*/
+	/*-------------- to trigger spiNNaker to do the processing                  ------------*/
+	/*-------------- This command should be sent to core<0,0,1>                 ------------*/
+	else if(port==SDP_PORT_FRAME_END) {
+		spin1_send_mc_packet(MCPL_BCAST_START_PROC, 0, WITH_PAYLOAD);
 	}
 
 	// Note: variable msg might be released somewhere else
@@ -263,18 +291,4 @@ void configure_network(uint mBox)
 		}
 #endif
 	}
-}
-
-void fwdImgData(uint isLastChannel, uint arg1)
-{
-	// special key with base value 0xF?000000,
-	// where ? can be 0(red), 1(green), or 2(blue)
-	// Usage: 0xF?xxyyyy
-	//        xx   = how many pixels (max is 4), if FF then end transmission
-	//		  yyyy = pxSeq
-
-
-	// only if B-channel is received
-	if(isLastChannel == 1)
-		processGrayScaling(0,0);
 }
