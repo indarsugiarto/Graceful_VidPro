@@ -89,15 +89,40 @@ def sendChunk(ch_port, ba):
     CmdSock.flush()
     
 
+def getImage(fName):
+    rCh = list()
+    gCh = list()
+    bCh = list()
+    img = QtGui.QImage()
+    img.load(fName)
+    wImg = img.width()
+    hImg = img.height()
+    for y in range(hImg):
+        r = [0 for _ in range(wImg)]
+        g = [0 for _ in range(wImg)]
+        b = [0 for _ in range(wImg)]
+        for x in range(wImg):
+            clr = Qt.QColor(img.pixel(x, y))
+            r[x] = clr.red()
+            g[x] = clr.green()
+            b[x] = clr.blue()
+        rCh.append(r)
+        gCh.append(g)
+        bCh.append(b)
+    return rCh, gCh, bCh
+
+imgFile = "SpiNN-3.jpg"
+
 def main():
     #prepare the socket
+    # prepare the socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-      sock.bind( ('', DEF_PORT) )
+        sock.bind(('', DEF_PORT))
     except OSError as msg:
-      print "%s" % msg
-      sock.close()
-      sock = None
+        print "%s" % msg
+        sock.close()
+        sock = None
 
     if sock is not None:
       print "Send frame info: 640 x 480",

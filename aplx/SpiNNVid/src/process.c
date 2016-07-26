@@ -115,7 +115,7 @@ void processGrayScaling(uint arg0, uint arg1)
 		tmp = (REAL)pxBuffer.rpxbuf[i] * R_GRAY +
 			  (REAL)pxBuffer.gpxbuf[i] * G_GRAY +
 			  (REAL)pxBuffer.bpxbuf[i] * B_GRAY;
-		grVal = (ushort)tmp;
+		grVal = (ushort)tmp;	// why not round first?
 		pxBuffer.ypxbuf[i] = grVal>255?255:grVal;
 	}
 	// then copy to sdram at location pxBuffer.pxSeq

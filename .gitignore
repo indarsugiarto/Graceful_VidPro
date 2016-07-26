@@ -43,6 +43,8 @@
 **/.idea
 **/refs
 **/local
+**/.metadata
+**/RemoteSystemsTempFiles
 
 # Yang lain
 *.json
@@ -50,4 +52,5 @@
 *.pro.user*
 *.aplx
 run*
-
+*.jpg*
+*.png*
