@@ -74,9 +74,9 @@ def sendSDP(flags, tag, dp, dc, dax, day, cmd, seq, arg1, arg2, arg3, bArray):
     CmdSock.flush()
     return sdp
 
-def sendChunk(ch_port, ba):
+def sendChunk(ch_port, core, ba):
     da = 0
-    dpc = (ch_port << 5) + 1
+    dpc = (ch_port << 5) + core
     sa = 0
     spc = 255
     pad = struct.pack('<2B',0,0)
@@ -127,17 +127,9 @@ class imgData:
             self.bCh.append(b)
 
     # Compute gray channel and store in a file
-    def processImage(self, fOutName):
+    def processImage(self, fOutName, withSaving):
         if self.wImg==0:
             return
-        rFName = fOutName+".red"
-        gFName = fOutName+".green"
-        bFName = fOutName+".blue"
-        yFName = fOutName+".gray"
-        rf = open(rFName, "wb")
-        gf = open(gFName, "wb")
-        bf = open(bFName, "wb")
-        yf = open(yFName, "wb")
         for y in range(self.hImg):
             for x in range(self.wImg):
                 self.rba.append(struct.pack("B", self.rCh[y][x]))
@@ -150,22 +142,86 @@ class imgData:
                 if gr > 255:
                     gr = 255
                 self.yba.append(struct.pack("B", gr))
-        rf.write(self.rba)
-        gf.write(self.gba)
-        bf.write(self.bba)
-        yf.write(self.yba)
-        rf.close()
-        gf.close()
-        bf.close()
-        yf.close()
+        if withSaving is True:
+            rFName = fOutName + ".red"
+            gFName = fOutName + ".green"
+            bFName = fOutName + ".blue"
+            yFName = fOutName + ".gray"
+            rf = open(rFName, "wb")
+            gf = open(gFName, "wb")
+            bf = open(bFName, "wb")
+            yf = open(yFName, "wb")
+            rf.write(self.rba)
+            gf.write(self.gba)
+            bf.write(self.bba)
+            yf.write(self.yba)
+            rf.close()
+            gf.close()
+            bf.close()
+            yf.close()
+
+    def sendImg(self, coreList):
+        """
+        Scenario: iterate until all chunks have been sent
+        :param coreList:
+        :return:
+        """
+        def_len = 270   # not 272, because we include pxSeq in cmd_rc
+        coreCntr = 0  # starting core is core-1
+        remaining = self.wImg * self.hImg
+        sp = 0
+        pxSeq = 0
+        # then repeat until all pixels of all chanels have sent
+        while remaining > 0:
+            print "[ pxSeq-{} ]Sending burst data of 3-channels to core-{}...".format(pxSeq, coreList[coreCntr])
+
+
+            if remaining > (def_len):
+                pxLen = def_len
+            else:
+                pxLen = remaining
+
+            print "R-channel:"
+            for px in range(pxLen):
+                print "%0x" % ord(self.rba[sp+px:sp+px+1]),
+            print "\nG-channel"
+            for px in range(pxLen):
+                print "%0x" % ord(self.gba[sp+px:sp+px+1]),
+            print "\nB-channel"
+            for px in range(pxLen):
+                print "%0x" % ord(self.bba[sp+px:sp+px+1]),
+            print "\nY-channel"
+            for px in range(pxLen):
+                print "%0x" % ord(self.yba[sp+px:sp+px+1]),
+            print "\n"
+
+            cmd_rc = struct.pack("<H", pxSeq)
+            br = cmd_rc + self.rba[sp:sp+pxLen]
+            bg = cmd_rc + self.gba[sp:sp+pxLen]
+            bb = cmd_rc + self.bba[sp:sp+pxLen]
+
+            sendChunk(SDP_PORT_R_IMG_DATA, coreList[coreCntr], br)
+            sendChunk(SDP_PORT_G_IMG_DATA, coreList[coreCntr], bg)
+            sendChunk(SDP_PORT_B_IMG_DATA, coreList[coreCntr], bb)
+
+            # update
+            coreCntr += 1
+            if coreCntr == len(coreList):
+                coreCntr = 0
+            sp += pxLen
+            remaining -= pxLen
+
+            _ = raw_input("Press enter to continue")
 
 
 imgFile = "SpiNN-3.jpg"
+destCore = [c+1 for c in range(10)]  # let's try with 10 cores
 
 def main():
     #load image from file and create array from it
     img = imgData(imgFile)
-    img.processImage(imgFile)
+    img.processImage(imgFile, False)
+    img.sendImg(destCore)
 
     # TODO: send to spinnaker
 

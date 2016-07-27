@@ -109,14 +109,30 @@ void computeWLoad(uint withReport, uint arg1)
 // processGrayScaling() will process pxBuffer
 void processGrayScaling(uint arg0, uint arg1)
 {
+	/* Problem with uchar and stdfix:
+	 * Somehow, uchar is treated weirdly by stdfix. For example, if rpxBuf[0]==255:
+	 * printing (REAL)rpxBuf[0] = %k -> will result in -1.0000000
+	 * BUT, if I define:
+	 * uchar c = 255;
+	 * then printing (REAL)c = %k -> will produce 255.00000 !!!! WTF!!!
+	 * Solution: create temporary variable other than uchar
+	 * */
 	REAL tmp;
-	ushort grVal;
+	ushort v1,v2,v3;
+	uchar grVal;
 	for(ushort i=0; i<pxBuffer.pxLen; i++) {
+		v1 = pxBuffer.rpxbuf[i];
+		v2 = pxBuffer.gpxbuf[i];
+		v3 = pxBuffer.bpxbuf[i];
+		/*
 		tmp = (REAL)pxBuffer.rpxbuf[i] * R_GRAY +
 			  (REAL)pxBuffer.gpxbuf[i] * G_GRAY +
 			  (REAL)pxBuffer.bpxbuf[i] * B_GRAY;
-		grVal = (ushort)tmp;	// why not round first?
-		pxBuffer.ypxbuf[i] = grVal>255?255:grVal;
+		*/
+		tmp = (REAL)v1*R_GRAY + (REAL)v2*G_GRAY + (REAL)v3*B_GRAY;
+		// why round first? because if not, it truncate to lower integer
+		grVal = (uchar)roundr(tmp);
+		pxBuffer.ypxbuf[i] = grVal;
 	}
 	// then copy to sdram at location pxBuffer.pxSeq
 	// Note: blkInfo->imgOut1 must be initialized already and all cores must
@@ -145,10 +161,16 @@ void processGrayScaling(uint arg0, uint arg1)
 
 	// Note: jangan broadcast gray pixel, tapi untuk masing-masing channel dan biarkan
 	//       core tujuan yang menghitung gray-scale nya sendiri !!!!!
+
+
+	/*------------------------ debugging --------------------------*/
+	// debugging: to see if original pixels chunks and forwarded are the same
+	// in python, we use raw_input() to get a chance for viewing it
+	seePxBuffer();
 }
 
 // once the core receive chunks for all channels, it forwards them
-void fwdImgData(uint isLastChannel, uint arg1)
+void fwdImgData(uint arg0, uint arg1)
 {
 	// NOTE: at this point the core, should received chunks of all channels
 	// TODO: forward pixels data to external chips
@@ -156,7 +178,7 @@ void fwdImgData(uint isLastChannel, uint arg1)
 	uint payload;
 	// first forward chunk information
 	payload = (pxBuffer.pxLen << 16) + pxBuffer.pxSeq;
-	spin1_send_mc_packet(MCPL_FWD_PIXEL_INFO, payload, WITH_PAYLOAD);
+	spin1_send_mc_packet(MCPL_FWD_PIXEL_INFO+myCoreID, payload, WITH_PAYLOAD);
 
 	ushort i, cntr, szpx, ch, remaining;
 	cntr = (pxBuffer.pxLen % 4) == 0 ? pxBuffer.pxLen / 4 : (pxBuffer.pxLen / 4) + 1;
@@ -172,22 +194,22 @@ void fwdImgData(uint isLastChannel, uint arg1)
 			if(i==0) {
 				sark_mem_cpy((void *)&payload, (void *)pxBuffer.rpxbuf + i*4, szpx);
 				// note the 4-byte boundary above; hence, we define rpxbuf as 272 array
-				spin1_send_mc_packet(MCPL_FWD_PIXEL_RDATA, payload, WITH_PAYLOAD);
+				spin1_send_mc_packet(MCPL_FWD_PIXEL_RDATA+myCoreID, payload, WITH_PAYLOAD);
 			} else if(i==1) {
 				sark_mem_cpy((void *)&payload, (void *)pxBuffer.gpxbuf + i*4, szpx);
 				// note the 4-byte boundary above; hence, we define rpxbuf as 272 array
-				spin1_send_mc_packet(MCPL_FWD_PIXEL_GDATA, payload, WITH_PAYLOAD);
+				spin1_send_mc_packet(MCPL_FWD_PIXEL_GDATA+myCoreID, payload, WITH_PAYLOAD);
 			} else {
 				sark_mem_cpy((void *)&payload, (void *)pxBuffer.bpxbuf + i*4, szpx);
 				// note the 4-byte boundary above; hence, we define rpxbuf as 272 array
-				spin1_send_mc_packet(MCPL_FWD_PIXEL_BDATA, payload, WITH_PAYLOAD);
+				spin1_send_mc_packet(MCPL_FWD_PIXEL_BDATA+myCoreID, payload, WITH_PAYLOAD);
 			}
 			remaining -= szpx;
 		}
 	}
 
 	// then, send info end-of-forwarding
-	spin1_send_mc_packet(MCPL_FWD_PIXEL_EOF, 0, WITH_PAYLOAD);
+	spin1_send_mc_packet(MCPL_FWD_PIXEL_EOF+myCoreID, 0, WITH_PAYLOAD);
 
 	// and then compute the grayscale for this core:
 	//if(isLastChannel == 1)

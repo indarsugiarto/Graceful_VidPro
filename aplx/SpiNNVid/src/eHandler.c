@@ -63,6 +63,7 @@ void hMCPL(uint key, uint payload)
 
 	// outside root node: make it core-to-core communication
 	else if(key_hdr == MCPL_FWD_PIXEL_INFO && key_arg == myCoreID) {
+		//io_printf(IO_BUF, "Got key-hdr 0x%x and key-arg %d\n", key_hdr, key_arg);
 		pxBuffer.pxLen = payload >> 16;
 		pxBuffer.pxSeq = payload & 0xFFFF;
 		pxBuffer.pxCntr[0] = 0;
@@ -82,6 +83,7 @@ void hMCPL(uint key, uint payload)
 		pxBuffer.pxCntr[1]++;
 	}
 	else if(key_hdr == MCPL_FWD_PIXEL_EOF && key_arg == myCoreID) {
+		//io_printf(IO_BUF, "Got key-hdr 0x%x and key-arg %d\n", key_hdr, key_arg);
 		spin1_schedule_callback(processGrayScaling, 0, 0, PRIORITY_PROCESSING);
 	}
 
@@ -203,7 +205,7 @@ void hSDP(uint mBox, uint port)
 
 		pxBuffer.pxSeq = msg->cmd_rc;		// not important, if there's packet lost...
 		pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
-		sark_mem_cpy(pxBuffer.rpxbuf, &msg->seq, pxBuffer.pxLen);
+		sark_mem_cpy(pxBuffer.gpxbuf, &msg->seq, pxBuffer.pxLen);
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
 		// spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
 		// TODO: Think about packet lost...
@@ -228,7 +230,7 @@ void hSDP(uint mBox, uint port)
 		pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
 		sark_mem_cpy(pxBuffer.bpxbuf, &msg->seq, pxBuffer.pxLen);
 		// forward and notify to do grayscaling:
-		spin1_schedule_callback(fwdImgData, 1, 0, PRIORITY_PROCESSING);
+		spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
 		// TODO: Note: how to handle missing packet?
 	}
 

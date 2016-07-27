@@ -285,13 +285,16 @@ void bcastWID(uint Unused, uint null);
 
 void computeWLoad(uint withReport, uint arg1);
 
-void fwdImgData(uint isLastChannel, uint arg1);	// isLastChannel==1 for B-channel
+void fwdImgData(uint arg0, uint arg1);	// isLastChannel==1 for B-channel
 void processGrayScaling(uint arg0, uint arg1);
 void recvFwdImgData(uint key, uint payload);
 
 // debugging and reporting
 void give_report(uint reportType, uint target);
 void hTimer(uint tick, uint Unused);
+void seePxBuffer();
+
+REAL roundr(REAL inVal);
 
 /*--------- We change the algorithm into multiple cores processing for frames ---------
 void storeDtcmImgBuf(uint ch, uint Unused);

@@ -126,3 +126,57 @@ void give_report(uint reportType, uint target)
 	}
 #endif
 }
+
+void seePxBuffer()
+{
+	ushort i;
+	io_printf(IO_BUF, "Content of rba at pxSeq-%d:\n", pxBuffer.pxSeq);
+	for(i=0; i<pxBuffer.pxLen; i++) {
+		io_printf(IO_BUF, "%0x ", pxBuffer.rpxbuf[i]);
+	}
+	io_printf(IO_BUF, "\n---------------------------------\n");
+	io_printf(IO_BUF, "Content of gba at pxSeq-%d:\n", pxBuffer.pxSeq);
+	for(i=0; i<pxBuffer.pxLen; i++) {
+		io_printf(IO_BUF, "%0x ", pxBuffer.gpxbuf[i]);
+	}
+	io_printf(IO_BUF, "\n---------------------------------\n");
+	io_printf(IO_BUF, "Content of bba at pxSeq-%d:\n", pxBuffer.pxSeq);
+	for(i=0; i<pxBuffer.pxLen; i++) {
+		io_printf(IO_BUF, "%0x ", pxBuffer.bpxbuf[i]);
+	}
+	io_printf(IO_BUF, "\n---------------------------------\n");
+	io_printf(IO_BUF, "Content of yba at pxSeq-%d:\n", pxBuffer.pxSeq);
+	for(i=0; i<pxBuffer.pxLen; i++) {
+		io_printf(IO_BUF, "%0x ", pxBuffer.ypxbuf[i]);
+	}
+	io_printf(IO_BUF, "\n---------------------------------\n");
+
+	/*
+	ushort i;
+	io_printf(IO_BUF, "Content of rba at pxSeq-%d:\n", pxBuffer.pxSeq);
+	for(i=0; i<pxBuffer.pxLen; i++) {
+		io_printf(IO_BUF, "%k ", (REAL)pxBuffer.rpxbuf[i]);
+	}
+
+	ushort c = pxBuffer.rpxbuf[0];
+	//c = 255;
+	REAL r = (REAL)pxBuffer.rpxbuf[0];
+	io_printf(IO_BUF, "\n---------------------------------\n");
+	io_printf(IO_BUF, "rpxBuf[0] = %u\n",pxBuffer.rpxbuf[0]);
+	io_printf(IO_BUF, "(REAL)255 = %k\n",(REAL)255);
+	io_printf(IO_BUF, "(REAL)rpxBuf[0] = %k\n",(REAL)pxBuffer.rpxbuf[0]);
+	io_printf(IO_BUF, "c = %d, (REAL)c = %k\n",c, (REAL)c);
+	io_printf(IO_BUF, "r = %k\n",r);
+	*/
+}
+
+inline REAL roundr(REAL inVal)
+{
+	uint base = (uint)inVal;
+	uint upper = base + 1;
+	REAL conver = inVal+REAL_CONST(0.5);
+	if((uint)conver == base)
+		return (REAL)base;
+	else
+		return (REAL)upper;
+}
