@@ -130,7 +130,7 @@ void initRouter()
 	if(sv->p2p_addr==0)
 		dest = 1 + (1<<1) + (1<<2);
 #endif
-	e = rtr_alloc(5);
+	e = rtr_alloc(6);
 	if(e==0)
 	{
 		io_printf(IO_STD, "initRouter err!\n");
@@ -140,6 +140,7 @@ void initRouter()
 		rtr_mc_set(e, MCPL_FWD_PIXEL_RDATA, MCPL_FWD_PIXEL_MASK, dest); e++;
 		rtr_mc_set(e, MCPL_FWD_PIXEL_GDATA, MCPL_FWD_PIXEL_MASK, dest); e++;
 		rtr_mc_set(e, MCPL_FWD_PIXEL_BDATA, MCPL_FWD_PIXEL_MASK, dest); e++;
+		rtr_mc_set(e, MCPL_FWD_PIXEL_YDATA, MCPL_FWD_PIXEL_MASK, dest); e++;
 		rtr_mc_set(e, MCPL_FWD_PIXEL_EOF,	MCPL_FWD_PIXEL_MASK, dest); e++;
 	}
 

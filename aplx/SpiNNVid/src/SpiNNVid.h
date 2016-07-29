@@ -18,6 +18,11 @@
 #define G_GRAY                  REAL_CONST(0.5870)
 #define B_GRAY                  REAL_CONST(0.1140)
 
+// forward RGB or just gray pixels?
+// forwarding RGB is slower, but might be useful for general image processing
+// in the future
+#define FWD_FULL_COLOR          FALSE
+
 #define MAJOR_VERSION           0
 #define MINOR_VERSION           1
 
@@ -123,7 +128,8 @@
 #define MCPL_FWD_PIXEL_RDATA		0xbca70000	// broadcast pixel chunk data for R-ch
 #define MCPL_FWD_PIXEL_GDATA		0xbca80000	// broadcast pixel chunk data for G-ch
 #define MCPL_FWD_PIXEL_BDATA		0xbca90000	// broadcast pixel chunk data for B-ch
-#define MCPL_FWD_PIXEL_EOF			0xbcaA0000	// end of transfer, start grayscaling!
+#define MCPL_FWD_PIXEL_YDATA		0xbcaA0000	// broadcast pixel chunk data for B-ch
+#define MCPL_FWD_PIXEL_EOF			0xbcaB0000	// end of transfer, start grayscaling!
 #define MCPL_FWD_PIXEL_MASK			0xFFFF0000	// lower word is used for core-ID
 
 
@@ -221,19 +227,46 @@ fwdPkt_t fwdPktBuffer[3];	// for each channel
 typedef struct pxBuf {
 	ushort pxSeq;	// the segment index of the chunk within the overall frame structure
 	ushort pxLen;	// how many pixels are contained in one channel chunk
-	ushort pxCntr[3];	// for receiver only, to track which pixels are broadcasted
+	ushort pxCntr[4];	// for receiver only, to track which pixels are broadcasted
+	ushort pad;		// apa ini? tanpa ini, muncul dua byte "00 00" di awal
 	/*
 	uchar rpxbuf[270];	// 270/4 = 67 with 2 bytes remaining
 	uchar gpxbuf[270];
 	uchar bpxbuf[270];
 	*/
+
+	//---------------- Debugging 27.07.2016:17.00
+	// apa ada masalah dengan struct buat dma?
+	/*
 	uchar rpxbuf[272];	// we add 2bytes padding at the end to make 4-byte boundary
 	uchar gpxbuf[272];
 	uchar bpxbuf[272];
 	uchar ypxbuf[272];	// the resulting grey pixels
+	*/
 } pxBuf_t;
 pxBuf_t pxBuffer;
 
+// Ada masalah jika buffer dimasukkan ke dalam struct. Coba jika ditaruh di luar:
+// Ternyata masih bermasalah. Sekarang mari kota coba dengan benar-benar membuat
+// berada di boundary 4-byte.
+#define DEF_PXLEN_IN_CHUNK	270
+/*
+uchar rpxbuf[DEF_PXLEN_IN_CHUNK];	// 270/4 = 67 with 2 bytes remaining
+uchar gpxbuf[DEF_PXLEN_IN_CHUNK];
+uchar bpxbuf[DEF_PXLEN_IN_CHUNK];
+uchar ypxbuf[DEF_PXLEN_IN_CHUNK];
+/*
+uchar rpxbuf[270];	// 270/4 = 67 with 2 bytes remaining
+uchar gpxbuf[270];
+uchar bpxbuf[270];
+uchar ypxbuf[270];
+*/
+
+// Coba ?pxbuf di taruh di heap
+uchar *rpxbuf;
+uchar *gpxbuf;
+uchar *bpxbuf;
+uchar *ypxbuf;
 
 
 /*-----------------------------------------------------------------------------------*/
@@ -288,11 +321,13 @@ void computeWLoad(uint withReport, uint arg1);
 void fwdImgData(uint arg0, uint arg1);	// isLastChannel==1 for B-channel
 void processGrayScaling(uint arg0, uint arg1);
 void recvFwdImgData(uint key, uint payload);
+void collectGrayPixels(uint arg0, uint arg1);
 
 // debugging and reporting
 void give_report(uint reportType, uint target);
 void hTimer(uint tick, uint Unused);
-void seePxBuffer();
+void seePxBuffer(char *stream);
+void peekPxBufferInSDRAM(char *stream);
 
 REAL roundr(REAL inVal);
 

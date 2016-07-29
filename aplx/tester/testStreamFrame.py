@@ -167,13 +167,15 @@ class imgData:
         :return:
         """
         def_len = 270   # not 272, because we include pxSeq in cmd_rc
+        #def_len = 268  # mari coba dibuat "strict" pada boundary 4-byte
         coreCntr = 0  # starting core is core-1
         remaining = self.wImg * self.hImg
         sp = 0
         pxSeq = 0
         # then repeat until all pixels of all chanels have sent
+        delVal = 0
         while remaining > 0:
-            print "[ pxSeq-{} ]Sending burst data of 3-channels to core-{}...".format(pxSeq, coreList[coreCntr])
+            #print "[ pxSeq-{} ]Sending burst data of 3-channels to core-{}...".format(pxSeq, coreList[coreCntr])
 
 
             if remaining > (def_len):
@@ -181,6 +183,7 @@ class imgData:
             else:
                 pxLen = remaining
 
+            """
             print "R-channel:"
             for px in range(pxLen):
                 print "%0x" % ord(self.rba[sp+px:sp+px+1]),
@@ -194,6 +197,7 @@ class imgData:
             for px in range(pxLen):
                 print "%0x" % ord(self.yba[sp+px:sp+px+1]),
             print "\n"
+            """
 
             cmd_rc = struct.pack("<H", pxSeq)
             br = cmd_rc + self.rba[sp:sp+pxLen]
@@ -201,21 +205,29 @@ class imgData:
             bb = cmd_rc + self.bba[sp:sp+pxLen]
 
             sendChunk(SDP_PORT_R_IMG_DATA, coreList[coreCntr], br)
+            #time.sleep(0.5)    # should be removed, it's OK!!!!
             sendChunk(SDP_PORT_G_IMG_DATA, coreList[coreCntr], bg)
+            #time.sleep(0.5)
             sendChunk(SDP_PORT_B_IMG_DATA, coreList[coreCntr], bb)
 
             # update
             coreCntr += 1
+            pxSeq +=1
             if coreCntr == len(coreList):
                 coreCntr = 0
             sp += pxLen
             remaining -= pxLen
 
-            _ = raw_input("Press enter to continue")
+            for _ in range(200):     # in chip 0,0, the image is retrieved with 16-cores in this value
+                delVal += 1
 
+            #_ = raw_input("Press enter to continue")
+            # NOTE: activate the following if all RGB pixels should be forwarded instead of only gray
+            #time.sleep(0.001)
+        return delVal
 
 imgFile = "SpiNN-3.jpg"
-destCore = [c+1 for c in range(10)]  # let's try with 10 cores
+destCore = [c+1 for c in range(16)]  # let's try with 10 cores
 
 def main():
     #load image from file and create array from it

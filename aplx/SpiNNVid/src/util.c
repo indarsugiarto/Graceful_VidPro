@@ -83,29 +83,30 @@ void give_report(uint reportType, uint target)
 		else if(reportType==DEBUG_REPORT_NWORKERS) {
 			io_printf(dest, "Found %d active cores\n", get_Nworkers());
 		}
-		else if(reportType==DEBUG_REPORT_BLKINFO) {
-			io_printf(dest, "Node block info\n---------------------\n");
-			io_printf(dest, "Node-ID  = %d\n", blkInfo->nodeBlockID);
-			io_printf(dest, "MaxBlock = %d\n", blkInfo->maxBlock);
-			io_printf(dest, "Nworkers = %d\n", blkInfo->Nworkers);
-			if(blkInfo->opType==0) {
-				if(blkInfo->opFilter==0)
-					io_printf(dest, "OpType   = SOBEL no FILTER\n");
-				else
-					io_printf(dest, "OpType   = SOBEL with FILTER\n");
-			} else {
-				if(blkInfo->opFilter==0)
-					io_printf(dest, "OpType   = LAPLACE no FILTER\n");
-				else
-					io_printf(dest, "OpType   = LAPLACE with FILTER\n");
-			}
-			io_printf(dest, "wFrame   = %d\n", blkInfo->wImg);
-			io_printf(dest, "hFrame   = %d\n", blkInfo->hImg);
-			io_printf(dest, "------------------------\n", workers.tAvailable);
-		}
 	}
 	if(reportType==DEBUG_REPORT_MYWID) {
 		io_printf(dest, "My wID = %d\n", workers.subBlockID);
+	}
+	else if(reportType==DEBUG_REPORT_BLKINFO) {
+		io_printf(dest, "Node block info\n---------------------\n");
+		io_printf(dest, "@blkInfo = 0x%x\n", blkInfo);
+		io_printf(dest, "Node-ID  = %d\n", blkInfo->nodeBlockID);
+		io_printf(dest, "MaxBlock = %d\n", blkInfo->maxBlock);
+		io_printf(dest, "Nworkers = %d\n", blkInfo->Nworkers);
+		if(blkInfo->opType==0) {
+			if(blkInfo->opFilter==0)
+				io_printf(dest, "OpType   = SOBEL no FILTER\n");
+			else
+				io_printf(dest, "OpType   = SOBEL with FILTER\n");
+		} else {
+			if(blkInfo->opFilter==0)
+				io_printf(dest, "OpType   = LAPLACE no FILTER\n");
+			else
+				io_printf(dest, "OpType   = LAPLACE with FILTER\n");
+		}
+		io_printf(dest, "wFrame   = %d\n", blkInfo->wImg);
+		io_printf(dest, "hFrame   = %d\n", blkInfo->hImg);
+		io_printf(dest, "------------------------\n", workers.tAvailable);
 	}
 	else if(reportType==DEBUG_REPORT_WLOAD) {
 		// send the workload via tag-3
@@ -127,29 +128,34 @@ void give_report(uint reportType, uint target)
 #endif
 }
 
-void seePxBuffer()
+void seePxBuffer(char *stream)
 {
+	if(sv->p2p_addr != 0) return;
 	ushort i;
-	io_printf(IO_BUF, "Content of rba at pxSeq-%d:\n", pxBuffer.pxSeq);
+	io_printf(stream, "Content of rba at pxSeq-%d:\n", pxBuffer.pxSeq);
 	for(i=0; i<pxBuffer.pxLen; i++) {
-		io_printf(IO_BUF, "%0x ", pxBuffer.rpxbuf[i]);
+		//io_printf(stream, "%0x ", pxBuffer.rpxbuf[i]);
+		io_printf(stream, "%0x ", rpxbuf[i]);
 	}
-	io_printf(IO_BUF, "\n---------------------------------\n");
-	io_printf(IO_BUF, "Content of gba at pxSeq-%d:\n", pxBuffer.pxSeq);
+	io_printf(stream, "\n---------------------------------\n");
+	io_printf(stream, "Content of gba at pxSeq-%d:\n", pxBuffer.pxSeq);
 	for(i=0; i<pxBuffer.pxLen; i++) {
-		io_printf(IO_BUF, "%0x ", pxBuffer.gpxbuf[i]);
+		//io_printf(stream, "%0x ", pxBuffer.gpxbuf[i]);
+		io_printf(stream, "%0x ", gpxbuf[i]);
 	}
-	io_printf(IO_BUF, "\n---------------------------------\n");
-	io_printf(IO_BUF, "Content of bba at pxSeq-%d:\n", pxBuffer.pxSeq);
+	io_printf(stream, "\n---------------------------------\n");
+	io_printf(stream, "Content of bba at pxSeq-%d:\n", pxBuffer.pxSeq);
 	for(i=0; i<pxBuffer.pxLen; i++) {
-		io_printf(IO_BUF, "%0x ", pxBuffer.bpxbuf[i]);
+		//io_printf(stream, "%0x ", pxBuffer.bpxbuf[i]);
+		io_printf(stream, "%0x ", bpxbuf[i]);
 	}
-	io_printf(IO_BUF, "\n---------------------------------\n");
-	io_printf(IO_BUF, "Content of yba at pxSeq-%d:\n", pxBuffer.pxSeq);
+	io_printf(stream, "\n---------------------------------\n");
+	io_printf(stream, "Content of yba at pxSeq-%d:\n", pxBuffer.pxSeq);
 	for(i=0; i<pxBuffer.pxLen; i++) {
-		io_printf(IO_BUF, "%0x ", pxBuffer.ypxbuf[i]);
+		//io_printf(stream, "%0x ", pxBuffer.ypxbuf[i]);
+		io_printf(stream, "%0x ", ypxbuf[i]);
 	}
-	io_printf(IO_BUF, "\n---------------------------------\n");
+	io_printf(stream, "\n---------------------------------\n");
 
 	/*
 	ushort i;
@@ -169,6 +175,48 @@ void seePxBuffer()
 	io_printf(IO_BUF, "r = %k\n",r);
 	*/
 }
+
+void peekPxBufferInSDRAM(char *stream)
+{
+	//if(sv->p2p_addr != 0) return;
+	uchar px;
+	ushort i;
+	uchar *offset;
+	io_printf(stream, "Content of rba at 0x%x:\n",
+			  blkInfo->imgRIn+pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK);
+	for(i=0; i<pxBuffer.pxLen; i++) {
+		offset = blkInfo->imgRIn + pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK + i;
+		sark_mem_cpy(&px, offset, 1);
+		io_printf(stream, "%0x ", px);
+	}
+	io_printf(stream, "\n---------------------------------\n");
+	io_printf(stream, "Content of gba at 0x%x:\n",
+			  blkInfo->imgGIn+pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK);
+	for(i=0; i<pxBuffer.pxLen; i++) {
+		offset = blkInfo->imgGIn + pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK + i;
+		sark_mem_cpy(&px, offset, 1);
+		io_printf(stream, "%0x ", px);
+	}
+	io_printf(stream, "\n---------------------------------\n");
+	io_printf(stream, "Content of bba at 0x%x:\n",
+			  blkInfo->imgBIn+pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK);
+	for(i=0; i<pxBuffer.pxLen; i++) {
+		offset = blkInfo->imgBIn + pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK + i;
+		sark_mem_cpy(&px, offset, 1);
+		io_printf(stream, "%0x ", px);
+	}
+	io_printf(stream, "\n---------------------------------\n");
+	io_printf(stream, "Content of yba at 0x%x:\n",
+			  blkInfo->imgOut1+pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK);
+	for(i=0; i<pxBuffer.pxLen; i++) {
+		offset = blkInfo->imgOut1 + pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK + i;
+		sark_mem_cpy(&px, offset, 1);
+		io_printf(stream, "%0x ", px);
+	}
+	io_printf(stream, "\n---------------------------------\n");
+
+}
+
 
 inline REAL roundr(REAL inVal)
 {

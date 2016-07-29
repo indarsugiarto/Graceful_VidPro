@@ -53,3 +53,24 @@ xxx1xxx. R channel, G channel and B channel are sent in parallel, and reply mess
    // and current length of the chunk (szpx)
    key = base_key | (fwdPktBuffer[ch].pxLen < 4) | szpx;
    where base_key is either 0xbca80000, 0xbca90000, or 0xbcaA0000
+
+
+
+----------------- Catatan 28 Juli 2016 - 17:13:44 -----------------
+Ada masalah dengan dma :
+- Tidak cocok antara sumber dengan hasil di sdram:
+  - ada tambahan 2 byte 00 00 di awal -> aku menduga karena ada offset di struct
+    --> dapat diselesaikan dengan menambankan 2 byte pad di struct
+  - tapi kemudian ada tambahan 2 byte 00 00 juga di akhir chunk
+    --> aku ndak tahu dari mana, tapi sepertinya dapat diselesaikan dengan
+	meletakkan ?pxbuf[] di luar struct
+- Sepertinya dengan meletakkan ?pxbuf[] di luar struct tetap tidak menyelesaikan masalah.
+  Karena di chunk-chunk berikutnya terjadi mismatching lagi...
+- SOLVED!!!!
+  Dengan menggunakan heap, jadi ?pxbuf diletakkan di heap
+  Bahkan bisa hingga 270, bukan hanya 268!!!
+
+----------------- Catatan 29 Juli 2016 - 17:13:44 -----------------
+- Meskipun teknik copy manual ke sdram menghasilkan hasil yang sempurna, tapi sepertinya
+  hanya berfungsi untuk kecepatan sedang. Kalau kecepatan dinaikkan, hasilnya juga
+  ada noise seperti dengan dma.

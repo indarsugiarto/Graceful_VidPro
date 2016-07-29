@@ -104,8 +104,6 @@ void computeWLoad(uint withReport, uint arg1)
 }
 
 
-
-
 // processGrayScaling() will process pxBuffer
 void processGrayScaling(uint arg0, uint arg1)
 {
@@ -121,9 +119,15 @@ void processGrayScaling(uint arg0, uint arg1)
 	ushort v1,v2,v3;
 	uchar grVal;
 	for(ushort i=0; i<pxBuffer.pxLen; i++) {
+		/*
 		v1 = pxBuffer.rpxbuf[i];
 		v2 = pxBuffer.gpxbuf[i];
 		v3 = pxBuffer.bpxbuf[i];
+		*/
+		v1 = rpxbuf[i];
+		v2 = gpxbuf[i];
+		v3 = bpxbuf[i];
+
 		/*
 		tmp = (REAL)pxBuffer.rpxbuf[i] * R_GRAY +
 			  (REAL)pxBuffer.gpxbuf[i] * G_GRAY +
@@ -132,57 +136,114 @@ void processGrayScaling(uint arg0, uint arg1)
 		tmp = (REAL)v1*R_GRAY + (REAL)v2*G_GRAY + (REAL)v3*B_GRAY;
 		// why round first? because if not, it truncate to lower integer
 		grVal = (uchar)roundr(tmp);
-		pxBuffer.ypxbuf[i] = grVal;
+		//pxBuffer.ypxbuf[i] = grVal;
+		ypxbuf[i] = grVal;
 	}
-	// then copy to sdram at location pxBuffer.pxSeq
+	// then copy to sdram determined by pxBuffer.pxSeq
 	// Note: blkInfo->imgOut1 must be initialized already and all cores must
 	//       know it already (ie. blkInfo must be broadcasted in advance)
+
+	// Assuming that we only work with "non icon" image, then the chunk size
+	// will be the same, unless the last one. Hence, we put the fix-size here:
+	//uint offset = pxBuffer.pxSeq*pxBuffer.pxLen;
+	// uint offset = pxBuffer.pxSeq*270;
+	uint offset = pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK;
+
+	// at this point, although workers.imgRIn... workers.imgOut1... have been initialized,
+	// we cannot use for storing original image to sdram, since the image distribution
+	// is independent of wID !!! So, we have to use blkInfo, which is global for all cores
+	// in the chip (it IS independent of wID)
+
+	// coba dengan manual copy: hasilnya? SEMPURNA !!!!
+	sark_mem_cpy((void *)blkInfo->imgRIn+offset, (void *)rpxbuf, pxBuffer.pxLen);
+	sark_mem_cpy((void *)blkInfo->imgGIn+offset, (void *)gpxbuf, pxBuffer.pxLen);
+	sark_mem_cpy((void *)blkInfo->imgBIn+offset, (void *)bpxbuf, pxBuffer.pxLen);
+	sark_mem_cpy((void *)blkInfo->imgOut1+offset, (void *)ypxbuf, pxBuffer.pxLen);
+
+	/*
+	// the combination of dma and direct memory copying
 	uint dmaDone;
 	do {
 		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_R_PIXELS+myCoreID,
-									 blkInfo->imgRIn+(pxBuffer.pxSeq*pxBuffer.pxLen),
-									 pxBuffer.rpxbuf, DMA_WRITE, pxBuffer.pxLen);
+									 blkInfo->imgRIn+offset,
+									 rpxbuf, DMA_WRITE, pxBuffer.pxLen);
+		//if(dmaDone != 0) io_printf(IO_STD, "dma full!\n");
+		if(dmaDone != 0) {
+			sark_mem_cpy((void *)blkInfo->imgRIn+offset, (void *)rpxbuf, pxBuffer.pxLen);
+			dmaDone = 1;
+		}
 	} while(dmaDone==0);
 	do {
 		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_G_PIXELS+myCoreID,
-									 blkInfo->imgGIn+(pxBuffer.pxSeq*pxBuffer.pxLen),
-									 pxBuffer.gpxbuf, DMA_WRITE, pxBuffer.pxLen);
+									 blkInfo->imgGIn+offset,
+									 gpxbuf, DMA_WRITE, pxBuffer.pxLen);
+		//if(dmaDone != 0) io_printf(IO_STD, "dma full!\n");
+		if(dmaDone != 0) {
+			sark_mem_cpy((void *)blkInfo->imgGIn+offset, (void *)gpxbuf, pxBuffer.pxLen);
+			dmaDone = 1;
+		}
 	} while(dmaDone==0);
 	do {
 		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_B_PIXELS+myCoreID,
-									 blkInfo->imgRIn+(pxBuffer.pxSeq*pxBuffer.pxLen),
-									 pxBuffer.rpxbuf, DMA_WRITE, pxBuffer.pxLen);
+									 blkInfo->imgBIn+offset,
+									 bpxbuf, DMA_WRITE, pxBuffer.pxLen);
+		//if(dmaDone != 0) io_printf(IO_STD, "dma full!\n");
+		if(dmaDone != 0) {
+			sark_mem_cpy((void *)blkInfo->imgBIn+offset, (void *)bpxbuf, pxBuffer.pxLen);
+			dmaDone = 1;
+		}
 	} while(dmaDone==0);
 	do {
 		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_Y_PIXELS+myCoreID,
-									 blkInfo->imgOut1+(pxBuffer.pxSeq*pxBuffer.pxLen),
-									 pxBuffer.ypxbuf, DMA_WRITE, pxBuffer.pxLen);
+									 blkInfo->imgOut1+offset,
+									 ypxbuf, DMA_WRITE, pxBuffer.pxLen);
+		//if(dmaDone != 0) io_printf(IO_STD, "dma full!\n");
+		if(dmaDone != 0) {
+			sark_mem_cpy((void *)blkInfo->imgOut1+offset, (void *)ypxbuf, pxBuffer.pxLen);
+			dmaDone = 1;
+		}
 	} while(dmaDone==0);
-
 	// Note: jangan broadcast gray pixel, tapi untuk masing-masing channel dan biarkan
 	//       core tujuan yang menghitung gray-scale nya sendiri !!!!!
+	*/
 
 
 	/*------------------------ debugging --------------------------*/
 	// debugging: to see if original pixels chunks and forwarded are the same
 	// in python, we use raw_input() to get a chance for viewing it
-	seePxBuffer();
+	// seePxBuffer(IO_BUF);
+
+	/*
+	// see the address where the chunk is stored
+	if(sv->p2p_addr==0)
+	io_printf(IO_STD, "rgby-chunk-%d is stored at 0x%x, 0x%x, 0x%x, 0x%x\n", pxBuffer.pxSeq,
+			  blkInfo->imgRIn+offset,
+			  blkInfo->imgGIn+offset,
+			  blkInfo->imgBIn+offset,
+			  blkInfo->imgOut1+offset);
+	*/
+
+	// give a delay for dma to complete
+	// sark_delay_us(1000);
+	// then peek
+	// peekPxBufferInSDRAM();
+
+	// then forward the pixels to similar cores but in other chips
+	if(sv->p2p_addr==0)
+		spin1_schedule_callback(fwdImgData,0,0,PRIORITY_PROCESSING);
 }
 
 // once the core receive chunks for all channels, it forwards them
 void fwdImgData(uint arg0, uint arg1)
 {
-	// NOTE: at this point the core, should received chunks of all channels
-	// TODO: forward pixels data to external chips
-
-	uint payload;
-	// first forward chunk information
+	uint payload, i, cntr, szpx, remaining, ch;
 	payload = (pxBuffer.pxLen << 16) + pxBuffer.pxSeq;
-	spin1_send_mc_packet(MCPL_FWD_PIXEL_INFO+myCoreID, payload, WITH_PAYLOAD);
-
-	ushort i, cntr, szpx, ch, remaining;
 	cntr = (pxBuffer.pxLen % 4) == 0 ? pxBuffer.pxLen / 4 : (pxBuffer.pxLen / 4) + 1;
 
+	// first forward chunk information
+	spin1_send_mc_packet(MCPL_FWD_PIXEL_INFO+myCoreID, payload, WITH_PAYLOAD);
+
+#if (FWD_FULL_COLOR==TRUE)
 	// then forward chunks for each channels
 	for(ch=0; ch<3; ch++) {
 		remaining = pxBuffer.pxLen;
@@ -191,33 +252,54 @@ void fwdImgData(uint arg0, uint arg1)
 				szpx = sizeof(uint);
 			else
 				szpx = remaining;
-			if(i==0) {
-				sark_mem_cpy((void *)&payload, (void *)pxBuffer.rpxbuf + i*4, szpx);
+			if(ch==0) {
+				//sark_mem_cpy((void *)&payload, (void *)pxBuffer.rpxbuf + i*4, szpx);
+				sark_mem_cpy((void *)&payload, (void *)rpxbuf + i*4, szpx);
 				// note the 4-byte boundary above; hence, we define rpxbuf as 272 array
 				spin1_send_mc_packet(MCPL_FWD_PIXEL_RDATA+myCoreID, payload, WITH_PAYLOAD);
-			} else if(i==1) {
-				sark_mem_cpy((void *)&payload, (void *)pxBuffer.gpxbuf + i*4, szpx);
+			} else if(ch==1) {
+				//sark_mem_cpy((void *)&payload, (void *)pxBuffer.gpxbuf + i*4, szpx);
+				sark_mem_cpy((void *)&payload, (void *)gpxbuf + i*4, szpx);
 				// note the 4-byte boundary above; hence, we define rpxbuf as 272 array
 				spin1_send_mc_packet(MCPL_FWD_PIXEL_GDATA+myCoreID, payload, WITH_PAYLOAD);
 			} else {
-				sark_mem_cpy((void *)&payload, (void *)pxBuffer.bpxbuf + i*4, szpx);
+				//sark_mem_cpy((void *)&payload, (void *)pxBuffer.bpxbuf + i*4, szpx);
+				sark_mem_cpy((void *)&payload, (void *)bpxbuf + i*4, szpx);
 				// note the 4-byte boundary above; hence, we define rpxbuf as 272 array
 				spin1_send_mc_packet(MCPL_FWD_PIXEL_BDATA+myCoreID, payload, WITH_PAYLOAD);
 			}
 			remaining -= szpx;
+
 		}
+	}
+
+#endif
+	/*-------------- gray pixels forwarding ----------------*/
+
+	remaining = pxBuffer.pxLen;
+	for(i=0; i<cntr; i++) {
+		if(remaining > sizeof(uint))
+			szpx = sizeof(uint);
+		else
+			szpx = remaining;
+		sark_mem_cpy((void *)&payload, (void *)ypxbuf + i*4, szpx);
+		spin1_send_mc_packet(MCPL_FWD_PIXEL_YDATA+myCoreID, payload, WITH_PAYLOAD);
+		remaining -= szpx;
 	}
 
 	// then, send info end-of-forwarding
 	spin1_send_mc_packet(MCPL_FWD_PIXEL_EOF+myCoreID, 0, WITH_PAYLOAD);
 
-	// and then compute the grayscale for this core:
-	//if(isLastChannel == 1)
-	processGrayScaling(0,0);
 }
 
 
 
+void collectGrayPixels(uint arg0, uint arg1)
+{
+	uint offset = pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK;
+	// coba dengan manual copy: hasilnya? SEMPURNA !!!!
+	sark_mem_cpy((void *)blkInfo->imgOut1+offset, (void *)ypxbuf, pxBuffer.pxLen);
+}
 
 
 

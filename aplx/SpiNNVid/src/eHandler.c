@@ -62,29 +62,56 @@ void hMCPL(uint key, uint payload)
 	*/
 
 	// outside root node: make it core-to-core communication
+	// the following 5 else-if are used to transmit a chunk (270 pixels)
 	else if(key_hdr == MCPL_FWD_PIXEL_INFO && key_arg == myCoreID) {
-		//io_printf(IO_BUF, "Got key-hdr 0x%x and key-arg %d\n", key_hdr, key_arg);
 		pxBuffer.pxLen = payload >> 16;
 		pxBuffer.pxSeq = payload & 0xFFFF;
 		pxBuffer.pxCntr[0] = 0;
 		pxBuffer.pxCntr[1] = 0;
 		pxBuffer.pxCntr[2] = 0;
+		pxBuffer.pxCntr[3] = 0;
+		/*
+		if(sv->p2p_addr==1)
+			io_printf(IO_STD, "Got MCPL_FWD_PIXEL_INFO\n");
+		else
+			io_printf(IO_BUF, "Got MCPL_FWD_PIXEL_INFO\n");
+			*/
 	}
 	else if(key_hdr == MCPL_FWD_PIXEL_RDATA && key_arg == myCoreID) {
-		sark_mem_cpy(pxBuffer.rpxbuf + pxBuffer.pxCntr[0]*sizeof(uint), &payload, sizeof(uint));
+		//sark_mem_cpy((void *)pxBuffer.rpxbuf + pxBuffer.pxCntr[0]*sizeof(uint),
+		//			 (void *)&payload, sizeof(uint));
+		sark_mem_cpy((void *)rpxbuf + pxBuffer.pxCntr[0]*sizeof(uint),
+					 (void *)&payload, sizeof(uint));
 		pxBuffer.pxCntr[0]++;
 	}
 	else if(key_hdr == MCPL_FWD_PIXEL_GDATA && key_arg == myCoreID) {
-		sark_mem_cpy(pxBuffer.gpxbuf + pxBuffer.pxCntr[1]*sizeof(uint), &payload, sizeof(uint));
+		//sark_mem_cpy((void *)pxBuffer.gpxbuf + pxBuffer.pxCntr[1]*sizeof(uint),
+		//			 (void *)&payload, sizeof(uint));
+		sark_mem_cpy((void *)gpxbuf + pxBuffer.pxCntr[1]*sizeof(uint),
+					 (void *)&payload, sizeof(uint));
 		pxBuffer.pxCntr[1]++;
 	}
 	else if(key_hdr == MCPL_FWD_PIXEL_BDATA && key_arg == myCoreID) {
-		sark_mem_cpy(pxBuffer.bpxbuf + pxBuffer.pxCntr[2]*sizeof(uint), &payload, sizeof(uint));
-		pxBuffer.pxCntr[1]++;
+		//sark_mem_cpy((void *)pxBuffer.bpxbuf + pxBuffer.pxCntr[2]*sizeof(uint),
+		//			 (void *)&payload, sizeof(uint));
+		sark_mem_cpy((void *)bpxbuf + pxBuffer.pxCntr[2]*sizeof(uint),
+					 (void *)&payload, sizeof(uint));
+		pxBuffer.pxCntr[2]++;
+	}
+	else if(key_hdr == MCPL_FWD_PIXEL_YDATA && key_arg == myCoreID) {
+		//sark_mem_cpy((void *)pxBuffer.bpxbuf + pxBuffer.pxCntr[2]*sizeof(uint),
+		//			 (void *)&payload, sizeof(uint));
+		sark_mem_cpy((void *)ypxbuf + pxBuffer.pxCntr[3]*sizeof(uint),
+					 (void *)&payload, sizeof(uint));
+		pxBuffer.pxCntr[3]++;
 	}
 	else if(key_hdr == MCPL_FWD_PIXEL_EOF && key_arg == myCoreID) {
-		//io_printf(IO_BUF, "Got key-hdr 0x%x and key-arg %d\n", key_hdr, key_arg);
+		// debug 29.07.2016: since we only broadcast gray, no need to process it
+#if (FWD_FULL_COLOR==TRUE)
 		spin1_schedule_callback(processGrayScaling, 0, 0, PRIORITY_PROCESSING);
+#else
+		spin1_schedule_callback(collectGrayPixels, 0, 0, PRIORITY_PROCESSING);
+#endif
 	}
 
 	/*---------------- Old processing mechanism for forwarded packet ------------------
@@ -190,9 +217,16 @@ void hSDP(uint mBox, uint port)
 
 		pxBuffer.pxSeq = msg->cmd_rc;		// not important, if there's packet lost...
 		pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
-		sark_mem_cpy(pxBuffer.rpxbuf, &msg->seq, pxBuffer.pxLen);
+		//sark_mem_cpy(pxBuffer.rpxbuf, &msg->seq, pxBuffer.pxLen);
+		sark_mem_cpy(rpxbuf, &msg->seq, pxBuffer.pxLen);
+
+
+
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
 		// spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
+
+		// Debugging 28.07.2016: how many pxSeq?
+		//io_printf(IO_STD, "Got pxSeq-%d with msg->length %d\n", msg->cmd_rc, msg->length);
 	}
 	else if(port==SDP_PORT_G_IMG_DATA) {
 		// chCntr++;
@@ -205,7 +239,11 @@ void hSDP(uint mBox, uint port)
 
 		pxBuffer.pxSeq = msg->cmd_rc;		// not important, if there's packet lost...
 		pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
-		sark_mem_cpy(pxBuffer.gpxbuf, &msg->seq, pxBuffer.pxLen);
+		//sark_mem_cpy(pxBuffer.gpxbuf, &msg->seq, pxBuffer.pxLen);
+		sark_mem_cpy(gpxbuf, &msg->seq, pxBuffer.pxLen);
+
+
+
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
 		// spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
 		// TODO: Think about packet lost...
@@ -228,9 +266,14 @@ void hSDP(uint mBox, uint port)
 		//return;	// exit from here, because msg should be freed by core-4
 		pxBuffer.pxSeq = msg->cmd_rc;		// So, if there's packet lost before, it won't be processed!!
 		pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
-		sark_mem_cpy(pxBuffer.bpxbuf, &msg->seq, pxBuffer.pxLen);
+		//sark_mem_cpy(pxBuffer.bpxbuf, &msg->seq, pxBuffer.pxLen);
+		sark_mem_cpy(bpxbuf, &msg->seq, pxBuffer.pxLen);
+
+		// process gray scalling
+		spin1_schedule_callback(processGrayScaling, 0, 0, PRIORITY_PROCESSING);
+
 		// forward and notify to do grayscaling:
-		spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
+		// spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
 		// TODO: Note: how to handle missing packet?
 	}
 

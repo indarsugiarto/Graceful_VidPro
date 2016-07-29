@@ -2,6 +2,12 @@
 
 void c_main(void)
 {
+	// allocate ?pxbuf
+	rpxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, sizeof(uchar));
+	gpxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, sizeof(uchar));
+	bpxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, sizeof(uchar));
+	ypxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, sizeof(uchar));
+
 	// do sanity check
 	initCheck();
 
@@ -66,8 +72,13 @@ void c_main(void)
 		// then say hello so that we know if we run the correct version
 		if(sv->p2p_addr==0) {
 #ifdef USE_FIX_NODES
-			io_printf(IO_STD, "[FIX_NODES] SpiNNVid-v%d.%d for Spin%d\n",
+#if (FWD_FULL_COLOR==TRUE)
+			io_printf(IO_STD, "[FIX_NODES:FWD_RGB] SpiNNVid-v%d.%d for Spin%d\n",
 					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
+#else
+			io_printf(IO_STD, "[FIX_NODES:FWD_GRY] SpiNNVid-v%d.%d for Spin%d\n",
+					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
+#endif
 #else
 			io_printf(IO_STD, "[CONFIGURABLE] SpiNNVid-v%d.%d for Spin%d\n",
 					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
@@ -92,8 +103,13 @@ void c_main(void)
 	else {
 		// TODO: check if leadAp is running
 #ifdef USE_FIX_NODES
-			io_printf(IO_BUF, "[FIX_NODES] SpiNNVid-v%d.%d for Spin%d\n",
+#if (FWD_FULL_COLOR==TRUE)
+			io_printf(IO_BUF, "[FIX_NODES:FWD_RGB] SpiNNVid-v%d.%d for Spin%d\n",
 					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
+#else
+		io_printf(IO_BUF, "[FIX_NODES:FWD_GRY] SpiNNVid-v%d.%d for Spin%d\n",
+				  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
+#endif
 #else
 			io_printf(IO_BUF, "[CONFIGURABLE] SpiNNVid-v%d.%d for Spin%d\n",
 					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);

@@ -9,3 +9,8 @@
 4. If there is packet lost during frame transmission, process whatever data it holds currently
 
 5. After grayscaling: broadcast the pixels to external chips
+
+
+---------------------------
+28 Juli 2016:
+- Test broadcasted MCPL step-by-step (dengan delay supaya bisa dilihat dengan io_printf
