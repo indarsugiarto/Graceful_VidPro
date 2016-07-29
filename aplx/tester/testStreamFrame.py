@@ -22,6 +22,7 @@ SDP_UDP_DEBUG_PORT      = 20003
 SDP_PORT_R_IMG_DATA      = 1      # port for sending R-channel
 SDP_PORT_G_IMG_DATA      = 2      # port for sending G-channel
 SDP_PORT_B_IMG_DATA      = 3      # port for sending B-channel
+SDP_PORT_FRAME_END      = 4
 SDP_PORT_FRAME_INFO     = 5      # will be used to send the basic info about frame
 SDP_PORT_ACK            = 6
 SDP_PORT_CONFIG            = 7      # for sending image/frame info
@@ -82,7 +83,10 @@ def sendChunk(ch_port, core, ba):
     pad = struct.pack('<2B',0,0)
     hdr = struct.pack('<4B2H',7,0,dpc,spc,da,sa)
 
-    sdp = pad + hdr + ba
+    if ba is not None:
+        sdp = pad + hdr + ba
+    else:
+        sdp = pad + hdr
 
     CmdSock = QtNetwork.QUdpSocket()
     CmdSock.writeDatagram(sdp, QtNetwork.QHostAddress(DEF_HOST), DEF_SEND_PORT)
@@ -160,6 +164,19 @@ class imgData:
             bf.close()
             yf.close()
 
+    def sendFrameInfo(self):
+        flags = 0x07
+        tag = 0
+        dp = SDP_PORT_FRAME_INFO
+        dc = DEF_LEADAP
+        dax = 0
+        day = 0
+        print "Send frame info: 640 x 480",
+        cmd = 640
+        seq = 480
+        sendSDP(flags, tag, dp, dc, dax, day, cmd, seq, 0, 0, 0, None)
+        print "done!"
+
     def sendImg(self, coreList):
         """
         Scenario: iterate until all chunks have been sent
@@ -218,59 +235,34 @@ class imgData:
             sp += pxLen
             remaining -= pxLen
 
-            for _ in range(200):     # in chip 0,0, the image is retrieved with 16-cores in this value
+            for _ in range(200):  # in chip 0,0, the image is OK with 16-cores in this value
                 delVal += 1
 
             #_ = raw_input("Press enter to continue")
             # NOTE: activate the following if all RGB pixels should be forwarded instead of only gray
-            #time.sleep(0.001)
+            #       or for debugging in lower speed
+            time.sleep(0.000001)
         return delVal
 
+    def sendGo(self):
+        sendChunk(SDP_PORT_FRAME_END, 1, None)
+
+
 imgFile = "SpiNN-3.jpg"
+#imgFile = "Elephant-Wallpapers.jpg"
 destCore = [c+1 for c in range(16)]  # let's try with 10 cores
 
 def main():
     #load image from file and create array from it
     img = imgData(imgFile)
     img.processImage(imgFile, False)
+    img.sendFrameInfo()
     img.sendImg(destCore)
-
-    # TODO: send to spinnaker
+    img.sendGo()
 
     # finish? clean up memory
     del img
-    return
 
-    #prepare the socket
-    print "Send frame info: 640 x 480",
-    dp = SDP_PORT_FRAME_INFO
-    dc = DEF_LEADAP
-    cmd = 640
-    seq = 480
-    sendSDP(7, 0, dp, dc, 0, 0, cmd, seq, 0, 0, 0, None)
-    print "done!"
-
-    time.sleep(1)
-
-    print "Send chunks...",
-    rba = bytearray()
-    gba = bytearray()
-    bba = bytearray()
-    for i in range(pxLen):
-          if (i % 2) == 0:
-                rba += struct.pack('B', 0x1A)
-                gba += struct.pack('B', 0x2A)
-                bba += struct.pack('B', 0x3A)
-          else:
-                rba += struct.pack('B', 0x4B)
-                gba += struct.pack('B', 0x5B)
-                bba += struct.pack('B', 0x6B)
-    sendChunk(SDP_PORT_R_IMG_DATA, rba)
-    time.sleep(DELAY_VALUE)
-    sendChunk(SDP_PORT_G_IMG_DATA, gba)
-    time.sleep(DELAY_VALUE)
-    sendChunk(SDP_PORT_B_IMG_DATA, bba)
-    print "done!"
 
 if __name__=='__main__':
       main()

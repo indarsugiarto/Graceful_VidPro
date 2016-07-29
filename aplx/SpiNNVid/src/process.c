@@ -1,5 +1,6 @@
 // All distributed processing mechanisms are in this file
 #include "SpiNNVid.h"
+#include <stdlib.h>	// need for abs()
 
 
 void initIDcollection(uint withBlkInfo, uint Unused)
@@ -42,9 +43,12 @@ void bcastWID(uint Unused, uint null)
 // computeWLoad will be executed by all cores (including leadAps) in all chips
 void computeWLoad(uint withReport, uint arg1)
 {
-	// keep local (for each core)
+	//io_printf(IO_BUF, "Computing workload...\n");
+	// keep local (for each core) and to speed up
 	ushort w = blkInfo->wImg; workers.wImg = w;
 	ushort h = blkInfo->hImg; workers.hImg = h;
+	workers.opFilter = blkInfo->opFilter;
+	workers.opType = blkInfo->opType;
 
 	// block-wide
 	workers.nLinesPerBlock = h / blkInfo->maxBlock;
@@ -101,6 +105,19 @@ void computeWLoad(uint withReport, uint arg1)
 		workers.blkImgOut2 = blkInfo->imgOut2 + offset;
 		workers.blkImgOut3 = blkInfo->imgOut3 + offset;
 	}
+
+	// prepare the pixel buffers
+	ushort szMask = blkInfo->opType == IMG_SOBEL ? 3:5;
+	workers.cntPixel = szMask * w;
+
+	// when first called, dtcmImgBuf should be NULL
+	if(dtcmImgBuf != NULL) {
+		sark_free(dtcmImgBuf);
+		sark_free(resImgBuf);
+	}
+	dtcmImgBuf = sark_alloc(workers.cntPixel, sizeof(uchar));
+	resImgBuf = sark_alloc(w, sizeof(uchar));	// just one line!
+	//io_printf(IO_BUF, "my startline = %d, my endline = %d\n", workers.startLine, workers.endLine);
 }
 
 
@@ -293,13 +310,207 @@ void fwdImgData(uint arg0, uint arg1)
 }
 
 
-
+// collectGrayPixels() will be executed by other chips when they
+// all gray-pixel packets from root chip have been received
 void collectGrayPixels(uint arg0, uint arg1)
 {
 	uint offset = pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK;
 	// coba dengan manual copy: hasilnya? SEMPURNA !!!!
 	sark_mem_cpy((void *)blkInfo->imgOut1+offset, (void *)ypxbuf, pxBuffer.pxLen);
 }
+
+/*------------------------------------------------------------------------------------------*/
+/*------------------------------------------------------------------------------------------*/
+/*----------------------------- IMAGE PROCESSING CORE MECHANISMS ---------------------------*/
+/*-----------------------------                                  ---------------------------*/
+void triggerProcessing(uint arg0, uint arg1)
+{
+	io_printf(IO_BUF, "Start: ");
+	/*
+	if(blkInfo->opFilter==1) {
+		// broadcast command for filtering
+		nFiltJobDone = 0;
+		spin1_send_mc_packet(MCPL_BCAST_CMD_FILT, 0, WITH_PAYLOAD);
+	}
+	else {
+		nEdgeJobDone = 0;
+		// broadcast command for detection
+		spin1_send_mc_packet(MCPL_BCAST_CMD_DETECT, 0, WITH_PAYLOAD);
+	}
+	*/
+
+	// debugging: see, how many chips are able to collect the images:
+	// myDelay();
+	// io_printf(IO_STD, "Image is completely received. Ready for processing!\n");
+	// return;
+
+	// prepare measurement
+	tic = sv->clock_ms;
+
+	// how many workers have finished edge detection?
+	nEdgeJobDone = 0;
+
+	if(blkInfo->opFilter==1)
+		imgFiltering(0,0);	// inside imgFiltering, it will then call imgDetection
+	else
+		imgDetection(0,0);	// go edge detection directly
+}
+
+void imgFiltering(uint arg0, uint arg1)
+{
+	// step-1: do filtering
+
+	// step-2: call imgDetection
+}
+
+void imgDetection(uint arg0, uint arg1)
+{
+	io_printf(IO_BUF, "edge detection\n");
+	//io_printf(IO_BUF, "Begin edge detection...\n");
+	ushort offset = workers.opType == IMG_SOBEL ? 1:2;
+	short l,c,n,i,j;
+	uchar *sdramImgIn, *sdramImgOut;
+	uchar *dtcmLine;	//point to the current image line in the DTCM (not in SDRAM!)
+	int sumX, sumY, sumXY;
+
+
+	uint adj;
+
+	uint dmatag;
+
+	// how many lines this worker has?
+	n = workers.endLine - workers.startLine + 1;
+
+	// io_printf(IO_BUF, "n = %d\n", n);
+
+	// prepare the correct line address in sdram
+	if(workers.opFilter==IMG_WITHOUT_FILTER) {
+		sdramImgIn = workers.imgOut1;
+		sdramImgOut = workers.imgOut2;
+	} else {
+		sdramImgIn = workers.imgOut2;
+		sdramImgOut = workers.imgOut3;
+	}
+
+	io_printf(IO_BUF, "sdramImgIn = 0x%x, sdramImgOut = 0x%x\n",
+			  sdramImgIn, sdramImgOut);
+
+	// scan for all lines in the working block
+	for(l=0; l<n; l++) {
+		// adjust pointer for each line
+		adj = l*workers.wImg;
+		sdramImgIn += adj;
+		sdramImgOut += adj;
+
+		// shift by mask size for fetching via dma
+		sdramImgIn -= offset*workers.wImg;
+
+		dmaImgFromSDRAMdone = 0;
+		do {
+			dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
+			dmaTID = spin1_dma_transfer(dmatag, (void *)sdramImgIn,
+										  (void *)dtcmImgBuf, DMA_READ, workers.cntPixel);
+
+			if(dmaTID==0)
+				io_printf(IO_BUF, "[Edging] DMA full! Retry...\n");
+			/*
+			else
+				io_printf(IO_BUF, "DMA tag-0x%x tid-%d is requested\n", dmatag, dmaTID);
+			*/
+		} while (dmaTID==0);
+
+		// wait until dma above is completed
+		while(dmaImgFromSDRAMdone==0) {
+		}
+
+		// point to the current image line in the DTCM (not in SDRAM!)
+		dtcmLine = dtcmImgBuf + offset*workers.wImg;	// mind the offset since dtcmImgBuf contains additional data
+
+		// scan for all column in the line
+		for(c=0; c<workers.wImg; c++) {
+			// if offset is 1, then it is for sobel, otherwise it is for laplace
+			if(offset==1) {
+				sumX = 0;
+				sumY = 0;
+				if(workers.startLine+l == 0 || workers.startLine+l == workers.hImg-1)
+					sumXY = 0;
+				else if(c==0 || c==workers.wImg-1)
+					sumXY = 0;
+				else {
+					for(i=-1; i<=1; i++)
+						for(j=-1; j<=1; j++) {
+							sumX += (int)((*(dtcmLine + c + i + j*workers.wImg)) * GX[i+1][j+1]);
+							sumY += (int)((*(dtcmLine + c + i + j*workers.wImg)) * GY[i+1][j+1]);
+						}
+					// python version: sumXY[0] = math.sqrt(math.pow(sumX[0],2) + math.pow(sumY[0],2))
+					sumXY = (abs(sumX) + abs(sumY))*7/10;	// 7/10 = 0.717 -> cukup dekat dengan akar
+				}
+			}
+			else {	// for laplace operation
+				sumXY = 0;
+				if((workers.startLine+l) < 2 || (workers.hImg-workers.startLine+l) <= 2)
+					sumXY = 0;
+				else if(c<2 || (workers.wImg-c)<=2)
+					sumXY = 0;
+				else {
+					for(i=-1; i<=2; i++)
+						for(j=-2; j<=2; j++)
+							sumXY += (int)((*(dtcmLine + c + i + j*workers.wImg)) * LAP[i+2][j+2]);
+				}
+			}
+
+			// make necessary correction
+			if(sumXY>255) sumXY = 255;
+			if(sumXY<0) sumXY = 0;
+
+			// resImgBuf is just one line and it doesn't matter, where it is!
+			*(resImgBuf + c) = 255 - (uchar)(sumXY);
+			//*(resImgBuf + c) = (uchar)(sumXY);
+			dmaTID = spin1_dma_transfer((myCoreID << 16) + DMA_STORE_IMG_TAG, (void *)sdramImgOut,
+						   (void *)resImgBuf, DMA_WRITE, workers.wImg);
+
+		} // end for c-loop
+
+		/*
+		// then copy the resulting line into sdram
+		do {
+			dmaTID = spin1_dma_transfer((myCoreID << 16) + DMA_STORE_IMG_TAG, (void *)sdramImgOut,
+						   (void *)resImgBuf, DMA_WRITE, workers.wImg);
+		} while(dmaTID==0);
+		*/
+
+	} // end for l-loop
+
+    // at the end, send MCPL_EDGE_DONE
+    io_printf(IO_BUF, "Done! send MCPL_EDGE_DONE!\n");
+    spin1_send_mc_packet(MCPL_EDGE_DONE, 0, WITH_PAYLOAD);
+}
+
+void afterEdgeDone(uint arg0, uint arg1)
+{
+    io_printf(IO_BUF, "Node-%d is done edging in %d-ms!\n", blkInfo->nodeBlockID, elapse);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

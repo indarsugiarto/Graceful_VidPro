@@ -18,13 +18,40 @@
 #define G_GRAY                  REAL_CONST(0.5870)
 #define B_GRAY                  REAL_CONST(0.1140)
 
+/* 3x3 GX and GY Sobel mask.  Ref: www.cee.hw.ac.uk/hipr/html/sobel.html */
+static const short GX[3][3] = {{-1,0,1},
+				 {-2,0,2},
+				 {-1,0,1}};
+static const short GY[3][3] = {{1,2,1},
+				 {0,0,0},
+				 {-1,-2,-1}};
+
+/* Laplace operator: 5x5 Laplace mask.  Ref: Myler Handbook p. 135 */
+static const short LAP[5][5] = {{-1,-1,-1,-1,-1},
+				  {-1,-1,-1,-1,-1},
+				  {-1,-1,24,-1,-1},
+				  {-1,-1,-1,-1,-1},
+				  {-1,-1,-1,-1,-1}};
+
+/* Gaussian filter. Ref:  en.wikipedia.org/wiki/Canny_edge_detector */
+static const short FILT[5][5] = {{2,4,5,4,2},
+				   {4,9,12,9,4},
+				   {5,12,15,12,5},
+				   {4,9,12,9,4},
+				   {2,4,5,4,2}};
+static const short FILT_DENOM = 159;
+
 // forward RGB or just gray pixels?
 // forwarding RGB is slower, but might be useful for general image processing
 // in the future
 #define FWD_FULL_COLOR          FALSE
 
 #define MAJOR_VERSION           0
-#define MINOR_VERSION           1
+#define MINOR_VERSION           2
+
+// Version log
+// 0.1 Sending frame to SpiNNaker at 10MBps
+// 0.2 Do the edge detection
 
 #define USING_SPIN				3	// 3 for spin3, 5 for spin5
 
@@ -100,6 +127,9 @@
 #define DMA_TAG_STORE_B_PIXELS	60
 #define DMA_TAG_STORE_Y_PIXELS	80
 
+#define DMA_FETCH_IMG_TAG		100
+#define DMA_STORE_IMG_TAG		120
+
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
@@ -118,6 +148,9 @@
 #define MCPL_BCAST_FRAME_INFO		0xbca50005
 #define MCPL_BCAST_ALL_REPORT		0xbca50006	// the payload might contain specific reportType
 #define MCPL_BCAST_START_PROC		0xbca50007
+
+// mechanism for controlling the image processing
+#define MCPL_EDGE_DONE				0x1ead0003
 
 
 // mechanism for forwarding pixel packets
@@ -145,6 +178,11 @@
 #define IMG_O_BUFF1_BASE		0x64000000	// the result
 #define IMG_O_BUFF2_BASE		0x65000000	// optional: result after filtering
 #define IMG_O_BUFF3_BASE		0x66000000	// optional:
+
+#define IMG_SOBEL				0
+#define IMG_LAPLACE				1
+#define IMG_WITHOUT_FILTER		0
+#define IMG_WITH_FILTER			1
 
 /*------------------------ Struct, Enum, Type definition ----------------------------*/
 // block info
@@ -186,9 +224,12 @@ typedef struct w_info {
 	ushort nLinesPerBlock;
 	ushort startLine;
 	ushort endLine;
+	uint cntPixel;			// how many pixels will be fetch by dtcmImgBuf?
 	// helper pointers
 	ushort wImg;		// just a copy of block_info_t.wImg
 	ushort hImg;		// just a copy of block_info_t.hImg
+	uchar opType;			// 0==sobel, 1==laplace
+	uchar opFilter;			// 0==no filtering, 1==with filtering
 
 	uchar *imgRIn;		// each worker has its own value of imgRIn --> workload base
 	uchar *imgGIn;		// idem
@@ -268,6 +309,9 @@ uchar *gpxbuf;
 uchar *bpxbuf;
 uchar *ypxbuf;
 
+// for fetching/storing image
+volatile uchar dmaImgFromSDRAMdone;
+
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
@@ -286,11 +330,20 @@ block_info_t *blkInfo;			// general frame info stored in sysram, to be shared wi
 w_info_t workers;				// specific info each core should hold individually
 uchar needSendDebug;
 uint myCoreID;
+uint dmaTID;
 
-//uchar *dtcmImgBuf = NULL;
+uchar nFiltJobDone;				// will be used to count how many workers have
+uchar nEdgeJobDone;				// finished their job in either filtering or edge detection
 
-uchar dtcmImgBuf[1600];			// one row of UXGA resolution
+// to speed up, let's allocate these two buffers in computeWLoad()
+uchar *dtcmImgBuf;
+uchar *resImgBuf;
 ushort pixelCntr;				// how many pixel has been processed?
+
+// for performance measurement
+volatile uint64 tic, toc;
+volatile ushort elapse;
+
 
 /*------------------------- Forward declarations ----------------------------*/
 
@@ -322,6 +375,13 @@ void fwdImgData(uint arg0, uint arg1);	// isLastChannel==1 for B-channel
 void processGrayScaling(uint arg0, uint arg1);
 void recvFwdImgData(uint key, uint payload);
 void collectGrayPixels(uint arg0, uint arg1);
+
+
+void triggerProcessing(uint arg0, uint arg1);
+void imgFiltering(uint arg0, uint arg1);
+void imgDetection(uint arg0, uint arg1);
+void afterEdgeDone(uint arg0, uint arg1);
+
 
 // debugging and reporting
 void give_report(uint reportType, uint target);

@@ -10,8 +10,15 @@ void configure_network(uint mBox);
 
 
 
-void hDMA(uint tag, uint tid)
+void hDMA(uint tid, uint tag)
 {
+	//io_printf(IO_BUF, "DMA done tag-0x%x tid-%d\n", tag, tid);
+	if((tag & 0xFFFF) == DMA_FETCH_IMG_TAG) {
+		if((tag >> 16) == myCoreID) {
+			//io_printf(IO_BUF, "Reseting dmaImgFromSDRAMdone for core-%d\n", myCoreID);
+			dmaImgFromSDRAMdone = 1;	// so the image processing can continue
+		}
+	}
 
 }
 
@@ -38,11 +45,6 @@ void hMCPL(uint key, uint payload)
 		spin1_schedule_callback(give_report, DEBUG_REPORT_MYWID, 0, PRIORITY_PROCESSING);
 	}
 	// host sends request for report via leadAp
-	else if(key==MCPL_BCAST_ALL_REPORT) {
-		// MCPL_BCAST_ALL_REPORT will be broadcasted to all cores in the system
-		// and the requesting info will be provided in the payload
-		spin1_schedule_callback(give_report, payload, 0, PRIORITY_PROCESSING);
-	}
 	else if(key==MCPL_BCAST_GET_WLOAD) {
 		spin1_schedule_callback(computeWLoad, 0, 0, PRIORITY_PROCESSING);
 	}
@@ -164,12 +166,39 @@ void hMCPL(uint key, uint payload)
 			blkInfo->maxBlock = payload >> 24;
 		}
 	}
+
 	// got frame info from root node, then broadcast to workers
 	else if(key==MCPL_BCAST_FRAME_INFO) {
 		blkInfo->wImg = payload >> 16;
 		blkInfo->hImg = payload & 0xFFFF;
 		// then broadcast to all workers (including leadAp) to compute their workload
 		spin1_send_mc_packet(MCPL_BCAST_GET_WLOAD, 0, WITH_PAYLOAD);
+	}
+
+	else if(key==MCPL_EDGE_DONE) {
+		nEdgeJobDone++;
+		if(nEdgeJobDone==workers.tAvailable) {
+			// collect measurement
+			// Note: this also includes time for filtering, since filtering also trigger edging
+			toc = sv->clock_ms;
+			elapse = toc-tic;	// in milliseconds
+
+			// what next?
+			spin1_schedule_callback(afterEdgeDone, 0, 0, PRIORITY_PROCESSING);
+		}
+	}
+
+
+	/*----------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------*/
+	/*-------------------------- All cores processing ----------------------------*/
+	else if(key==MCPL_BCAST_START_PROC) {
+		spin1_schedule_callback(triggerProcessing, key, payload, PRIORITY_PROCESSING);
+	}
+	else if(key==MCPL_BCAST_ALL_REPORT) {
+		// MCPL_BCAST_ALL_REPORT will be broadcasted to all cores in the system
+		// and the requesting info will be provided in the payload
+		spin1_schedule_callback(give_report, payload, 0, PRIORITY_PROCESSING);
 	}
 }
 
@@ -194,6 +223,7 @@ void hSDP(uint mBox, uint port)
 		}
 	}
 	else if(port==SDP_PORT_FRAME_INFO) {
+		//io_printf(IO_STD, "Got frame info...\n");
 		// will only send wImg (in cmd_rc) and hImg (in seq)
 		blkInfo->wImg = msg->cmd_rc;
 		blkInfo->hImg = msg->seq;
@@ -283,6 +313,9 @@ void hSDP(uint mBox, uint port)
 	/*-------------- to trigger spiNNaker to do the processing                  ------------*/
 	/*-------------- This command should be sent to core<0,0,1>                 ------------*/
 	else if(port==SDP_PORT_FRAME_END) {
+		//debugging:
+		io_printf(IO_STD, "Processing begin...\n");
+
 		spin1_send_mc_packet(MCPL_BCAST_START_PROC, 0, WITH_PAYLOAD);
 	}
 

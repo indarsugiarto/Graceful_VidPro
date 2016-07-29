@@ -7,6 +7,8 @@ void c_main(void)
 	gpxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, sizeof(uchar));
 	bpxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, sizeof(uchar));
 	ypxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, sizeof(uchar));
+	dtcmImgBuf = NULL;
+	resImgBuf = NULL;
 
 	// do sanity check
 	initCheck();
