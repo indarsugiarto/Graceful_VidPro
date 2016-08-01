@@ -8,13 +8,13 @@ void initCheck()
 	if(sv->p2p_addr==0) {
 #if(USING_SPIN==3)
 		if(ip!=253) {
-			io_printf(IO_STD, "Invalid target board!\n");
+			io_printf(IO_STD, "Invalid target board! Got IP-%d\n", ip);
 			// rt_error(RTE_ABORT);
 			spin1_exit(RTE_ABORT);
 		}
 #else
 		if(ip != 1) {
-			io_printf(IO_STD, "Invalid target board!\n");
+			io_printf(IO_STD, "Invalid target board! Got IP-%d\n", ip);
 			rt_error(RTE_ABORT);
 			spin1_exit(1);
 		}
@@ -97,7 +97,7 @@ void initRouter()
 	if(sv->p2p_addr==0)
 		dest = 1 + (1<<1) + (1<<2);
 #endif
-	e = rtr_alloc(3);
+	e = rtr_alloc(4);
 	if(e==0)
 	{
 		io_printf(IO_STD, "initRouter err!\n");
@@ -106,6 +106,22 @@ void initRouter()
 		rtr_mc_set(e, MCPL_BCAST_NODES_INFO, 0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_OP_INFO, 0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_FRAME_INFO, 0xFFFFFFFF, dest); e++;
+		rtr_mc_set(e, MCPL_BCAST_SEND_RESULT, 0xFFFFFFFF, dest); e++;
+	}
+
+	// special for MCPL_BLOCK_DONE
+	// this is for sending toward core <0,0,leadAp>
+	if (x>0 && y>0)			dest = (1 << 4);	// south-west
+	else if(x>0 && y==0)	dest = (1 << 3);	// west
+	else if(x==0 && y>0)	dest = (1 << 5);	// south
+	else					dest = leader;
+	e = rtr_alloc(1);
+	if(e==0)
+	{
+		io_printf(IO_STD, "initRouter err!\n");
+		rt_error(RTE_ABORT);
+	} else {
+		rtr_mc_set(e, MCPL_BLOCK_DONE, 0xFFFFFFFF, dest); e++;
 	}
 
 

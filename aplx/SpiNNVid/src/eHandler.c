@@ -175,6 +175,7 @@ void hMCPL(uint key, uint payload)
 		spin1_send_mc_packet(MCPL_BCAST_GET_WLOAD, 0, WITH_PAYLOAD);
 	}
 
+	// MCPL_EDGE_DONE is sent by every core to leadAp
 	else if(key==MCPL_EDGE_DONE) {
 		nEdgeJobDone++;
 		if(nEdgeJobDone==workers.tAvailable) {
@@ -183,10 +184,34 @@ void hMCPL(uint key, uint payload)
 			toc = sv->clock_ms;
 			elapse = toc-tic;	// in milliseconds
 
-			// what next?
-			spin1_schedule_callback(afterEdgeDone, 0, 0, PRIORITY_PROCESSING);
+			// what next? trigger the chain for sending from root-node
+			spin1_schedule_callback(afterProcessingDone, 0, 0, PRIORITY_PROCESSING);
 		}
 	}
+
+	// MCPL_BLOCK_DONE will be sent by leadAp in each node (including the leadAp in the root-node)
+	// to core <0,0,leadAp>
+	else if(key==MCPL_BLOCK_DONE) {
+		nBlockDone++;
+		if(nBlockDone==blkInfo->maxBlock) {
+			spin1_schedule_callback(notifyDestDone, 0, 0, PRIORITY_PROCESSING);
+		}
+		// if I'm block-0, continue the chain by broadcasting to other nodes
+		// with the next node-ID (++payload)
+		// MCPL_BCAST_SEND_RESULT is destined to other external nodes from root-node
+		else if(blkInfo->nodeBlockID==0) {
+			spin1_send_mc_packet(MCPL_BCAST_SEND_RESULT, ++payload, WITH_PAYLOAD);
+		}
+	}
+
+	else if(key==MCPL_BCAST_SEND_RESULT) {
+#if (DESTINATION==DEST_HOST)
+		spin1_schedule_callback(sendDetectionResult2Host, payload, 0, PRIORITY_PROCESSING);
+#elif (DESTINATION==DEST_FPGA)
+		spin1_schedule_callback(sendDetectionResult2FPGA, payload, 0, PRIORITY_PROCESSING);
+#endif
+	}
+
 
 
 	/*----------------------------------------------------------------------------*/

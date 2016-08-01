@@ -13,10 +13,40 @@
 #define REAL                    accum
 #define REAL_CONST(x)           x##k
 
+
+// forward RGB or just gray pixels?
+// forwarding RGB is slower, but might be useful for general image processing
+// in the future
+#define FWD_FULL_COLOR          FALSE
+
+#define MAJOR_VERSION           0
+#define MINOR_VERSION           2
+
+// Version log
+// 0.1 Sending frame to SpiNNaker at 10MBps
+// 0.2 Do the edge detection
+
+
+//#define USING_SPIN				5	// 3 for spin3, 5 for spin5
+
+// if USE_FIX_NODES is used, the node configuration MUST be supplied in the beginning
+#define USE_FIX_NODES               // use 4 chips or 48 chips
+
+#if(USING_SPIN==3)
+#define MAX_NODES               4
+#elif(USING_SPIN==5)
+#define MAX_NODES               48
+#endif
+
+
 // all constants below must be positive
 #define R_GRAY                  REAL_CONST(0.2989)
 #define G_GRAY                  REAL_CONST(0.5870)
 #define B_GRAY                  REAL_CONST(0.1140)
+
+#define DEST_HOST			1
+#define DEST_FPGA			2
+#define DESTINATION			DEST_HOST
 
 /* 3x3 GX and GY Sobel mask.  Ref: www.cee.hw.ac.uk/hipr/html/sobel.html */
 static const short GX[3][3] = {{-1,0,1},
@@ -40,29 +70,6 @@ static const short FILT[5][5] = {{2,4,5,4,2},
 				   {4,9,12,9,4},
 				   {2,4,5,4,2}};
 static const short FILT_DENOM = 159;
-
-// forward RGB or just gray pixels?
-// forwarding RGB is slower, but might be useful for general image processing
-// in the future
-#define FWD_FULL_COLOR          FALSE
-
-#define MAJOR_VERSION           0
-#define MINOR_VERSION           2
-
-// Version log
-// 0.1 Sending frame to SpiNNaker at 10MBps
-// 0.2 Do the edge detection
-
-#define USING_SPIN				3	// 3 for spin3, 5 for spin5
-
-// if USE_FIX_NODES is used, the node configuration MUST be supplied in the beginning
-#define USE_FIX_NODES               // use 4 chips or 48 chips
-
-#if(USING_SPIN==3)
-#define MAX_NODES               4
-#elif(USING_SPIN==5)
-#define MAX_NODES               48
-#endif
 
 
 /*-----------------------------------------------------------------------------------*/
@@ -120,6 +127,10 @@ static const short FILT_DENOM = 159;
 
 #define SPINNVID_APP_ID			16
 
+// From my experiment with test_sdp_stream_to_host:
+#define DEF_DEL_VAL     900  // perfect, up to 5.7MBps
+
+
 // dma transfer
 //#define DMA_TAG_STORE_FRAME		10
 #define DMA_TAG_STORE_R_PIXELS	20
@@ -148,9 +159,13 @@ static const short FILT_DENOM = 159;
 #define MCPL_BCAST_FRAME_INFO		0xbca50005
 #define MCPL_BCAST_ALL_REPORT		0xbca50006	// the payload might contain specific reportType
 #define MCPL_BCAST_START_PROC		0xbca50007
+#define MCPL_BCAST_SEND_RESULT		0xbca50008	// trigger the node to send the result to dest
 
 // mechanism for controlling the image processing
 #define MCPL_EDGE_DONE				0x1ead0003
+
+//special key (with values)
+#define MCPL_BLOCK_DONE			0x1ead1ead	// should be sent to <0,0,1>
 
 
 // mechanism for forwarding pixel packets
@@ -312,6 +327,16 @@ uchar *ypxbuf;
 // for fetching/storing image
 volatile uchar dmaImgFromSDRAMdone;
 
+enum proc_type_e
+{
+  PROC_FILTERING,		// Filtering a.k.a. smoothing
+  PROC_HISTEQ,		 	// Histogram equalization a.k.a. sharpening
+  PROC_EDGING		 	// Edge detection
+};
+
+typedef enum proc_type_e proc_t;	//!< Typedef for enum spin_lock_e
+
+proc_t proc;
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
@@ -334,6 +359,7 @@ uint dmaTID;
 
 uchar nFiltJobDone;				// will be used to count how many workers have
 uchar nEdgeJobDone;				// finished their job in either filtering or edge detection
+uchar nBlockDone;
 
 // to speed up, let's allocate these two buffers in computeWLoad()
 uchar *dtcmImgBuf;
@@ -380,11 +406,14 @@ void collectGrayPixels(uint arg0, uint arg1);
 void triggerProcessing(uint arg0, uint arg1);
 void imgFiltering(uint arg0, uint arg1);
 void imgDetection(uint arg0, uint arg1);
-void afterEdgeDone(uint arg0, uint arg1);
-
+void afterProcessingDone(uint arg0, uint arg1);
+void sendDetectionResult2Host(uint nodeID, uint arg1);
+void sendDetectionResult2FPGA(uint nodeID, uint arg1);
+void notifyDestDone(uint arg0, uint arg1);          // this is notifyHostDone() in previous version
 
 // debugging and reporting
 void give_report(uint reportType, uint target);
+volatile uint giveDelay(uint delVal);
 void hTimer(uint tick, uint Unused);
 void seePxBuffer(char *stream);
 void peekPxBufferInSDRAM(char *stream);

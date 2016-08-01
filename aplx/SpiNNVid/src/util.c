@@ -228,3 +228,14 @@ inline REAL roundr(REAL inVal)
 	else
 		return (REAL)upper;
 }
+
+volatile uint giveDelay(uint delVal)
+{
+  volatile uint dummy = delVal;
+  uint step = 0;
+  while(step < delVal) {
+    dummy += (2 * step);
+    step++;
+  }
+  return dummy;
+}

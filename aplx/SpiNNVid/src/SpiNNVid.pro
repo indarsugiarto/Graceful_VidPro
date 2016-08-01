@@ -19,7 +19,9 @@ DISTFILES += \
     ../../tester/testMyWID.py \
     ../../tester/testDecompressing.py \
     TODO \
-    ../../tester/testStreamFrame.py
+    ../../tester/testStreamFrame.py \
+    Makefile.3 \
+    Makefile.5
 
 HEADERS += \
     SpiNNVid.h

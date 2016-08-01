@@ -47,6 +47,7 @@ void computeWLoad(uint withReport, uint arg1)
 	// keep local (for each core) and to speed up
 	ushort w = blkInfo->wImg; workers.wImg = w;
 	ushort h = blkInfo->hImg; workers.hImg = h;
+
 	workers.opFilter = blkInfo->opFilter;
 	workers.opType = blkInfo->opType;
 
@@ -115,6 +116,7 @@ void computeWLoad(uint withReport, uint arg1)
 		sark_free(dtcmImgBuf);
 		sark_free(resImgBuf);
 	}
+	// dtcmImgBuf can be 3 or 5 times the image width
 	dtcmImgBuf = sark_alloc(workers.cntPixel, sizeof(uchar));
 	resImgBuf = sark_alloc(w, sizeof(uchar));	// just one line!
 	//io_printf(IO_BUF, "my startline = %d, my endline = %d\n", workers.startLine, workers.endLine);
@@ -346,13 +348,18 @@ void triggerProcessing(uint arg0, uint arg1)
 	// prepare measurement
 	tic = sv->clock_ms;
 
-	// how many workers have finished edge detection?
+	// how many workers/blocks have finished the process?
 	nEdgeJobDone = 0;
+	nBlockDone = 0;
 
-	if(blkInfo->opFilter==1)
+	if(blkInfo->opFilter==1) {
+		proc = PROC_FILTERING;
 		imgFiltering(0,0);	// inside imgFiltering, it will then call imgDetection
-	else
+	}
+	else {
+		proc = PROC_EDGING;
 		imgDetection(0,0);	// go edge detection directly
+	}
 }
 
 void imgFiltering(uint arg0, uint arg1)
@@ -389,9 +396,6 @@ void imgDetection(uint arg0, uint arg1)
 		sdramImgIn = workers.imgOut2;
 		sdramImgOut = workers.imgOut3;
 	}
-
-	io_printf(IO_BUF, "sdramImgIn = 0x%x, sdramImgOut = 0x%x\n",
-			  sdramImgIn, sdramImgOut);
 
 	// scan for all lines in the working block
 	for(l=0; l<n; l++) {
@@ -464,18 +468,16 @@ void imgDetection(uint arg0, uint arg1)
 			// resImgBuf is just one line and it doesn't matter, where it is!
 			*(resImgBuf + c) = 255 - (uchar)(sumXY);
 			//*(resImgBuf + c) = (uchar)(sumXY);
-			dmaTID = spin1_dma_transfer((myCoreID << 16) + DMA_STORE_IMG_TAG, (void *)sdramImgOut,
-						   (void *)resImgBuf, DMA_WRITE, workers.wImg);
+			//dmaTID = spin1_dma_transfer((myCoreID << 16) + DMA_STORE_IMG_TAG, (void *)sdramImgOut,
+			//			   (void *)resImgBuf, DMA_WRITE, workers.wImg);
 
 		} // end for c-loop
 
-		/*
 		// then copy the resulting line into sdram
 		do {
 			dmaTID = spin1_dma_transfer((myCoreID << 16) + DMA_STORE_IMG_TAG, (void *)sdramImgOut,
 						   (void *)resImgBuf, DMA_WRITE, workers.wImg);
 		} while(dmaTID==0);
-		*/
 
 	} // end for l-loop
 
@@ -484,17 +486,113 @@ void imgDetection(uint arg0, uint arg1)
     spin1_send_mc_packet(MCPL_EDGE_DONE, 0, WITH_PAYLOAD);
 }
 
-void afterEdgeDone(uint arg0, uint arg1)
+// AfterProcessingDone() is managed by the leadAp in each node.
+// But in root-node, afterProcessingDone() will trigger sending the result.
+void afterProcessingDone(uint arg0, uint arg1)
 {
-    io_printf(IO_BUF, "Node-%d is done edging in %d-ms!\n", blkInfo->nodeBlockID, elapse);
+    if(proc==PROC_EDGING) {
+        // optional, won't be used in video streaming:
+        io_printf(IO_BUF, "Node-%d is done edging in %d-ms!\n", blkInfo->nodeBlockID, elapse);
+
+        // if root-node, trigger to send the result
+        if(sv->p2p_addr==0) {
+#if (DESTINATION==DEST_HOST)
+            spin1_schedule_callback(sendDetectionResult2Host, 0, 0, PRIORITY_PROCESSING);
+#elif (DESTINATION==DEST_FPGA)
+            spin1_schedule_callback(sendDetectionResult2FPGA, 0, 0, PRIORITY_PROCESSING);
+#endif
+        }
+    }
+}
+
+// check: sendResult() will be executed only by leadAp
+// we cannot use workers.imgROut, because workers.imgROut differs from core to core
+// use workers.blkImgROut instead!
+// nodeID is the next node that is supposed to send the result
+// NOTE: in this version, we'll send the gray image. Refer to pA for rgb version!
+void sendDetectionResult2Host(uint nodeID, uint arg1)
+{
+	// if I'm not include in the list, skip this
+	if(blkInfo->maxBlock==0) return;
+
+	//io_printf(IO_STD, "Expecting processing by node-%d\n", arg0);
+	if(nodeID != blkInfo->nodeBlockID) return;
+	// format sdp (scp_segment + data_segment):
+	// srce_addr = line number
+	// so, it relies on udp reliability (packet might be dropped)
+	// the host will assemble the line based on srce_addr, so if the packet
+	// is dropped, and the next line is sent, then it produces "defect"
+	uchar *imgOut;
+	ushort rem, sz;
+	ushort l,c;
+
+	// Note: dtcmImgBuf has been allocated in computeWLoad(), but it can be 3 or 5 times the image width.
+	// For fetching only one line, use resImgBuf instead
+
+	l = 0;	// for the imgXOut pointer
+	if(workers.opFilter==IMG_WITHOUT_FILTER)
+		imgOut = workers.blkImgOut2;
+	else
+		imgOut = workers.blkImgOut3;
+
+	for(ushort lines=workers.blkStart; lines<=workers.blkEnd; lines++) {
+		// get the line from sdram
+		imgOut += l*workers.wImg;
+
+		dmaImgFromSDRAMdone = 0;	// will be altered in hDMA
+		do {
+			dmaTID = spin1_dma_transfer(DMA_FETCH_IMG_TAG | (myCoreID << 16), (void *)imgOut,
+										(void *)resImgBuf, DMA_READ, workers.wImg);
+			if(dmaTID==0)
+				io_printf(IO_BUF, "[Sending] DMA full! Retry!\n");
+
+		} while(dmaTID==0);
+		// wait until dma is completed
+		while(dmaImgFromSDRAMdone==0) {
+		}
+		// then sequentially copy & send via sdp
+		c = 0;
+		rem = workers.wImg;
+		resultMsg.srce_addr = lines;
+		do {
+			sz = rem > 272 ? 272 : rem;
+			spin1_memcpy((void *)&resultMsg.cmd_rc, (void *)(resImgBuf + c*272), sz);
+			resultMsg.length = sizeof(sdp_hdr_t) + sz;
+
+			spin1_send_sdp_msg(&resultMsg, 10);
+			giveDelay(DEF_DEL_VAL);
+
+			c++;		// for the resImgBuf pointer
+			rem -= sz;
+		} while(rem > 0);
+		l++;
+	}
+
+	//io_printf(IO_STD, "Block-%d done!\n", blkInfo->nodeBlockID);
+	//io_printf(IO_BUF, "[Sending] pixels [%d,%d,%d] done!\n", total[0], total[1], total[2]);
+
+	// then send notification to chip<0,0> that my part is complete
+	spin1_send_mc_packet(MCPL_BLOCK_DONE, blkInfo->nodeBlockID, WITH_PAYLOAD);
+
+}
+
+// TODO: waiting for Gengting...
+void sendDetectionResult2FPGA(uint nodeID, uint arg1)
+{
+
 }
 
 
+void notifyDestDone(uint arg0, uint arg1)
+{
+#if (DESTINATION==DEST_HOST)
+	resultMsg.srce_addr = elapse;
+	resultMsg.length = sizeof(sdp_hdr_t);
+	spin1_send_sdp_msg(&resultMsg, 10);
+#elif (DESTINATION==DEST_FPGA)
 
-
-
-
-
+#endif
+}
 
 
 

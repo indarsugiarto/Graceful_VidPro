@@ -27,7 +27,7 @@ SDP_PORT_FRAME_INFO     = 5      # will be used to send the basic info about fra
 SDP_PORT_ACK            = 6
 SDP_PORT_CONFIG            = 7      # for sending image/frame info
 
-DEF_HOST            = SPINN3_HOST
+DEF_HOST            = SPINN5_HOST
 DEF_LEADAP            = 1
 
 SDP_CMD_CONFIG_NETWORK       = 1   # for setting up the network
@@ -44,6 +44,11 @@ Num_of_Blocks            = 3
 #Node-2: <1,1>
 
 DEF_PORT            = 20003
+
+IMG_SOBEL           = 0
+IMG_LAPLACE         = 1
+IMG_WITHOUT_FILTER  = 0
+IMG_WITH_FILTER     = 1
 
 
 # Untuk eksperiment, coba ganti parameter berikut:
@@ -165,6 +170,20 @@ class imgData:
             bf.close()
             yf.close()
 
+    def sendNetConfig(self):
+        # in configure_network(), the opType, opFilter, and node list are given
+        flags = 0x07
+        tag = 0
+        dp = SDP_PORT_CONFIG
+        dc = DEF_LEADAP
+        dax = 0
+        day = 0
+        print "Send network config: no filtering, do sobel",
+        cmd = SDP_CMD_CONFIG_NETWORK
+        seq = ( IMG_SOBEL << 8) | IMG_WITHOUT_FILTER
+        sendSDP(flags, tag, dp, dc, dax, day, cmd, seq, 0, 0, 0, None)
+        print "done!"
+
     def sendFrameInfo(self):
         flags = 0x07
         tag = 0
@@ -254,7 +273,7 @@ class imgData:
         return delVal
 
     def sendGo(self):
-        sendChunk(SDP_PORT_FRAME_END, 1, None)
+        sendChunk(SDP_PORT_FRAME_END, 1, 0, None)
 
 
 imgFile = "SpiNN-3.jpg"
@@ -265,6 +284,7 @@ def main():
     #load image from file and create array from it
     img = imgData(imgFile)
     img.processImage(imgFile, False)
+    img.sendNetConfig()
     img.sendFrameInfo()
     img.sendImg(destCore)
     img.sendGo()
