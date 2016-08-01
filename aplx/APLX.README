@@ -14,7 +14,7 @@ In this version, let's use this approach:
 
 
 ------------------------------------------------------------------------------------------
-How to achieve highest possible throughput using multiple-cores (16 cores or more?)
+How to achieve highest possible throughput using multiple-cores (16 cores or 17?)
 host-PC must send the 3 color orderly every time, such as:
 
 [send_R_chunk] [send_G_chunk] [send_B_chunk] [send_R_chunk] [send_G_chunk] [send_B_chunk] ...
@@ -30,7 +30,7 @@ Dengan demikian dibutuhkan format khusus:
 - 2 byte didepan digunakan untuk menunjukkan sequence-number supaya core
   penerima tahu dimana hasilnya harus disimpan.
   Sequence-number ini diletakkan didepan, jadi pas dibagian cmd_rc
-
+  -> Revisi: Sequence-number di letakkan di header, di bagian srce_addr
 ------------------------------------------------------------------------------------------
 
 How to parallelize and decompress?
@@ -54,7 +54,7 @@ xxx1xxx. R channel, G channel and B channel are sent in parallel, and reply mess
    key = base_key | (fwdPktBuffer[ch].pxLen < 4) | szpx;
    where base_key is either 0xbca80000, 0xbca90000, or 0xbcaA0000
 
-
+   --> Revisi: Sekarang ditambahkan opsi (via compiler directive), apakah akan fwd RGB atau gray
 
 ----------------- Catatan 28 Juli 2016 - 17:13:44 -----------------
 Ada masalah dengan dma :
@@ -66,9 +66,11 @@ Ada masalah dengan dma :
 	meletakkan ?pxbuf[] di luar struct
 - Sepertinya dengan meletakkan ?pxbuf[] di luar struct tetap tidak menyelesaikan masalah.
   Karena di chunk-chunk berikutnya terjadi mismatching lagi...
-- SOLVED!!!!
+- IMPROVEMENT:
   Dengan menggunakan heap, jadi ?pxbuf diletakkan di heap
   Bahkan bisa hingga 270, bukan hanya 268!!!
+  --> Tapi belum solved the problem!!!
+- YANG PASTI, cara copy manual bisa menghasilkan hasil yang benar (meskipun mungkin lebih lambat)
 
 ----------------- Catatan 29 Juli 2016 - 17:13:44 -----------------
 - Meskipun teknik copy manual ke sdram menghasilkan hasil yang sempurna, tapi sepertinya

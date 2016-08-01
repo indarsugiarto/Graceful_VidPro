@@ -245,12 +245,14 @@ void hSDP(uint mBox, uint port)
 		//spin1_send_mc_packet(MCPL_PROCEED_R_IMG_DATA, mBox, WITH_PAYLOAD);
 		//return;	// exit from here, because msg should be freed by core-2
 
-		pxBuffer.pxSeq = msg->cmd_rc;		// not important, if there's packet lost...
-		pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
+		//pxBuffer.pxSeq = msg->cmd_rc;		// this is in version 0.1
+		//pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
 		//sark_mem_cpy(pxBuffer.rpxbuf, &msg->seq, pxBuffer.pxLen);
-		sark_mem_cpy(rpxbuf, &msg->seq, pxBuffer.pxLen);
-
-
+		//sark_mem_cpy(rpxbuf, &msg->seq, pxBuffer.pxLen);
+		pxBuffer.pxSeq = msg->srce_addr;
+		pxBuffer.pxLen = msg->length - 8;
+		//we use srce_addr for pxSeq, hence more data can be loaded into scp
+		sark_mem_cpy(rpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
 
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
 		// spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
@@ -267,10 +269,14 @@ void hSDP(uint mBox, uint port)
 		//spin1_send_mc_packet(MCPL_PROCEED_G_IMG_DATA, mBox, WITH_PAYLOAD);
 		//return;	// exit from here, because msg should be freed by core-3
 
-		pxBuffer.pxSeq = msg->cmd_rc;		// not important, if there's packet lost...
-		pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
+		//pxBuffer.pxSeq = msg->cmd_rc;		// not important, if there's packet lost...
+		//pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
 		//sark_mem_cpy(pxBuffer.gpxbuf, &msg->seq, pxBuffer.pxLen);
-		sark_mem_cpy(gpxbuf, &msg->seq, pxBuffer.pxLen);
+		//sark_mem_cpy(gpxbuf, &msg->seq, pxBuffer.pxLen);
+
+		pxBuffer.pxSeq = msg->srce_addr;
+		pxBuffer.pxLen = msg->length - 8;
+		sark_mem_cpy(gpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
 
 
 
@@ -294,10 +300,14 @@ void hSDP(uint mBox, uint port)
 		}
 		*/
 		//return;	// exit from here, because msg should be freed by core-4
-		pxBuffer.pxSeq = msg->cmd_rc;		// So, if there's packet lost before, it won't be processed!!
-		pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
+		//pxBuffer.pxSeq = msg->cmd_rc;		// So, if there's packet lost before, it won't be processed!!
+		//pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
 		//sark_mem_cpy(pxBuffer.bpxbuf, &msg->seq, pxBuffer.pxLen);
-		sark_mem_cpy(bpxbuf, &msg->seq, pxBuffer.pxLen);
+		//sark_mem_cpy(bpxbuf, &msg->seq, pxBuffer.pxLen);
+
+		pxBuffer.pxSeq = msg->srce_addr;
+		pxBuffer.pxLen = msg->length - 8;
+		sark_mem_cpy(bpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
 
 		// process gray scalling
 		spin1_schedule_callback(processGrayScaling, 0, 0, PRIORITY_PROCESSING);

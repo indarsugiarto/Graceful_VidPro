@@ -18,7 +18,8 @@ DISTFILES += \
     ../../tester/testWorkLoad.py \
     ../../tester/testMyWID.py \
     ../../tester/testDecompressing.py \
-    TODO
+    TODO \
+    ../../tester/testStreamFrame.py
 
 HEADERS += \
     SpiNNVid.h

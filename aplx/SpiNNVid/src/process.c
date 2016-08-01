@@ -325,7 +325,6 @@ void collectGrayPixels(uint arg0, uint arg1)
 /*-----------------------------                                  ---------------------------*/
 void triggerProcessing(uint arg0, uint arg1)
 {
-	io_printf(IO_BUF, "Start: ");
 	/*
 	if(blkInfo->opFilter==1) {
 		// broadcast command for filtering
@@ -365,14 +364,13 @@ void imgFiltering(uint arg0, uint arg1)
 
 void imgDetection(uint arg0, uint arg1)
 {
-	io_printf(IO_BUF, "edge detection\n");
+	io_printf(IO_BUF, "Start edge detection\n");
 	//io_printf(IO_BUF, "Begin edge detection...\n");
 	ushort offset = workers.opType == IMG_SOBEL ? 1:2;
 	short l,c,n,i,j;
 	uchar *sdramImgIn, *sdramImgOut;
 	uchar *dtcmLine;	//point to the current image line in the DTCM (not in SDRAM!)
 	int sumX, sumY, sumXY;
-
 
 	uint adj;
 

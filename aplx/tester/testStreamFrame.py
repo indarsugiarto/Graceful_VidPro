@@ -75,10 +75,11 @@ def sendSDP(flags, tag, dp, dc, dax, day, cmd, seq, arg1, arg2, arg3, bArray):
     CmdSock.flush()
     return sdp
 
-def sendChunk(ch_port, core, ba):
+#def sendChunk(ch_port, core, ba):
+def sendChunk(ch_port, core, seq, ba):
     da = 0
     dpc = (ch_port << 5) + core
-    sa = 0
+    sa = seq
     spc = 255
     pad = struct.pack('<2B',0,0)
     hdr = struct.pack('<4B2H',7,0,dpc,spc,da,sa)
@@ -183,7 +184,8 @@ class imgData:
         :param coreList:
         :return:
         """
-        def_len = 270   # not 272, because we include pxSeq in cmd_rc
+        def_len = 272   # because now we include pxSeq in srce_addr
+        #def_len = 270   # not 272, because we include pxSeq in cmd_rc
         #def_len = 268  # mari coba dibuat "strict" pada boundary 4-byte
         coreCntr = 0  # starting core is core-1
         remaining = self.wImg * self.hImg
@@ -216,16 +218,23 @@ class imgData:
             print "\n"
             """
 
+            """
             cmd_rc = struct.pack("<H", pxSeq)
             br = cmd_rc + self.rba[sp:sp+pxLen]
             bg = cmd_rc + self.gba[sp:sp+pxLen]
             bb = cmd_rc + self.bba[sp:sp+pxLen]
+            """
+            br = self.rba[sp:sp+pxLen]
+            bg = self.gba[sp:sp+pxLen]
+            bb = self.bba[sp:sp+pxLen]
 
-            sendChunk(SDP_PORT_R_IMG_DATA, coreList[coreCntr], br)
+            #sendChunk(SDP_PORT_R_IMG_DATA, coreList[coreCntr], br)
+            #now pxSeq will be part of the sdp header
+            sendChunk(SDP_PORT_R_IMG_DATA, coreList[coreCntr], pxSeq, br)
             #time.sleep(0.5)    # should be removed, it's OK!!!!
-            sendChunk(SDP_PORT_G_IMG_DATA, coreList[coreCntr], bg)
+            sendChunk(SDP_PORT_G_IMG_DATA, coreList[coreCntr], pxSeq, bg)
             #time.sleep(0.5)
-            sendChunk(SDP_PORT_B_IMG_DATA, coreList[coreCntr], bb)
+            sendChunk(SDP_PORT_B_IMG_DATA, coreList[coreCntr], pxSeq, bb)
 
             # update
             coreCntr += 1
