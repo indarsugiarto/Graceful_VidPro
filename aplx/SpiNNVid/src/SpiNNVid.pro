@@ -24,4 +24,5 @@ DISTFILES += \
     Makefile.5
 
 HEADERS += \
-    SpiNNVid.h
+    SpiNNVid.h \
+    defSpiNNVid.h

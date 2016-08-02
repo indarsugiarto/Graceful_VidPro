@@ -6,6 +6,9 @@
 #include <QHostAddress>
 #include <QImage>
 
+// to make it consistent with the aplx-part:
+#include "defSpiNNVid.h"
+
 #define SPIN3       0
 #define SPIN5       1
 #define SPIN3_IP    "192.168.240.253"
@@ -13,12 +16,6 @@
 #define ETH_PORT    255
 #define ETH_ADDR    0
 
-#define SDP_CMD_CONFIG_CHAIN    11
-
-#define OP_SOBEL_NO_FILTER      1
-#define OP_SOBEL_WITH_FILTER    2
-#define OP_LAPLACE_NO_FILTER    3
-#define OP_LAPLACE_WITH_FILTER  4
 
 #define BLOCK_REPORT_NO         0
 #define BLOCK_REPORT_YES        1
@@ -45,29 +42,26 @@ typedef struct cmd_hdr		// Command header
 
 typedef struct nodeInfo
 {
-    ushort chipX;
-    ushort chipY;
-    ushort nodeID;
+    quint8 chipX;
+    quint8 chipY;
+    quint8 nodeID;
 } nodes_t;
 
-#define SDP_REPLY_PORT  20000		// with tag 1
-#define SDP_RESULT_PORT	20001		// with tag 2
-#define SDP_DEBUG_PORT  20002		// with tag 3
-#define DEF_SEND_PORT	17893		// tidak bisa diganti dengan yang lain
-#define SDP_IMAGE_CHUNK	272
-#define SDP_
 
-//struct timespec {
-//	time_t tv_sec; /* seconds */
-//	long tv_nsec; /* nanoseconds */
-//};
+// struct timespec is already defined in time.h
+/*
+struct timespec {
+	time_t tv_sec;	// seconds
+	long tv_nsec;	// nanoseconds
+};
+*/
 
 class cSpiNNcomm: public QObject
 {
 	Q_OBJECT
 
 public:
-    cSpiNNcomm(QObject *parent=0);
+    cSpiNNcomm(quint8 nodes=4, quint8 opType=0, quint8 wFilter=0, quint8 wHist=0, QObject *parent=0);
     ~cSpiNNcomm();
 	QImage *frResult;
 
@@ -96,11 +90,6 @@ private:
     nodes_t     nodes[MAX_CHIPS];
     QHostAddress ha;
     uchar leadAp;
-    uchar sdpImgRedPort;            // = 1       # based on the aplx code
-    uchar sdpImgGreenPort;          // = 2
-    uchar sdpImgBluePort;           // = 3
-	uchar sdpImgReplyPort;			// = 6
-    uchar sdpImgConfigPort;         // = 7
     static uchar X_CHIPS[48];       // must be static, otherwise it'll raise
     static uchar Y_CHIPS[48];       // is not a static data member of cSpiNNcomm
 	void sendSDP(sdp_hdr_t h, QByteArray s = QByteArray(), QByteArray d = QByteArray());
@@ -110,6 +99,8 @@ private:
 	volatile bool cont2Send;
 
 	quint16 wImg, hImg, szImg;
+	quint8 N_nodes;
+	quint8 edgeOperator, withFilter, withHistogramEq;
 
 	// let's prepare header for image sending
 	sdp_hdr_t hdrr, hdrg, hdrb;

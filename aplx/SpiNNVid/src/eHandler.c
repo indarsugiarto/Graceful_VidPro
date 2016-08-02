@@ -386,6 +386,8 @@ void configure_network(uint mBox)
 		spin1_send_mc_packet(MCPL_BCAST_OP_INFO, payload, WITH_PAYLOAD);
 
 		// additional broadcasting for nodes configuration if not USE_FIX_NODES
+		// chip<0,0> will be the root-node!
+		TODO: assure this
 #ifndef USE_FIX_NODES
 		blkInfo->maxBlock = msg->arg1;
 		// here we build chips database for later propagation usage

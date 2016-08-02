@@ -15,36 +15,33 @@ uchar cSpiNNcomm::X_CHIPS[48] = {0,1,0,1,2,3,4,2,3,4,5,0,1,2,3,4,5,6,0,1,2,3,4,5
 uchar cSpiNNcomm::Y_CHIPS[48] = {0,0,1,1,0,0,0,1,1,1,1,2,2,2,2,2,2,2,3,3,3,3,3,3,
                                  3,3,4,4,4,4,4,4,4,5,5,5,5,5,5,6,6,6,6,6,7,7,7,7};
 
-cSpiNNcomm::cSpiNNcomm(QObject *parent): QObject(parent),
+cSpiNNcomm::cSpiNNcomm(quint8 nodes, quint8 opType, quint8 wFilter, quint8 wHist, QObject *parent): QObject(parent),
+	N_nodes(nodes),			// by default it uses 4 nodes (spin3)
+	edgeOperator(opType),	// operator typ: SOBEL, LAPLACE
+	withFilter(wFilter),	// with Gaussian filtering?
+	withHistogramEq(wHist),	// with Histogram Equalization?
 	frResult(NULL),
 	ResultTriggered(false),
 	w272(false)
 {
     // initialize nodes
-    for(ushort i=0; i<MAX_CHIPS; i++) {
+    for(int i=0; i<MAX_CHIPS; i++) {
         nodes[i].nodeID = i;
         nodes[i].chipX = X_CHIPS[i];
         nodes[i].chipY = Y_CHIPS[i];
     }
     // create sockets
-    sdpReply = new QUdpSocket();
-    sdpResult = new QUdpSocket();
-    sdpDebug = new QUdpSocket();
-    sender = new QUdpSocket();
-	sdpReply->bind(SDP_REPLY_PORT);
-	sdpResult->bind(SDP_RESULT_PORT);
-	sdpDebug->bind(SDP_DEBUG_PORT);
+    sdpReply = new QUdpSocket(this);
+    sdpResult = new QUdpSocket(this);
+    sdpDebug = new QUdpSocket(this);
+    sender = new QUdpSocket(this);
+    sdpReply->bind(SDP_UDP_REPLY_PORT);
+    sdpResult->bind(SDP_UDP_RESULT_PORT);
+    sdpDebug->bind(SDP_UDP_DEBUG_PORT);
     // handle/prepare callbacks
 	connect(sdpReply, SIGNAL(readyRead()), this, SLOT(readReply()));
 	connect(sdpResult, SIGNAL(readyRead()), this, SLOT(readResult()));
 	connect(sdpDebug, SIGNAL(readyRead()), this, SLOT(readDebug()));
-
-    // initialize SpiNNaker stuffs
-    sdpImgRedPort = 1;
-    sdpImgGreenPort = 2;
-    sdpImgBluePort = 3;
-	sdpImgReplyPort = 6;
-    sdpImgConfigPort = 7;
 
 	// TODO: ask spinnaker, who's the leadAp
 	// right now, let's assume it is core-1
@@ -53,26 +50,21 @@ cSpiNNcomm::cSpiNNcomm(QObject *parent): QObject(parent),
 	// prepare headers for transmission
 	hdrr.flags = 0x07;
 	hdrr.tag = 0;
-	hdrr.dest_port = (sdpImgRedPort << 5) + leadAp;
+	hdrr.dest_port = (SDP_PORT_R_IMG_DATA << 5) + leadAp;
 	hdrr.dest_addr = 0;
 	hdrr.srce_port = ETH_PORT;
 	hdrr.srce_addr = ETH_ADDR;
 
-	hdrg = hdrr; hdrg.dest_port = (sdpImgGreenPort << 5) + leadAp;
-	hdrb = hdrr; hdrb.dest_port = (sdpImgBluePort << 5) + leadAp;
+	hdrg = hdrr; hdrg.dest_port = (SDP_PORT_G_IMG_DATA << 5) + leadAp;
+	hdrb = hdrr; hdrb.dest_port = (SDP_PORT_B_IMG_DATA << 5) + leadAp;
 
 	cont2Send = false;
-
-
 }
 
 cSpiNNcomm::~cSpiNNcomm()
 {
 	if(frResult != NULL)
 		delete frResult;
-    delete sdpReply;
-    delete sdpResult;
-    delete sdpDebug;
 }
 
 void cSpiNNcomm::readDebug()
@@ -190,28 +182,33 @@ void cSpiNNcomm::configSpin(uchar spinIDX, int imgW, int imgH)
     sdp_hdr_t h;
     h.flags = 0x07;
     h.tag = 0;
-    h.dest_port = (sdpImgConfigPort << 5) + leadAp;
+    h.dest_port = (SDP_PORT_CONFIG << 5) + leadAp;
     h.srce_port = ETH_PORT;
     h.dest_addr = 0;
     h.srce_addr = 0;
 
     cmd_hdr_t c;
-    c.cmd_rc = SDP_CMD_CONFIG_CHAIN;
-	c.seq = OP_SOBEL_NO_FILTER;    // edge-proc sobel, no filtering, not grey
-    c.arg1 = (imgW << 16) + imgH;
-    // ushort rootNode = 0;
-    // ushort nNodes = spinIDX == 0 ? 4 : MAX_CHIPS;
-    // c.arg2 = (rootNode << 16) + nNodes;
-    c.arg2 = spinIDX==0?4:MAX_CHIPS;    // spin3 or spin5
-    c.arg3 = BLOCK_REPORT_NO;
+    c.cmd_rc = SDP_CMD_CONFIG_NETWORK;
+    c.seq = (edgeOperator << 8) | (withFilter << 4) | withHistogramEq;
+    // node-0 should be in chip<0,0>
+    // node-1 is contained in arg1
+    // node-2 is contained in arg2
+    // node-3 is contained in arg3
+    c.arg1 = (nodes[1].chipX << 8) | (nodes[1].chipY);
+    c.arg2 = (nodes[2].chipX << 8) | (nodes[2].chipY);
+    c.arg1 = (nodes[3].chipX << 8) | (nodes[3].chipY);
 
     // build the node list
     QByteArray nodeList;
-    // here, we make chip<0,0> as the rootNode, hence we start from 1
-    for(ushort i=1; i<c.arg2; i++) {
-        nodeList.append((char)nodes[i].chipX);
-        nodeList.append((char)nodes[i].chipY);
-        nodeList.append((char)nodes[i].nodeID);
+    // here,  we start from 4
+    if(N_nodes > 4) {
+        for(ushort i=4; i<N_nodes; i++) {
+            nodeList.append((char)nodes[i].chipX);
+            nodeList.append((char)nodes[i].chipY);
+            // we can infer, how many nodes in the list
+            // so, the following is not required:
+            //nodeList.append((char)nodes[i].nodeID);
+        }
     }
     sendSDP(h, scp(c), nodeList);
 }
