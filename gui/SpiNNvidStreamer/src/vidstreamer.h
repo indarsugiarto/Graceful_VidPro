@@ -35,9 +35,12 @@ public slots:
     void pbLoadClicked();
 	void pbPauseClicked();
     void pbTestClicked();
+    void pbConfigureClicked();
     void refreshUpdate();
 	void videoFinish();
 	void setSize(int w, int h);
+	void cbSpiNNchanged(int idx);
+	void frameReady();
 
 private:
     bool isPaused;

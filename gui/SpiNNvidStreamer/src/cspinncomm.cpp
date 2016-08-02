@@ -15,31 +15,26 @@ uchar cSpiNNcomm::X_CHIPS[48] = {0,1,0,1,2,3,4,2,3,4,5,0,1,2,3,4,5,6,0,1,2,3,4,5
 uchar cSpiNNcomm::Y_CHIPS[48] = {0,0,1,1,0,0,0,1,1,1,1,2,2,2,2,2,2,2,3,3,3,3,3,3,
                                  3,3,4,4,4,4,4,4,4,5,5,5,5,5,5,6,6,6,6,6,7,7,7,7};
 
-cSpiNNcomm::cSpiNNcomm(quint8 nodes, quint8 opType, quint8 wFilter, quint8 wHist, QObject *parent): QObject(parent),
-	N_nodes(nodes),			// by default it uses 4 nodes (spin3)
-	edgeOperator(opType),	// operator typ: SOBEL, LAPLACE
-	withFilter(wFilter),	// with Gaussian filtering?
-	withHistogramEq(wHist),	// with Histogram Equalization?
-	frResult(NULL),
-	ResultTriggered(false),
-	w272(false)
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*-------------------- Class Constructor and Destructor ---------------------*/
+cSpiNNcomm::cSpiNNcomm(QObject *parent): QObject(parent),
+    frResult(NULL)
 {
     // initialize nodes
     for(int i=0; i<MAX_CHIPS; i++) {
-        nodes[i].nodeID = i;
         nodes[i].chipX = X_CHIPS[i];
         nodes[i].chipY = Y_CHIPS[i];
     }
-    // create sockets
-    sdpReply = new QUdpSocket(this);
+    // create receiver sockets
     sdpResult = new QUdpSocket(this);
     sdpDebug = new QUdpSocket(this);
-    sender = new QUdpSocket(this);
-    sdpReply->bind(SDP_UDP_REPLY_PORT);
     sdpResult->bind(SDP_UDP_RESULT_PORT);
     sdpDebug->bind(SDP_UDP_DEBUG_PORT);
-    // handle/prepare callbacks
-	connect(sdpReply, SIGNAL(readyRead()), this, SLOT(readReply()));
+    // and the sender
+    sender = new QUdpSocket(this);
+
+	// handle/prepare callbacks
 	connect(sdpResult, SIGNAL(readyRead()), this, SLOT(readResult()));
 	connect(sdpDebug, SIGNAL(readyRead()), this, SLOT(readDebug()));
 
@@ -57,8 +52,8 @@ cSpiNNcomm::cSpiNNcomm(quint8 nodes, quint8 opType, quint8 wFilter, quint8 wHist
 
 	hdrg = hdrr; hdrg.dest_port = (SDP_PORT_G_IMG_DATA << 5) + leadAp;
 	hdrb = hdrr; hdrb.dest_port = (SDP_PORT_B_IMG_DATA << 5) + leadAp;
-
-	cont2Send = false;
+	hdre = hdrr; hdre.dest_port = (SDP_PORT_FRAME_END  << 5) + leadAp;
+	hdrf = hdrr; hdrf.dest_port = (SDP_PORT_FRAME_INFO << 5) + leadAp;
 }
 
 cSpiNNcomm::~cSpiNNcomm()
@@ -67,152 +62,9 @@ cSpiNNcomm::~cSpiNNcomm()
 		delete frResult;
 }
 
-void cSpiNNcomm::readDebug()
-{
-	QByteArray ba;
-	ba.resize(sdpDebug->pendingDatagramSize());
-	sdpDebug->readDatagram(ba.data(), ba.size());
-	// then process it before emit the signal
-}
-
-void cSpiNNcomm::readReply()
-{
-	QByteArray ba;
-	ba.resize(sdpReply->pendingDatagramSize());
-	sdpReply->readDatagram(ba.data(), ba.size());
-	// then process it before emit the signal
-
-	// during sending frame, spinnaker send reply as reportMsg via tag-1
-	// that goes through port-2000 (this sdpReply port)
-	// TODO: extract cmd_rc to make sure it is during image retrieval? No?
-	cont2Send = true;
-}
-
-void cSpiNNcomm::readResult()
-{
-	QByteArray ba;
-	ba.resize(sdpResult->pendingDatagramSize());
-	sdpResult->readDatagram(ba.data(), ba.size());
-	// then process it before emit the signal
-    // TODO: getImage()
-	// at this point frResult should be ready
-	if(ba.size() > 10) {
-		// send acknowledge sendReply() == sendAck()
-		sendReply();
-
-		int lines, rgb;		// rgb = channel
-		/*
-		// NOTE: let's assume that the width is note 272 (256+16)
-		QByteArray srce_port(1, '\0');
-		srce_port[0] = ba[5];
-
-		QByteArray srce_addr(2, '\0');
-		srce_addr[0] = ba[8];
-		srce_addr[1] = ba[9];
-
-		// So, we don't care about the line
-		QDataStream lStream(&srce_addr, QIODevice::ReadOnly);
-		lStream.setVersion(QDataStream::Qt_4_8);
-		lStream.setByteOrder(QDataStream::LittleEndian);
-		lStream >> lines;
-		lines = lines >> 2;
-
-		QDataStream cStream(&srce_addr, QIODevice::ReadOnly);
-		cStream.setVersion(QDataStream::Qt_4_8);
-		cStream.setByteOrder(QDataStream::LittleEndian);
-		cStream >> rgb;
-		*/
-		rgb = ba[8] & 3;
-		//rgb = rgb & 3;
-
-		// copy to pixelBuffer
-		ba.remove(0, 10);	// remove the header
-		pxBuff[rgb].append(ba);
-	}
-	else {
-		// if spinnaker send notification of starting process
-		if(ResultTriggered==false) {
-			ResultTriggered=true;
-		}
-		// then the processing is finish
-		else {
-			ResultTriggered=false;	// prepare for the next
-			// copy to frResult
-			int cntr = 0;
-			QRgb value;
-			for(int y=0; y<hImg; y++)
-				for(int x=0; x<wImg; x++) {
-					value = qRgb(pxBuff[0][cntr], pxBuff[1][cntr], pxBuff[2][cntr]);
-					frResult->setPixel(x, y, value);
-					cntr++;
-				}
-			// then emit the result
-			emit frameOut(*frResult);
-			// and clear pixel buffers
-			for(int i=0; i<3; i++)
-				pxBuff[i].clear();
-			// how fast?
-			quint16 speed;
-
-			QByteArray srce_addr(2, '\0');
-			srce_addr[0] = ba[8];
-			srce_addr[1] = ba[9];
-			QDataStream lStream(&srce_addr, QIODevice::ReadOnly);
-			lStream.setVersion(QDataStream::Qt_4_8);
-			lStream.setByteOrder(QDataStream::LittleEndian);
-			lStream >> speed;
-			qDebug() << QString("SpiNNaker processing time: %1-ms").arg(speed);
-		}
-	}
-}
-
-// configure SpiNNaker to calculate workloads
-// it should be called when cDecoder first detect the resolution
-void cSpiNNcomm::configSpin(uchar spinIDX, int imgW, int imgH)
-// @slot
-{
-	hImg = imgH;
-	wImg = imgW;
-	szImg = imgH * imgW;
-	for(int i=0; i<3; i++) pxBuff[i].clear();
-
-	// w272 will determine how the result from spinnaker will be handled (see readResult() )
-	if(wImg==272) w272 = true; else w272 = false;
-
-    sdp_hdr_t h;
-    h.flags = 0x07;
-    h.tag = 0;
-    h.dest_port = (SDP_PORT_CONFIG << 5) + leadAp;
-    h.srce_port = ETH_PORT;
-    h.dest_addr = 0;
-    h.srce_addr = 0;
-
-    cmd_hdr_t c;
-    c.cmd_rc = SDP_CMD_CONFIG_NETWORK;
-    c.seq = (edgeOperator << 8) | (withFilter << 4) | withHistogramEq;
-    // node-0 should be in chip<0,0>
-    // node-1 is contained in arg1
-    // node-2 is contained in arg2
-    // node-3 is contained in arg3
-    c.arg1 = (nodes[1].chipX << 8) | (nodes[1].chipY);
-    c.arg2 = (nodes[2].chipX << 8) | (nodes[2].chipY);
-    c.arg1 = (nodes[3].chipX << 8) | (nodes[3].chipY);
-
-    // build the node list
-    QByteArray nodeList;
-    // here,  we start from 4
-    if(N_nodes > 4) {
-        for(ushort i=4; i<N_nodes; i++) {
-            nodeList.append((char)nodes[i].chipX);
-            nodeList.append((char)nodes[i].chipY);
-            // we can infer, how many nodes in the list
-            // so, the following is not required:
-            //nodeList.append((char)nodes[i].nodeID);
-        }
-    }
-    sendSDP(h, scp(c), nodeList);
-}
-
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*------------------ Basic SpiNNaker communication mechanism ----------------*/
 void cSpiNNcomm::sendSDP(sdp_hdr_t h, QByteArray s, QByteArray d)
 {
 	QByteArray ba = QByteArray(2, '\0');    // pad first
@@ -220,12 +72,13 @@ void cSpiNNcomm::sendSDP(sdp_hdr_t h, QByteArray s, QByteArray d)
 
 	if(s.size()>0) ba.append(s);
 
-    if(d.size()>0) ba.append(d);
+	if(d.size()>0) ba.append(d);
 
 	sender->writeDatagram(ba, ha, DEF_SEND_PORT);
 	//sender->writeDatagram(ba, QHostAddress::Any, DEF_SEND_PORT);	// not working with Any
 }
 
+// scp() will construct a bytearray from a cmd_hdr_t variable
 QByteArray cSpiNNcomm::scp(cmd_hdr_t cmd)
 {
 	QByteArray ba;
@@ -238,9 +91,10 @@ QByteArray cSpiNNcomm::scp(cmd_hdr_t cmd)
 	return ba;
 }
 
+// hdr() will construct a bytearray from a sdp_hdr_t variable
 QByteArray cSpiNNcomm::hdr(sdp_hdr_t h)
 {
-	/* It doesn't work, because ::number creates more bytes :(
+    /* It doesn't work, because ::number creates more bytes :(
     QByteArray ba = QByteArray::number(h.flags);
     ba.append(QByteArray::number(h.tag));
     ba.append(QByteArray::number(h.dest_port));
@@ -248,9 +102,9 @@ QByteArray cSpiNNcomm::hdr(sdp_hdr_t h)
     ba.append(QByteArray::number(h.dest_addr));
     ba.append(QByteArray::number(h.srce_addr));
     return ba;
-	*/
+    */
 
-	QByteArray ba;
+    QByteArray ba;
 
 	QDataStream stream(&ba, QIODevice::WriteOnly);
 	stream.setVersion(QDataStream::Qt_4_8);
@@ -261,24 +115,148 @@ QByteArray cSpiNNcomm::hdr(sdp_hdr_t h)
 	return ba;
 }
 
-void cSpiNNcomm::setHost(int spinIDX)
+// extract sdp_hdr from a bytearray
+sdp_hdr_t cSpiNNcomm::get_hdr(QByteArray const &ba)
 {
-    if(spinIDX==SPIN3)
-        ha = QHostAddress(QString(SPIN3_IP));
-    else
-        ha = QHostAddress(QString(SPIN5_IP));
+	sdp_hdr_t h;
+	QByteArray b;
+	b.resize(8);
+	for(int i=0; i<8; i++) b[i] = ba[i+2];
+	QDataStream stream(&b, QIODevice::ReadOnly);
+	stream.setVersion(QDataStream::Qt_4_8);
+	stream.setByteOrder(QDataStream::LittleEndian);
+	stream >> h.flags >> h.tag >> h.dest_port >> h.srce_port >> h.dest_addr >> h.srce_addr;
+	return h;
 }
 
-void cSpiNNcomm::sendReply()
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*----------------- Image Processing / Network related stuffs----------------*/
+// it should be called when Configure button is clicked
+void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum, quint8 edgeOperator, quint8 withFiltering, quint8 withSharping)
 {
-	sdp_hdr_t reply;
-	reply.flags = 0x07;
-	reply.tag = 0;
-	reply.dest_port = (sdpImgReplyPort << 5) + leadAp;
-	reply.srce_port = ETH_PORT;
-	reply.dest_addr = 0;
-	reply.srce_addr = 0;
-	sendSDP(reply);
+    // collect the parameters
+    if(SpinIdx==SPIN3) {
+        ha = QHostAddress(QString(SPIN3_IP));
+        qDebug() << "Will use SpiN-3";
+    }
+    else {
+        ha = QHostAddress(QString(SPIN5_IP));
+        qDebug() << "Will use SpiN-5";
+    }
+
+    N_nodes = nodesNum;			// by default it uses 4 nodes (spin3)
+    opType = edgeOperator;      // operator typ: SOBEL, LAPLACE
+    wFilter = withFiltering;	// with Gaussian filtering?
+    wHistEq = withSharping;     // with Histogram Equalization?
+
+    // send to spinnaker
+    sdp_hdr_t h;
+    h.flags = 0x07;
+    h.tag = 0;
+    h.dest_port = (SDP_PORT_CONFIG << 5) + leadAp;
+    h.srce_port = ETH_PORT;
+    h.dest_addr = 0;
+    h.srce_addr = 0;
+
+    cmd_hdr_t c;
+    c.cmd_rc = SDP_CMD_CONFIG_NETWORK;
+    c.seq = (opType << 8) | (wFilter << 4) | wHistEq;
+    // node-0 should be in chip<0,0>
+    // node-1 is contained in arg1, node-2 is in arg2, and node-3 is in arg3
+    c.arg1 = (nodes[1].chipX << 8) | (nodes[1].chipY);
+    c.arg2 = (nodes[2].chipX << 8) | (nodes[2].chipY);
+    c.arg3 = (nodes[3].chipX << 8) | (nodes[3].chipY);
+
+    // build the node list
+    QByteArray nodeList;
+    // here,  we start from 4
+    if(N_nodes > 4) {
+        for(ushort i=4; i<N_nodes; i++) {
+            nodeList.append(nodes[i].chipX);
+            nodeList.append(nodes[i].chipY);
+        }
+    }
+    sendSDP(h, scp(c), nodeList);
+}
+
+// frameInfo() should be called right after file decoding
+// It will instruct SpiNNaker to calculate workloads.
+void cSpiNNcomm::frameInfo(int imgW, int imgH)
+{
+	hImg = imgH;
+	wImg = imgW;
+	szImg = imgH * imgW;
+
+	// prepare the result
+	if(frResult != NULL)
+		delete frResult;
+	frResult = new QImage(wImg, hImg, QImage::Format_RGB888);
+	// and its buffer
+	pxBuff.clear();
+
+    // send to spinnaker
+    cmd_hdr_t c;
+    c.cmd_rc = wImg;
+    c.seq = hImg;
+    sendSDP(hdrf, scp(c));
+}
+
+void cSpiNNcomm::readDebug()
+{
+	QByteArray ba;
+	ba.resize(sdpDebug->pendingDatagramSize());
+	sdpDebug->readDatagram(ba.data(), ba.size());
+	// then process it before emit the signal
+}
+
+void cSpiNNcomm::readResult()
+{
+	// in the aplx: resultMsg.srce_addr = lines;
+
+	QByteArray ba;
+	ba.resize(sdpResult->pendingDatagramSize());
+	sdpResult->readDatagram(ba.data(), ba.size());
+	// at this point frResult should be ready
+
+	// first, read the header
+	sdp_hdr_t h = get_hdr(ba);
+	// spinnaker finish sending the result?
+	if(h.srce_port != SDP_SRCE_NOTIFY_PORT) {
+
+		// for debugging:
+		int ln = (int)h.srce_addr;
+		if(ln != recvLine) {
+			recvLine = ln;
+			recvLineCntr++;
+		}
+
+		// remove header
+		ba.remove(0, 10);
+		// since the result is sent in sequential order, then no overlap
+		// but beware with packet loss though!!!
+		pxBuff.append(ba);
+	}
+	// Note: we receive a result notification (only gray result!)
+	else {
+		// copy to frResult
+		int cntr = 0;
+		QRgb value;
+		for(int y=0; y<hImg; y++)
+			for(int x=0; x<wImg; x++) {
+				value = qRgb(pxBuff[cntr], pxBuff[cntr], pxBuff[cntr]);
+				frResult->setPixel(x, y, value);
+				cntr++;
+			}
+		// then emit the result
+		emit frameOut(*frResult);
+
+		// and clear pixel buffers
+		pxBuff.clear();
+		// how fast?
+		spinElapse = h.srce_addr;
+		qDebug() << QString("Receiving %1 lines").arg(recvLineCntr);
+	}
 }
 
 void cSpiNNcomm::sendImgLine(sdp_hdr_t h, uchar *pixel, quint16 len)
@@ -286,146 +264,113 @@ void cSpiNNcomm::sendImgLine(sdp_hdr_t h, uchar *pixel, quint16 len)
     QByteArray sdp = QByteArray(2, '\0');    // pad first
     sdp.append(hdr(h));
     if(len > 0) {
-		QByteArray data = QByteArray::fromRawData((const char*)pixel, len);
+        QByteArray data = QByteArray::fromRawData((const char*)pixel, len);
         sdp.append(data);
     }
     sender->writeDatagram(sdp, ha, DEF_SEND_PORT);
 }
 
 /* Now we have to revise the frameIn() such that it send image data in ordered fashion:
- * [red_chunk] [green_chunk] [blue_chunk] [red_chunk] [green_chunk] etc...
+ * [red_chunk] [green_chunk] [blue_chunk] ...delay... [red_chunk] [green_chunk] etc...
  *
- * */
-// The reply from SpiNNaker will be sent as reportMsg via tag-1 (SDP_TAG_REPLY). It
-// contains cmd_rc SDP_CMD_REPLY_HOST_SEND_IMG
-// Do you know why we cannot use scanline with uchar directly? See this:
-// http://stackoverflow.com/questions/2095039/qt-qimage-pixel-manipulation
+ *
+ * Note: Do you know why we cannot use scanline with uchar directly? See this:
+ *       http://stackoverflow.com/questions/2095039/qt-qimage-pixel-manipulation
+ */
 void cSpiNNcomm::frameIn(const QImage &frame)
 {
-	// at this point SpiNNaker should know the configuration (image size, nodes, etc)
+	// at this point SpiNNaker should know the configuration and
+	// the frame info has also been sent to spinnaker
 
-	// prepare the result
-	if(frResult != NULL)
-		delete frResult;
-	frResult = new QImage(frame.width(), frame.height(), QImage::Format_RGB888);
+	quint32 remaining = szImg, sz;
 
-	quint16 remaining = szImg, sz;
+    // Kutemukan kenapa ada baris-baris yang aneh, sepertinya cara qt ini
+    // berbeda dengan cara py sebelumnya, dimana cara py semua array disiapkan
+    // dulu semuanya, bukan per baris. Karena itu aku ganti disini:
 
-	/*
-	uchar *rCh, *gCh, *bCh;
-	rCh = (uchar *)malloc(szImg);
-	gCh = (uchar *)malloc(szImg);
-	bCh = (uchar *)malloc(szImg);
+    // prepare line containers
+    rArray = (uchar *)malloc(szImg);
+    gArray = (uchar *)malloc(szImg);
+    bArray = (uchar *)malloc(szImg);
 
-	QColor px;
-	quint16 remaining = szImg, sz;
-	int cntr = 0;
-	for(int y=0; y<hImg; y++) {
-		for(int x=0; x<wImg; x++) {
-			px = QColor(frame.pixel(x,y));
-			rCh[cntr] = px.red();
-			gCh[cntr] = px.green();
-			bCh[cntr] = px.blue();
-			cntr++;
-		}
-	}
+	TODO: cara di atas bikin xArray NULL, kenapa? Coba nanti buat aja QByteArray
 
-	while(remaining > 0) {
-		QApplication::processEvents();
-		sz = remaining > SDP_IMAGE_CHUNK ? SDP_IMAGE_CHUNK : remaining;
-		cont2Send = false;
-		sendImgLine(hdrr, rCh, sz);
-		while(cont2Send==false) {
-			QApplication::processEvents();
-		}
-		cont2Send = false;
-		sendImgLine(hdrg, gCh, sz);
-		while(cont2Send==false) {
-			QApplication::processEvents();
-		}
-		cont2Send = false;
-		sendImgLine(hdrb, bCh, sz);
-		while(cont2Send==false) {
-			QApplication::processEvents();
-		}
-		rCh += sz;
-		gCh += sz;
-		bCh += sz;
-		remaining -= sz;
-	}
-	// then we have to send just headers to indicate end of image
-	sendImgLine(hdrr, NULL, 0);
-	sendImgLine(hdrg, NULL, 0);
-	sendImgLine(hdrb, NULL, 0);
-
-	free(rCh); free(gCh); free(bCh);
-	*/
-
-
-	// prepare the container
-	uchar rArray[4096];	//limited to 4096-wide frame
-	uchar gArray[4096];
-	uchar bArray[4096];
-	// and its pointer
-//    const char *rPtr;
-//    const char *gPtr;
-//    const char *bPtr;
+	// prepare the container's pointer
 	uchar *rPtr;
 	uchar *gPtr;
 	uchar *bPtr;
 
+	quint16 pxSeq = 0;
+	quint8 tag, srce_port;
+	quint32 pxCntr = 0;
 
 	// for all lines in the image
 	for(int i=0; i<hImg; i++) {
 		for(int j=0; j<wImg; j++) {
-			rArray[j] = QColor(frame.pixel(j,i)).red();
-			gArray[j] = QColor(frame.pixel(j,i)).green();
-			bArray[j] = QColor(frame.pixel(j,i)).blue();
-		}
-//		memcpy(rArray, frame.scanLine(i)+1, wImg);
-//		memcpy(gArray, frame.scanLine(i)+wImg+1, wImg);
-//		memcpy(bArray, frame.scanLine(i)+2*wImg+1, wImg);
-
-//        rPtr = (const char *)rArray;
-//        gPtr = (const char *)gArray;
-//        bPtr = (const char *)bArray;
-		rPtr = rArray;
-		gPtr = gArray;
-		bPtr = bArray;
-
-		// we work only with color images!!!
-		remaining = wImg;
-		while(remaining > 0) {
-			sz = remaining > 256+16 ? 256+16:remaining;
-			cont2Send = false;
-			sendImgLine(hdrr, rPtr, sz);
-			while(cont2Send==false) {
-				QApplication::processEvents();
-			}
-			cont2Send = false;
-			sendImgLine(hdrg, gPtr, sz);
-			while(cont2Send==false) {
-				QApplication::processEvents();
-			}
-			cont2Send = false;
-			sendImgLine(hdrb, bPtr, sz);
-			while(cont2Send==false) {
-				QApplication::processEvents();
-			}
-			// then adjust array position
-			rPtr += sz;
-			gPtr += sz;
-			bPtr += sz;
-			remaining -= sz;
+			rArray[pxCntr] = QColor(frame.pixel(j,i)).red();
+			gArray[pxCntr] = QColor(frame.pixel(j,i)).green();
+			bArray[pxCntr] = QColor(frame.pixel(j,i)).blue();
+			pxCntr++;
 		}
 	}
-    // then we have to send just headers to indicate end of image
-    sendImgLine(hdrr, NULL, 0);
-    sendImgLine(hdrg, NULL, 0);
-    sendImgLine(hdrb, NULL, 0);
+	// now ?Array hold all pixel values
+
+	/* Cannot use scanLine!!!
+	memcpy(rArray, frame.scanLine(i)+1, wImg);
+	memcpy(gArray, frame.scanLine(i)+wImg+1, wImg);
+	memcpy(bArray, frame.scanLine(i)+2*wImg+1, wImg);
+	*/
+
+	// then reset the pointers to the beginning of the lines
+	rPtr = rArray;
+	gPtr = gArray;
+	bPtr = bArray;
+
+	// we work only with color images!!!
+	while(remaining > 0) {
+		tag = pxSeq >> 8;
+		srce_port = pxSeq & 0xFF;
+		sz = remaining > 272 ? 272:remaining;
+
+		hdrr.tag = tag; hdrr.srce_port = srce_port;
+		hdrg.tag = tag; hdrg.srce_port = srce_port;
+		hdrb.tag = tag; hdrb.srce_port = srce_port;
+		//hdrr.srce_addr = pxSeq;
+		//hdrg.srce_addr = pxSeq;
+		//hdrb.srce_addr = pxSeq;
+		sendImgLine(hdrr, rPtr, sz);
+		sendImgLine(hdrg, gPtr, sz);
+		sendImgLine(hdrb, bPtr, sz);
+
+		// then give sufficient delay
+		giveDelay(DEF_QT_WAIT_VAL*1000000);
+		// then adjust array position
+		rPtr += sz;
+		gPtr += sz;
+		bPtr += sz;
+		pxSeq++;
+		remaining -= sz;
+	}
+
+	qDebug() << QString("Total pxSeq = %1").arg(pxSeq);
+	// then we have to send empty msg via SDP_PORT_FRAME_END to start decoding
+	// sendImgLine(hdre, NULL, 0);
+
+	// release memory
+	free(rArray);
+	free(gArray);
+	free(bArray);
+
+	// debugging:
+	recvLine = -1;
+	recvLineCntr = 0;
 }
 
-/*-------------------- Helper functions ---------------------*/
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*--------------------------- Helper functions ------------------------------*/
 void cSpiNNcomm::giveDelay(quint32 ns)
 {
 	timespec ts, te;

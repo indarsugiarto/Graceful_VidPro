@@ -89,21 +89,23 @@ void give_report(uint reportType, uint target)
 	}
 	else if(reportType==DEBUG_REPORT_BLKINFO) {
 		io_printf(dest, "Node block info\n---------------------\n");
-		io_printf(dest, "@blkInfo = 0x%x\n", blkInfo);
+		//io_printf(dest, "@blkInfo = 0x%x\n", blkInfo);
 		io_printf(dest, "Node-ID  = %d\n", blkInfo->nodeBlockID);
 		io_printf(dest, "MaxBlock = %d\n", blkInfo->maxBlock);
 		io_printf(dest, "Nworkers = %d\n", blkInfo->Nworkers);
-		if(blkInfo->opType==0) {
-			if(blkInfo->opFilter==0)
-				io_printf(dest, "OpType   = SOBEL no FILTER\n");
-			else
-				io_printf(dest, "OpType   = SOBEL with FILTER\n");
-		} else {
-			if(blkInfo->opFilter==0)
-				io_printf(dest, "OpType   = LAPLACE no FILTER\n");
-			else
-				io_printf(dest, "OpType   = LAPLACE with FILTER\n");
+		switch(blkInfo->opType){
+		case 0: io_printf(dest, "OpType   = SOBEL\n"); break;
+		case 1: io_printf(dest, "OpType   = LAPLACE\n"); break;
 		}
+		switch(blkInfo->opFilter){
+		case 0: io_printf(dest, "OpFilter = no FILTERING\n"); break;
+		case 1: io_printf(dest, "OpFilter = with FILTERING\n"); break;
+		}
+		switch(blkInfo->opSharpen){
+		case 0: io_printf(dest, "OpFilter = no SHARPENING\n"); break;
+		case 1: io_printf(dest, "OpFilter = with SHARPENING\n"); break;
+		}
+
 		io_printf(dest, "wFrame   = %d\n", blkInfo->wImg);
 		io_printf(dest, "hFrame   = %d\n", blkInfo->hImg);
 		io_printf(dest, "------------------------\n", workers.tAvailable);
@@ -111,17 +113,21 @@ void give_report(uint reportType, uint target)
 	else if(reportType==DEBUG_REPORT_WLOAD) {
 		// send the workload via tag-3
 		// let's print the resulting workload
+		io_printf(IO_BUF, "blkInfo->wImg = %d, blkInfo->hImg = %d\n",
+				  blkInfo->wImg, blkInfo->hImg);
 		io_printf(IO_BUF, "blkID-%d, wID-%d, sp = %d, ep = %d\n",
 				  blkInfo->nodeBlockID, workers.subBlockID, workers.startLine, workers.endLine);
 		// printWLoad();
 		// cmd_rc: how many blocks in the network and what's current blockID
-		debugMsg.cmd_rc = (blkInfo->maxBlock << 8) + blkInfo->nodeBlockID;
-		// seq: how many workers in the block and what's current worker ID
-		debugMsg.seq = (blkInfo->Nworkers << 8) + workers.subBlockID;
-		debugMsg.arg1 = (workers.startLine << 16) + workers.endLine;
-		debugMsg.arg2 = (uint)workers.imgRIn;	// not important, just for check
-		debugMsg.arg3 = (uint)workers.imgOut1;	// not important
-		spin1_delay_us((blkInfo->nodeBlockID*17+workers.subBlockID)*100);
+		if(target==0) {
+			debugMsg.cmd_rc = (blkInfo->maxBlock << 8) + blkInfo->nodeBlockID;
+			// seq: how many workers in the block and what's current worker ID
+			debugMsg.seq = (blkInfo->Nworkers << 8) + workers.subBlockID;
+			debugMsg.arg1 = (workers.startLine << 16) + workers.endLine;
+			debugMsg.arg2 = (uint)workers.imgRIn;	// not important, just for check
+			debugMsg.arg3 = (uint)workers.imgOut1;	// not important
+			spin1_delay_us((blkInfo->nodeBlockID*17+workers.subBlockID)*100);
+		}
 
 		spin1_send_sdp_msg(&debugMsg, 10);
 	}

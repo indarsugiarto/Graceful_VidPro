@@ -35,7 +35,7 @@ LIBS += -lavcodec \
 DISTFILES +=
 
 #Jika dipakai di Fedora, lokasi ffmpeg ada di:
-#INCLUDEPATH += /usr/include/ffmpeg
+INCLUDEPATH += /usr/include/ffmpeg
 #Jika dipakai di Ubuntu, yang   di atas tidak diperlukan atau install dulu:
 #sudo apt install libavcodec-dev libavformat-dev libswscale-dev
 

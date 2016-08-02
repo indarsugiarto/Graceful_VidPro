@@ -21,7 +21,7 @@
 //#define USING_SPIN				5	// 3 for spin3, 5 for spin5
 
 // if USE_FIX_NODES is used, the node configuration MUST be supplied in the beginning
-#define USE_FIX_NODES               // use 4 chips or 48 chips
+//#define USE_FIX_NODES               // use 4 chips or 48 chips
 
 #if(USING_SPIN==3)
 #define MAX_NODES               4
@@ -84,10 +84,13 @@
 #define SDP_PORT_R_IMG_DATA		1	// port for sending R-channel
 #define SDP_PORT_G_IMG_DATA		2	// port for sending G-channel
 #define SDP_PORT_B_IMG_DATA		3	// port for sending B-channel
-#define SDP_PORT_FRAME_END              4   // instruct spinn to start decoding
-#define SDP_PORT_FRAME_INFO             5   // will be used to send the basic info about frame
-#define SDP_PORT_ACK			6
+#define SDP_PORT_FRAME_END      4   // instruct spinn to start decoding
+#define SDP_PORT_FRAME_INFO     5   // will be used to send the basic info about frame
 #define SDP_PORT_CONFIG			7	// for sending image/frame info
+
+// special for sending result and notification, srce_port can be used for chunk counter
+// while srce_addr can be used as line number of the image
+#define SDP_SRCE_NOTIFY_PORT	0xFE	// cannot use 0xFF because of ETH
 
 //#define SDP_CMD_CONFIG			1	// will be sent via SDP_PORT_CONFIG
 #define SDP_CMD_CONFIG_NETWORK  1   // for setting up the network
@@ -102,7 +105,11 @@
 #define SPINNVID_APP_ID			16
 
 // From my experiment with test_sdp_stream_to_host:
-#define DEF_DEL_VAL     900  // perfect, up to 5.7MBps
+// for sending chunks to spinnaker:
+#define DEF_QT_WAIT_VAL		200	// in nanosecond
+#define DEF_PY_WAIT_VAL		200
+// for sending chunks from spinnaker:
+#define DEF_DEL_VAL		900  // perfect, up to 5.7MBps
 
 
 // dma transfer

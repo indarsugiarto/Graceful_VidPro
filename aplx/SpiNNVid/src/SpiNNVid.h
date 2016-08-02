@@ -47,6 +47,7 @@ typedef struct block_info {
 	//ushort isGrey;			// 0==color, 1==gray
 	uchar opType;			// 0==sobel, 1==laplace
 	uchar opFilter;			// 0==no filtering, 1==with filtering
+	uchar opSharpen;		// 0==no sharpening, 1==with sharpening
 	uchar nodeBlockID;		// will be send by host
 	uchar myX;				// == CHIP_X(sv->p2p_addr)
 	uchar myY;				// == CHIP_Y(sv->p2p_addr)
@@ -85,6 +86,7 @@ typedef struct w_info {
 	ushort hImg;		// just a copy of block_info_t.hImg
 	uchar opType;			// 0==sobel, 1==laplace
 	uchar opFilter;			// 0==no filtering, 1==with filtering
+	uchar opSharpen;		// 0==no sharpening, 1==with sharpening
 
 	uchar *imgRIn;		// each worker has its own value of imgRIn --> workload base
 	uchar *imgGIn;		// idem
@@ -145,7 +147,7 @@ pxBuf_t pxBuffer;
 // Ada masalah jika buffer dimasukkan ke dalam struct. Coba jika ditaruh di luar:
 // Ternyata masih bermasalah. Sekarang mari kota coba dengan benar-benar membuat
 // berada di boundary 4-byte.
-#define DEF_PXLEN_IN_CHUNK	270
+#define DEF_PXLEN_IN_CHUNK	272
 /*
 uchar rpxbuf[DEF_PXLEN_IN_CHUNK];	// 270/4 = 67 with 2 bytes remaining
 uchar gpxbuf[DEF_PXLEN_IN_CHUNK];

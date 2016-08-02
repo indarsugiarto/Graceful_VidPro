@@ -120,6 +120,9 @@ void computeWLoad(uint withReport, uint arg1)
 	dtcmImgBuf = sark_alloc(workers.cntPixel, sizeof(uchar));
 	resImgBuf = sark_alloc(w, sizeof(uchar));	// just one line!
 	//io_printf(IO_BUF, "my startline = %d, my endline = %d\n", workers.startLine, workers.endLine);
+
+	// debugging:
+	//give_report(DEBUG_REPORT_WLOAD, 1);
 }
 
 
@@ -167,6 +170,10 @@ void processGrayScaling(uint arg0, uint arg1)
 	//uint offset = pxBuffer.pxSeq*pxBuffer.pxLen;
 	// uint offset = pxBuffer.pxSeq*270;
 	uint offset = pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK;
+
+
+	io_printf(IO_STD, "pxSeq = %d, offset = 0x%x\n", pxBuffer.pxSeq, offset);
+
 
 	// at this point, although workers.imgRIn... workers.imgOut1... have been initialized,
 	// we cannot use for storing original image to sdram, since the image distribution
@@ -246,6 +253,10 @@ void processGrayScaling(uint arg0, uint arg1)
 	// sark_delay_us(1000);
 	// then peek
 	// peekPxBufferInSDRAM();
+
+	// Karena srce_addr tidak bisa dipakai untuk pxSeq, kita buat pxSeq secara
+	// sekuensial:
+	// pxBuffer.pxSeq++;	// dia akan di-reset di bagian hSDP()
 
 	// then forward the pixels to similar cores but in other chips
 	if(sv->p2p_addr==0)
@@ -327,24 +338,8 @@ void collectGrayPixels(uint arg0, uint arg1)
 /*-----------------------------                                  ---------------------------*/
 void triggerProcessing(uint arg0, uint arg1)
 {
-	/*
-	if(blkInfo->opFilter==1) {
-		// broadcast command for filtering
-		nFiltJobDone = 0;
-		spin1_send_mc_packet(MCPL_BCAST_CMD_FILT, 0, WITH_PAYLOAD);
-	}
-	else {
-		nEdgeJobDone = 0;
-		// broadcast command for detection
-		spin1_send_mc_packet(MCPL_BCAST_CMD_DETECT, 0, WITH_PAYLOAD);
-	}
-	*/
-
-	// debugging: see, how many chips are able to collect the images:
-	// myDelay();
-	// io_printf(IO_STD, "Image is completely received. Ready for processing!\n");
-	// return;
-
+	// debugging:
+	io_printf(IO_BUF, "triggerProcessing()\n");
 	// prepare measurement
 	tic = sv->clock_ms;
 
@@ -535,6 +530,13 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 	else
 		imgOut = workers.blkImgOut3;
 
+	/*
+	IDEA: revisi untuk:
+	1. for sending pixel, use srce_port as chunk index
+			hence, the maximum chunk = 253, which reflect the maximum 253*272=68816 pixels
+	   for notifying host, use srce_port 0xFE
+	   we cannot use 0xFF, because 0xFF is special for ETH
+	*/
 	for(ushort lines=workers.blkStart; lines<=workers.blkEnd; lines++) {
 		// get the line from sdram
 		imgOut += l*workers.wImg;
@@ -553,14 +555,16 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 		// then sequentially copy & send via sdp
 		c = 0;
 		rem = workers.wImg;
-		resultMsg.srce_addr = lines;
+		resultMsg.srce_addr = lines;	// is it useful??? for debugging!!!
 		do {
+			resultMsg.srce_port = c;	// is it useful???
 			sz = rem > 272 ? 272 : rem;
 			spin1_memcpy((void *)&resultMsg.cmd_rc, (void *)(resImgBuf + c*272), sz);
 			resultMsg.length = sizeof(sdp_hdr_t) + sz;
 
 			spin1_send_sdp_msg(&resultMsg, 10);
-			giveDelay(DEF_DEL_VAL);
+			//giveDelay(DEF_DEL_VAL);
+			sark_delay_us(500);
 
 			c++;		// for the resImgBuf pointer
 			rem -= sz;
@@ -585,8 +589,10 @@ void sendDetectionResult2FPGA(uint nodeID, uint arg1)
 
 void notifyDestDone(uint arg0, uint arg1)
 {
+	io_printf(IO_STD, "Processing is done. Notify host with elapse-%d\n", elapse);
 #if (DESTINATION==DEST_HOST)
 	resultMsg.srce_addr = elapse;
+	resultMsg.srce_port = SDP_SRCE_NOTIFY_PORT;
 	resultMsg.length = sizeof(sdp_hdr_t);
 	spin1_send_sdp_msg(&resultMsg, 10);
 #elif (DESTINATION==DEST_FPGA)

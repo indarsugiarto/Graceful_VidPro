@@ -21,6 +21,10 @@
 #define BLOCK_REPORT_YES        1
 
 #define MAX_CHIPS               48  // how many chips will be used?
+
+// just for nice indicator
+#define QTSLOT                  (void)
+
 typedef struct sdp_hdr		// SDP header
 {
   uchar flags;
@@ -44,7 +48,7 @@ typedef struct nodeInfo
 {
     quint8 chipX;
     quint8 chipY;
-    quint8 nodeID;
+    // quint8 nodeID; // not needed anymore, since we can infer from data length
 } nodes_t;
 
 
@@ -61,19 +65,19 @@ class cSpiNNcomm: public QObject
 	Q_OBJECT
 
 public:
-    cSpiNNcomm(quint8 nodes=4, quint8 opType=0, quint8 wFilter=0, quint8 wHist=0, QObject *parent=0);
+    cSpiNNcomm(QObject *parent=0);
     ~cSpiNNcomm();
 	QImage *frResult;
 
 public slots:
 	void readResult();
-	void readReply();
 	void readDebug();
-    void configSpin(uchar spinIDX, int imgW, int imgH);
-    void setHost(int spinIDX);  //0=spin3, 1=spin5
+	void configSpin(quint8 SpinIdx, quint8 nodesNum, quint8 edgeOperator, quint8 withFiltering, quint8 withSharping);
+	void frameInfo(int imgW, int imgH);
 	void frameIn(const QImage &frame);
-	void sendReply();
 	void sendImgLine(sdp_hdr_t h, uchar *pixel, quint16 len);
+	// getSpinElapse() is useful if we want to read spinnaker processing time
+	quint16 getSpinElapse() {return spinElapse;}
 
 signals:
 	void gotResult(const QByteArray &data);
@@ -83,7 +87,6 @@ signals:
 
 private:
 	QUdpSocket *sdpResult;
-	QUdpSocket *sdpReply;
 	QUdpSocket *sdpDebug;
     QUdpSocket *sender;
 private:
@@ -96,24 +99,27 @@ private:
     // helper functions:
     QByteArray hdr(sdp_hdr_t h);
     QByteArray scp(cmd_hdr_t cmd);
-	volatile bool cont2Send;
+    sdp_hdr_t get_hdr(QByteArray const &ba);
 
 	quint16 wImg, hImg, szImg;
-	quint8 N_nodes;
-	quint8 edgeOperator, withFilter, withHistogramEq;
+	quint8 N_nodes, opType, wFilter, wHistEq;
+	quint16 spinElapse;
 
-	// let's prepare header for image sending
-	sdp_hdr_t hdrr, hdrg, hdrb;
+	// let's prepare header for image sending:
+	// rgb, end-of-frame, frame-info
+	sdp_hdr_t hdrr, hdrg, hdrb, hdre, hdrf;
 
-	volatile bool ResultTriggered;
-	volatile bool w272;				// will be used to indicate that the width is special
-	QByteArray pixelBuffer;
-	QByteArray pxBuff[3];
+	QByteArray pxBuff;
 
+	uchar *rArray, *gArray, *bArray;	// line container
 
 	// helper functions & variables
 	void giveDelay(quint32 ns);	// in nanoseconds
 	quint64 elapsed(timespec start, timespec end);
+
+	// for debugging
+	int recvLineCntr;
+	int recvLine;
 };
 
 #endif // CSPINNCOMM_H

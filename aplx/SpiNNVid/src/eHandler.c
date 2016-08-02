@@ -148,7 +148,8 @@ void hMCPL(uint key, uint payload)
 	}
 	else if(key==MCPL_BCAST_OP_INFO) {
 		blkInfo->opType = payload >> 8;
-		blkInfo->opFilter = payload & 0xFF;
+		blkInfo->opFilter = payload >> 4;
+		blkInfo->opSharpen = payload & 0xF;
 	}
 	else if(key==MCPL_BCAST_NODES_INFO) {
 		// how to disable default node-ID to prevent a chip accidently active due to its
@@ -164,6 +165,8 @@ void hMCPL(uint key, uint payload)
 		if(x==blkInfo->myX && y==blkInfo->myY) {
 			blkInfo->nodeBlockID = id;
 			blkInfo->maxBlock = payload >> 24;
+			// debugging:
+			// give_report(DEBUG_REPORT_BLKINFO, 0);
 		}
 	}
 
@@ -234,7 +237,10 @@ void hSDP(uint mBox, uint port)
 	// Note: the variable msg might be released somewhere else,
 	//       especially when delivering frame's channel
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
-	// io_printf(IO_STD, "got sdp cmd_rc=%d, seq=%d...\n", msg->cmd_rc, msg->seq);
+	/*
+	io_printf(IO_STD, "got sdp tag = 0x%x, srce_port = 0x%x, srce_addr = 0x%x\n",
+			  msg->tag, msg->srce_port, msg->srce_addr);
+	*/
 
 	if(port==SDP_PORT_CONFIG) {
 		if(msg->cmd_rc == SDP_CMD_CONFIG_NETWORK) {
@@ -256,11 +262,19 @@ void hSDP(uint mBox, uint port)
 		spin1_send_mc_packet(MCPL_BCAST_FRAME_INFO, (msg->cmd_rc << 16) + msg->seq, WITH_PAYLOAD);
 		// then broadcast to all workers (including leadAp) to compute their workload
 		spin1_send_mc_packet(MCPL_BCAST_GET_WLOAD, 0, WITH_PAYLOAD);
+
+		// Karena srce_addr tidak bisa dipakai untuk pxSeq, kita buat pxSeq secara
+		// sekuensial:
+		// pxBuffer.pxSeq = 0;	// dan juga harus di-reset di bagian SDP_PORT_FRAME_END
+
 	}
 
 	/*--------------------------------------------------------------------------------------*/
 	/*--------------------------------------------------------------------------------------*/
 	/*-------------- New revision: several cores may receives frames directly --------------*/
+
+	// NOTE: srce_addr TIDAK BISA DIPAKAI UNTUK pxSeq !!!!!
+
 	else if(port==SDP_PORT_R_IMG_DATA) {
 		// chCntr++;
 		// then tell core-2 to proceed
@@ -274,10 +288,15 @@ void hSDP(uint mBox, uint port)
 		//pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
 		//sark_mem_cpy(pxBuffer.rpxbuf, &msg->seq, pxBuffer.pxLen);
 		//sark_mem_cpy(rpxbuf, &msg->seq, pxBuffer.pxLen);
-		pxBuffer.pxSeq = msg->srce_addr;
+
+		//pxBuffer.pxSeq = msg->srce_addr;
+		pxBuffer.pxSeq = (msg->tag << 8) | msg->srce_port;
 		pxBuffer.pxLen = msg->length - 8;
 		//we use srce_addr for pxSeq, hence more data can be loaded into scp
 		sark_mem_cpy(rpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
+
+
+		///io_printf(IO_STD, "pxSeq = %d\n", pxBuffer.pxSeq);
 
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
 		// spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
@@ -299,10 +318,12 @@ void hSDP(uint mBox, uint port)
 		//sark_mem_cpy(pxBuffer.gpxbuf, &msg->seq, pxBuffer.pxLen);
 		//sark_mem_cpy(gpxbuf, &msg->seq, pxBuffer.pxLen);
 
-		pxBuffer.pxSeq = msg->srce_addr;
+		//pxBuffer.pxSeq = msg->srce_addr;
+		pxBuffer.pxSeq = (msg->tag << 8) | msg->srce_port;
 		pxBuffer.pxLen = msg->length - 8;
 		sark_mem_cpy(gpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
 
+		//io_printf(IO_STD, "pxSeq = %d\n", pxBuffer.pxSeq);
 
 
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
@@ -330,9 +351,14 @@ void hSDP(uint mBox, uint port)
 		//sark_mem_cpy(pxBuffer.bpxbuf, &msg->seq, pxBuffer.pxLen);
 		//sark_mem_cpy(bpxbuf, &msg->seq, pxBuffer.pxLen);
 
-		pxBuffer.pxSeq = msg->srce_addr;
+		//pxBuffer.pxSeq = msg->srce_addr;
+		pxBuffer.pxSeq = (msg->tag << 8) | msg->srce_port;
 		pxBuffer.pxLen = msg->length - 8;
 		sark_mem_cpy(bpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
+
+
+		//io_printf(IO_STD, "pxSeq = %d\n", pxBuffer.pxSeq);
+
 
 		// process gray scalling
 		spin1_schedule_callback(processGrayScaling, 0, 0, PRIORITY_PROCESSING);
@@ -348,6 +374,11 @@ void hSDP(uint mBox, uint port)
 	/*-------------- to trigger spiNNaker to do the processing                  ------------*/
 	/*-------------- This command should be sent to core<0,0,1>                 ------------*/
 	else if(port==SDP_PORT_FRAME_END) {
+
+		// Karena srce_addr tidak bisa dipakai untuk pxSeq, kita buat pxSeq secara
+		// sekuensial:
+		// pxBuffer.pxSeq = 0;	// dan juga harus di-reset di bagian SDP_PORT_FRAME_INFO
+
 		//debugging:
 		io_printf(IO_STD, "Processing begin...\n");
 
@@ -377,33 +408,50 @@ void configure_network(uint mBox)
 	if(msg->cmd_rc == SDP_CMD_CONFIG_NETWORK) {
 		uint payload;   // for broadcasting
 		// encoding strategy:
-		// seq.high:  edge type, 0 = SOBEL, 1 = LAPLACE
-		// seq.low: perform filtering? 0 = NO, 1 = YES
-		// arg1: max num of blocks
+		// seq = (opType << 8) | (wFilter << 4) | wHistEq;
+
 		blkInfo->opType = msg->seq >> 8;
-		blkInfo->opFilter = msg->seq & 0xFF;
+		blkInfo->opFilter = msg->seq >> 4;
+		blkInfo->opSharpen = msg->seq & 0xF;
+
 		payload = msg->seq;
 		spin1_send_mc_packet(MCPL_BCAST_OP_INFO, payload, WITH_PAYLOAD);
+		// the remaining blkInfo is determined by get_def_Nblocks() and get_block_id()
 
 		// additional broadcasting for nodes configuration if not USE_FIX_NODES
-		// chip<0,0> will be the root-node!
-		TODO: assure this
 #ifndef USE_FIX_NODES
-		blkInfo->maxBlock = msg->arg1;
-		// here we build chips database for later propagation usage
-		// Note: the other node will use the maxBlock info for counting
-		for(uchar i=0; i<msg->arg1; i++) {
-			payload = blkInfo->maxBlock << 24;
-			chips[i].id = msg->data[i*3];
-			chips[i].x = msg->data[i*3 + 1];
-			chips[i].y = msg->data[i*3 + 2];
-			payload += (chips[i].id << 16) + (chips[i].x << 8) + (chips[i].y);
-			// find what's the node-id of my chip
-			if(chips[i].x==blkInfo->myX && chips[i].y==blkInfo->myY) {
-				blkInfo->nodeBlockID = chips[i].id;
+		// convention: chip<0,0> must be root, it has the ETH
+		if(sv->p2p_addr==0) blkInfo->nodeBlockID = 0;
+
+		// chip<0,0> will be the root-node!
+		// arg1, arg2, arg3 contain node-1, node-2, node-3
+		chips[0].id = 0; chips[0].x = 0; chips[0].y = 0;
+		chips[1].id = 1; chips[1].x = msg->arg1 >> 8; chips[1].y = msg->arg1 & 0xFF;
+		chips[2].id = 2; chips[2].x = msg->arg2 >> 8; chips[2].y = msg->arg2 & 0xFF;
+		chips[3].id = 3; chips[3].x = msg->arg3 >> 8; chips[3].y = msg->arg3 & 0xFF;
+
+		// infer from msg->length
+		uchar restNodes = (msg->length - sizeof(sdp_hdr_t) - sizeof(cmd_hdr_t)) / 2;
+		if(restNodes > 0) {
+			for(uchar i=0; i<restNodes; i++) {
+				chips[i].id = i+4;
+				chips[i].x = msg->data[i*2];
+				chips[i].y = msg->data[i*2 + 1];
 			}
+		}
+		blkInfo->maxBlock = restNodes + 4;	// hence, minBlock = 4
+		//blkInfo->maxBlock = msg->arg1;
+		// then broadcast
+
+		// Note: the other node will use the maxBlock info for counting
+		for(uchar i=1; i<blkInfo->maxBlock; i++) {
+			payload = blkInfo->maxBlock << 24;
+			payload += (chips[i].id << 16) + (chips[i].x << 8) + (chips[i].y);
 			spin1_send_mc_packet(MCPL_BCAST_NODES_INFO, payload, WITH_PAYLOAD);
 		}
 #endif
 	}
+
+	// debugging:
+	// give_report(DEBUG_REPORT_BLKINFO, 0);
 }

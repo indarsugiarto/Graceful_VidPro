@@ -14,23 +14,32 @@ vidStreamer::vidStreamer(QWidget *parent) :
     ui(new Ui::vidStreamer)
 {
     ui->setupUi(this);
-	ui->cbSpiNN->setCurrentIndex(1);
+    //ui->cbSpiNN->setCurrentIndex(1);
+
+	// disable buttons until spinnaker is configured
+	ui->pbLoad->setEnabled(false);
+	ui->pbTest->setEnabled(false);
+	ui->pbPause->setEnabled(false);
+
     refresh = new QTimer(this);
     screen = new cScreen();     // this is for displaying original frame
     edge = new cScreen();       // this is for displaying result
     spinn = new cSpiNNcomm();
-    spinn->setHost(ui->cbSpiNN->currentIndex());
 
     connect(ui->pbLoad, SIGNAL(pressed()), this, SLOT(pbLoadClicked()));
 	connect(ui->pbPause, SIGNAL(pressed()), this, SLOT(pbPauseClicked()));
-    connect(ui->cbSpiNN, SIGNAL(currentIndexChanged(int)), spinn,
-            SLOT(setHost(int)));
+	connect(ui->pbTest, SIGNAL(pressed()), this, SLOT(pbTestClicked()));
+	connect(ui->pbConfigure, SIGNAL(pressed()), this, SLOT(pbConfigureClicked()));
+	connect(spinn, SIGNAL(frameOut(const QImage &)), edge, SLOT(putFrame(const QImage &)));
 
 	refresh->setInterval(40);   // which produces roughly 25fps
 	//refresh->setInterval(1000);   // which produces roughly 1fps
 	refresh->start();
 	//connect(refresh, SIGNAL(timeout()), this, SLOT(refreshUpdate()));
 
+	// additional setup
+	cbSpiNNchanged(ui->cbSpiNN->currentIndex());
+	connect(ui->cbSpiNN, SIGNAL(currentIndexChanged(int)), this, SLOT(cbSpiNNchanged(int)));
 
 	// let's test
 	/*
@@ -38,8 +47,35 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	spinn->configSpin(1, 350, 350);
 	*/
 
-    // test functionality:
-    connect(ui->pbTest, SIGNAL(pressed()), this, SLOT(pbTestClicked()));
+}
+
+void vidStreamer::cbSpiNNchanged(int idx)
+{
+	if(idx==0) {
+		ui->sbNchips->setValue(4);
+		ui->sbNchips->setEnabled(false);
+	} else {
+		ui->sbNchips->setEnabled(true);
+	}
+
+}
+
+void vidStreamer::pbConfigureClicked()
+{
+    ui->pbLoad->setEnabled(true);
+    ui->pbTest->setEnabled(true);
+    ui->pbPause->setEnabled(true);
+
+    // then send information to spinn
+    quint8 spinIdx = ui->cbSpiNN->currentIndex();
+    quint8 nNodes = ui->sbNchips->value();
+    quint8 opType = 0;
+    if(ui->rbLaplace->isChecked()) opType = 1;
+    quint8 wFilter = 0;
+    if(ui->rbFilterOn->isChecked()) wFilter = 1;
+    quint8 wHist = 0;
+    if(ui->rbSharpOn->isChecked()) wHist = 1;
+    spinn->configSpin(spinIdx, nNodes, opType, wFilter, wHist);
 }
 
 void vidStreamer::pbPauseClicked()
@@ -77,9 +113,6 @@ void vidStreamer::pbLoadClicked()
 
 	worker = new QThread();
 	decoder = new cDecoder();
-
-	// set correct spinnaker board
-	spinn->setHost(ui->cbSpiNN->currentIndex());
 
 	decoder->moveToThread(worker);
 	connect(decoder, SIGNAL(error(QString)), this, SLOT(errorString(QString)));
@@ -119,7 +152,7 @@ void vidStreamer::setSize(int w, int h)
     edge->setGeometry(edge->x()+w+20,edge->y(),w,h);
 	edge->setSize(w,h);
     // then tell spinnaker to start initialization
-    spinn->configSpin(ui->cbSpiNN->currentIndex(), w, h);
+    spinn->frameInfo(w, h);
 }
 
 void vidStreamer::closeEvent(QCloseEvent *event)
@@ -154,26 +187,31 @@ void vidStreamer::pbTestClicked()
 		temp.tv_sec = end.tv_sec-start.tv_sec;
 		temp.tv_nsec = end.tv_nsec-start.tv_nsec;
 	}
-	qDebug() << QString("Elapsed = %1-ns").arg(temp.tv_sec*1000000000+temp.tv_nsec);
+	qDebug() << QString("Dummy Elapsed = %1-ns").arg(temp.tv_sec*1000000000+temp.tv_nsec);
 
     /* Test-1: Send QImage-frame to SpiNNaker and display the result */
     QString fName = QFileDialog::getOpenFileName(this, "Open Image File", "../../../../images", "*");
     if(fName.isEmpty())
         return;
 
-    // set correct spinnaker board
-    spinn->setHost(ui->cbSpiNN->currentIndex());
 
-    connect(spinn, SIGNAL(frameOut(const QImage &)), edge, SLOT(putFrame(const QImage &)));
     QImage img;
     img.load(fName);
 
     screen->putFrame(img);
     screen->show();
+    edge->show();
+    connect(spinn, SIGNAL(frameOut(const QImage &)), this, SLOT(frameReady()));
 
-    //edge->setSize(img.width(), img.height());   // to show the viewer
-    spinn->configSpin(ui->cbSpiNN->currentIndex(), img.width(), img.height());
-
+    // send frame info to spinn
+    spinn->frameInfo(img.width(), img.height());
+    // send the frame to spinn
     spinn->frameIn(img);
+}
+
+void vidStreamer::frameReady()
+{
+    quint16 elapse = spinn->getSpinElapse();
+    qDebug() << QString("SpiNNaker processing time = %1-clk").arg(elapse);
 }
 
