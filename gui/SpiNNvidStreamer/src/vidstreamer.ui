@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>270</width>
-    <height>328</height>
+    <height>485</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -25,7 +25,7 @@
   <property name="windowTitle">
    <string>vidStreamer</string>
   </property>
-  <widget class="QPushButton" name="pbLoad">
+  <widget class="QPushButton" name="pbVideo">
    <property name="geometry">
     <rect>
      <x>10</x>
@@ -220,9 +220,6 @@
       <bool>false</bool>
      </property>
     </widget>
-    <zorder>rbFilterOff</zorder>
-    <zorder>rbFilterOn</zorder>
-    <zorder>groupBox</zorder>
    </widget>
    <widget class="QGroupBox" name="groupBox_3">
     <property name="geometry">
@@ -270,7 +267,7 @@
     </widget>
    </widget>
   </widget>
-  <widget class="QPushButton" name="pbTest">
+  <widget class="QPushButton" name="pbImage">
    <property name="geometry">
     <rect>
      <x>100</x>
@@ -281,6 +278,101 @@
    </property>
    <property name="text">
     <string>Load Image</string>
+   </property>
+  </widget>
+  <widget class="QFrame" name="frame_2">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>360</y>
+     <width>251</width>
+     <height>111</height>
+    </rect>
+   </property>
+   <property name="frameShape">
+    <enum>QFrame::StyledPanel</enum>
+   </property>
+   <property name="frameShadow">
+    <enum>QFrame::Raised</enum>
+   </property>
+   <widget class="QComboBox" name="cbTest">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>30</y>
+      <width>221</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <item>
+     <property name="text">
+      <string>Workers ID</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Network Configuration</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Block Info</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Workload</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Frame Info</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Performance Measurement</string>
+     </property>
+    </item>
+   </widget>
+   <widget class="QPushButton" name="pbTest">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>70</y>
+      <width>93</width>
+      <height>29</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Run</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_2">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>67</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Test:</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QPushButton" name="pbSendImage">
+   <property name="geometry">
+    <rect>
+     <x>100</x>
+     <y>320</y>
+     <width>81</width>
+     <height>27</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Send Image</string>
    </property>
   </widget>
  </widget>

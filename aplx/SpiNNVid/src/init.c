@@ -74,7 +74,7 @@ void initRouter()
 	y = CHIP_Y(sv->p2p_addr);
 
 	// broadcasting from root node like:
-	// MCPL_BCAST_SEND_RESULT, MCPL_BCAST_*pixels and HOST_ACK
+	// MCPL_BCAST_SEND_RESULT, MCPL_BCAST_RESET_NET, etc
 	dest = leader;	// by default, go to leadAP, unless:
 #if(USING_SPIN==5)
 	if(x==y) {
@@ -97,16 +97,17 @@ void initRouter()
 	if(sv->p2p_addr==0)
 		dest = 1 + (1<<1) + (1<<2);
 #endif
-	e = rtr_alloc(4);
+	e = rtr_alloc(5);
 	if(e==0)
 	{
 		io_printf(IO_STD, "initRouter err!\n");
 		rt_error(RTE_ABORT);
 	} else {
-		rtr_mc_set(e, MCPL_BCAST_NODES_INFO, 0xFFFFFFFF, dest); e++;
-		rtr_mc_set(e, MCPL_BCAST_OP_INFO, 0xFFFFFFFF, dest); e++;
-		rtr_mc_set(e, MCPL_BCAST_FRAME_INFO, 0xFFFFFFFF, dest); e++;
-		rtr_mc_set(e, MCPL_BCAST_SEND_RESULT, 0xFFFFFFFF, dest); e++;
+		rtr_mc_set(e, MCPL_BCAST_NODES_INFO,	0xFFFFFFFF, dest); e++;
+		rtr_mc_set(e, MCPL_BCAST_OP_INFO,		0xFFFFFFFF, dest); e++;
+		rtr_mc_set(e, MCPL_BCAST_FRAME_INFO,	0xFFFFFFFF, dest); e++;
+		rtr_mc_set(e, MCPL_BCAST_SEND_RESULT,	0xFFFFFFFF, dest); e++;
+		rtr_mc_set(e, MCPL_BCAST_RESET_NET,		0xFFFFFFFF, dest); e++;
 	}
 
 	// special for MCPL_BLOCK_DONE

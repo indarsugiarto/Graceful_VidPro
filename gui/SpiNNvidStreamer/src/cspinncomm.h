@@ -68,6 +68,7 @@ public:
     cSpiNNcomm(QObject *parent=0);
     ~cSpiNNcomm();
 	QImage *frResult;
+	void sendTest(int testID);
 
 public slots:
 	void readResult();
@@ -80,6 +81,7 @@ public slots:
 	quint16 getSpinElapse() {return spinElapse;}
 
 signals:
+	void sendFrameDone();
 	void gotResult(const QByteArray &data);
 	void gotReply(const QByteArray &data);
 	void gotDebug(const QByteArray &data);
@@ -101,7 +103,7 @@ private:
     QByteArray scp(cmd_hdr_t cmd);
     sdp_hdr_t get_hdr(QByteArray const &ba);
 
-	quint16 wImg, hImg, szImg;
+	quint32 wImg, hImg, szImg;
 	quint8 N_nodes, opType, wFilter, wHistEq;
 	quint16 spinElapse;
 

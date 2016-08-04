@@ -17,20 +17,29 @@ vidStreamer::vidStreamer(QWidget *parent) :
     //ui->cbSpiNN->setCurrentIndex(1);
 
 	// disable buttons until spinnaker is configured
-	ui->pbLoad->setEnabled(false);
-	ui->pbTest->setEnabled(false);
+	ui->pbVideo->setEnabled(false);
+	ui->pbImage->setEnabled(false);
+	ui->pbSendImage->setEnabled(false);
 	ui->pbPause->setEnabled(false);
+	ui->cbTest->setEnabled(false);
+	ui->pbTest->setEnabled(false);
+
 
     refresh = new QTimer(this);
     screen = new cScreen();     // this is for displaying original frame
     edge = new cScreen();       // this is for displaying result
     spinn = new cSpiNNcomm();
 
-    connect(ui->pbLoad, SIGNAL(pressed()), this, SLOT(pbLoadClicked()));
+	connect(ui->pbVideo, SIGNAL(pressed()), this, SLOT(pbVideoClicked()));
 	connect(ui->pbPause, SIGNAL(pressed()), this, SLOT(pbPauseClicked()));
-	connect(ui->pbTest, SIGNAL(pressed()), this, SLOT(pbTestClicked()));
+	connect(ui->pbImage, SIGNAL(pressed()), this, SLOT(pbImageClicked()));
+	connect(ui->pbSendImage, SIGNAL(pressed()), this, SLOT(pbSendImageClicked()));
 	connect(ui->pbConfigure, SIGNAL(pressed()), this, SLOT(pbConfigureClicked()));
+	connect(ui->sbNchips, SIGNAL(editingFinished()), this, SLOT(newChipsNum()));
+	connect(ui->pbTest, SIGNAL(pressed()), this, SLOT(pbTestClicked()));
 	connect(spinn, SIGNAL(frameOut(const QImage &)), edge, SLOT(putFrame(const QImage &)));
+	connect(spinn, SIGNAL(frameOut(const QImage &)), this, SLOT(frameReady()));
+	connect(spinn, SIGNAL(sendFrameDone()), this, SLOT(frameSent()));
 
 	refresh->setInterval(40);   // which produces roughly 25fps
 	//refresh->setInterval(1000);   // which produces roughly 1fps
@@ -42,11 +51,17 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	connect(ui->cbSpiNN, SIGNAL(currentIndexChanged(int)), this, SLOT(cbSpiNNchanged(int)));
 
 	// let's test
+
+	//ui->pbConfigure->click();
+	//pbTestClicked();
 	/*
 	spinn->setHost(1);	//1=spin5
 	spinn->configSpin(1, 350, 350);
 	*/
 
+	oldNchips = 0;
+	//ui->rbLaplace->setChecked(true);
+	imgFilename = "../../../images/Elephant-uxga.bmp";
 }
 
 void vidStreamer::cbSpiNNchanged(int idx)
@@ -62,9 +77,14 @@ void vidStreamer::cbSpiNNchanged(int idx)
 
 void vidStreamer::pbConfigureClicked()
 {
-    ui->pbLoad->setEnabled(true);
+    screen->hide();
+    edge->hide();
+    ui->pbVideo->setEnabled(true);
+    ui->pbImage->setEnabled(true);
+    ui->pbSendImage->setEnabled(false);
+    //ui->pbPause->setEnabled(true);
+    ui->cbTest->setEnabled(true);
     ui->pbTest->setEnabled(true);
-    ui->pbPause->setEnabled(true);
 
     // then send information to spinn
     quint8 spinIdx = ui->cbSpiNN->currentIndex();
@@ -76,6 +96,10 @@ void vidStreamer::pbConfigureClicked()
     quint8 wHist = 0;
     if(ui->rbSharpOn->isChecked()) wHist = 1;
     spinn->configSpin(spinIdx, nNodes, opType, wFilter, wHist);
+
+    // just for experiment: it's boring...
+    pbImageClicked();
+    pbSendImageClicked();
 }
 
 void vidStreamer::pbPauseClicked()
@@ -105,11 +129,12 @@ void vidStreamer::errorString(QString err)
     qDebug() << err;
 }
 
-void vidStreamer::pbLoadClicked()
+void vidStreamer::pbVideoClicked()
 {
     QString fName = QFileDialog::getOpenFileName(this, "Open Video File", "../../../../videos", "*");
     if(fName.isEmpty())
         return;
+    ui->pbPause->setEnabled(true);
 
 	worker = new QThread();
 	decoder = new cDecoder();
@@ -174,7 +199,7 @@ void vidStreamer::videoFinish()
 	edge->hide();
 }
 
-void vidStreamer::pbTestClicked()
+void vidStreamer::pbImageClicked()
 {
 	timespec start, end, temp;
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
@@ -190,23 +215,32 @@ void vidStreamer::pbTestClicked()
 	qDebug() << QString("Dummy Elapsed = %1-ns").arg(temp.tv_sec*1000000000+temp.tv_nsec);
 
     /* Test-1: Send QImage-frame to SpiNNaker and display the result */
-    QString fName = QFileDialog::getOpenFileName(this, "Open Image File", "../../../../images", "*");
+    //fName = "../../../../SpiNN-3.jpg";
+
+    /*
+    imgFilename = QFileDialog::getOpenFileName(this, "Open Image File", "../../../images", "*");
     if(fName.isEmpty())
         return;
+    */
 
 
-    QImage img;
-    img.load(fName);
+    ui->pbSendImage->setEnabled(true);
 
-    screen->putFrame(img);
+    loadedImage.load(imgFilename);
+
+    screen->putFrame(loadedImage);
     screen->show();
-    edge->show();
-    connect(spinn, SIGNAL(frameOut(const QImage &)), this, SLOT(frameReady()));
+    //send frame info to spinn
+    spinn->frameInfo(loadedImage.width(), loadedImage.height());
+}
 
-    // send frame info to spinn
-    spinn->frameInfo(img.width(), img.height());
+void vidStreamer::pbSendImageClicked()
+{
+    edge->show();
+    // disable the button to see if the image is sent
+    ui->pbSendImage->setEnabled(false);
     // send the frame to spinn
-    spinn->frameIn(img);
+    spinn->frameIn(loadedImage);
 }
 
 void vidStreamer::frameReady()
@@ -215,3 +249,30 @@ void vidStreamer::frameReady()
     qDebug() << QString("SpiNNaker processing time = %1-clk").arg(elapse);
 }
 
+void vidStreamer::pbTestClicked()
+{
+    // Current possible test:
+    // 0 - Workers ID
+    // 1 - Network Configuration
+    // 2 - BlockInfo
+    // 3 - Workload
+    // 4 - FrameInfo
+    // 5 - Performance Measurement
+    spinn->sendTest(ui->cbTest->currentIndex());
+}
+
+void vidStreamer::newChipsNum()
+{
+    //qDebug() << QString("%1").arg(ui->sbNchips->value());
+    if(ui->sbNchips->value() != oldNchips) {
+        oldNchips = ui->sbNchips->value();
+        pbConfigureClicked();
+    }
+}
+
+void vidStreamer::frameSent()
+{
+    // if using "Load Image"
+    if(!loadedImage.isNull())
+        ui->pbSendImage->setEnabled(true);
+}

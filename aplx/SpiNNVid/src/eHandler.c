@@ -1,14 +1,73 @@
 #include "SpiNNVid.h"
 
+/*------------------------------------------------------------------------------*/
+/*------------------------------------------------------------------------------*/
+/*------------------------------------------------------------------------------*/
+/*------------------- Sub functions called by main handler ---------------------*/
+
+void configure_network(uint mBox)
+{
+#if (DEBUG_LEVEL>2)
+	io_printf(IO_STD, "Receiving configuration...\n");
+#endif
+	sdp_msg_t *msg = (sdp_msg_t *)mBox;
+	if(msg->cmd_rc == SDP_CMD_CONFIG_NETWORK) {
+		uint payload;   // for broadcasting
+		// encoding strategy:
+		// seq = (opType << 8) | (wFilter << 4) | wHistEq;
+
+		blkInfo->opType = msg->seq >> 8;
+		blkInfo->opFilter = (msg->seq >> 4) & 0xF;
+		blkInfo->opSharpen = msg->seq & 0xF;
+
+		payload = msg->seq;
+		spin1_send_mc_packet(MCPL_BCAST_OP_INFO, payload, WITH_PAYLOAD);
+		// the remaining blkInfo is determined by get_def_Nblocks() and get_block_id()
+
+		// additional broadcasting for nodes configuration if not USE_FIX_NODES
+#ifndef USE_FIX_NODES
+		// convention: chip<0,0> must be root, it has the ETH
+		if(sv->p2p_addr==0) blkInfo->nodeBlockID = 0;
+
+		// chip<0,0> will be the root-node!
+		// arg1, arg2, arg3 contain node-1, node-2, node-3
+		chips[0].id = 0; chips[0].x = 0; chips[0].y = 0;
+		chips[1].id = 1; chips[1].x = msg->arg1 >> 8; chips[1].y = msg->arg1 & 0xFF;
+		chips[2].id = 2; chips[2].x = msg->arg2 >> 8; chips[2].y = msg->arg2 & 0xFF;
+		chips[3].id = 3; chips[3].x = msg->arg3 >> 8; chips[3].y = msg->arg3 & 0xFF;
+
+		// infer from msg->length
+		uchar restNodes = (msg->length - sizeof(sdp_hdr_t) - sizeof(cmd_hdr_t)) / 2;
+		if(restNodes > 0) {
+			for(uchar i=0; i<restNodes; i++) {
+				chips[i+4].id = i+4;
+				chips[i+4].x = msg->data[i*2];
+				chips[i+4].y = msg->data[i*2 + 1];
+			}
+		}
+		blkInfo->maxBlock = restNodes + 4;	// hence, minBlock = 4
+		//blkInfo->maxBlock = msg->arg1;
+		// then broadcast
+
+		// Note: the other node will use the maxBlock info for counting
+		for(uchar i=0; i<blkInfo->maxBlock; i++) {
+			payload = blkInfo->maxBlock << 24;
+			payload += (chips[i].id << 16) + (chips[i].x << 8) + (chips[i].y);
+			spin1_send_mc_packet(MCPL_BCAST_NODES_INFO, payload, WITH_PAYLOAD);
+		}
+#endif
+	}
+
+	// debugging:
+	// give_report(DEBUG_REPORT_BLKINFO, 0);
+}
+
+
+
 /*----------------------------------------------------------------*/
 /*----------------------------------------------------------------*/
 /*----------------------------------------------------------------*/
 /*------------------- Main handler functions ---------------------*/
-
-// forward declaration:
-void configure_network(uint mBox);
-
-
 
 void hDMA(uint tid, uint tag)
 {
@@ -148,15 +207,15 @@ void hMCPL(uint key, uint payload)
 	}
 	else if(key==MCPL_BCAST_OP_INFO) {
 		blkInfo->opType = payload >> 8;
-		blkInfo->opFilter = payload >> 4;
+		blkInfo->opFilter = (payload >> 4) & 0xF;
 		blkInfo->opSharpen = payload & 0xF;
 	}
 	else if(key==MCPL_BCAST_NODES_INFO) {
 		// how to disable default node-ID to prevent a chip accidently active due to its
 		// default ID (during first time call with get_block_id() ?
-		// one possible solution:
-		// if we get MCPL_BCAST_NODES_INFO, first we reset maxBlock to 0
-		// then we set it again if the payload is for us
+		// one possible solution: using MCPL_BCAST_RESET_NET, with which
+		// the maxBlock is set to 0 and nodeBlockID to 0xFF
+		// Then we set it here if the payload is for us
 
 		uchar id = (payload >> 16) & 0xFF;
 		uchar x = (payload >> 8) & 0xFF;
@@ -168,6 +227,13 @@ void hMCPL(uint key, uint payload)
 			// debugging:
 			// give_report(DEBUG_REPORT_BLKINFO, 0);
 		}
+	}
+	else if(key==MCPL_BCAST_RESET_NET) {
+#if (DEBUG_LEVEL>2)
+		io_printf(IO_BUF, "Got net reset cmd\n");
+#endif
+		blkInfo->maxBlock = 0;
+		blkInfo->nodeBlockID = 0xFF;
 	}
 
 	// got frame info from root node, then broadcast to workers
@@ -181,7 +247,9 @@ void hMCPL(uint key, uint payload)
 	// MCPL_EDGE_DONE is sent by every core to leadAp
 	else if(key==MCPL_EDGE_DONE) {
 		nEdgeJobDone++;
-		if(nEdgeJobDone==workers.tAvailable) {
+		// I think we have a problem with comparing to tAvailable,
+		// because not all cores might be used (eg. the frame is small)
+		if(nEdgeJobDone==workers.tRunning) {
 			// collect measurement
 			// Note: this also includes time for filtering, since filtering also trigger edging
 			toc = sv->clock_ms;
@@ -196,6 +264,11 @@ void hMCPL(uint key, uint payload)
 	// to core <0,0,leadAp>
 	else if(key==MCPL_BLOCK_DONE) {
 		nBlockDone++;
+		/*
+		io_printf(IO_STD, "Receive MCPL_BLOCK_DONE from node-%d\n", payload);
+		io_printf(IO_STD, "Total nBlockDone now is %d\n", nBlockDone);
+		io_printf(IO_STD, "Next block should be %d\n", payload+1);
+		*/
 		if(nBlockDone==blkInfo->maxBlock) {
 			spin1_schedule_callback(notifyDestDone, 0, 0, PRIORITY_PROCESSING);
 		}
@@ -203,7 +276,8 @@ void hMCPL(uint key, uint payload)
 		// with the next node-ID (++payload)
 		// MCPL_BCAST_SEND_RESULT is destined to other external nodes from root-node
 		else if(blkInfo->nodeBlockID==0) {
-			spin1_send_mc_packet(MCPL_BCAST_SEND_RESULT, ++payload, WITH_PAYLOAD);
+			spin1_send_mc_packet(MCPL_BCAST_SEND_RESULT, payload+1, WITH_PAYLOAD);
+			//spin1_send_mc_packet(MCPL_BCAST_SEND_RESULT, ++payload, WITH_PAYLOAD);
 		}
 	}
 
@@ -251,6 +325,16 @@ void hSDP(uint mBox, uint port)
 			// will use MCPL_BCAST_ALL_REPORT to all cores in the system
 			// and the requesting info will be provided in the seq
 			spin1_send_mc_packet(MCPL_BCAST_ALL_REPORT, msg->seq, WITH_PAYLOAD);
+		}
+		else if(msg->cmd_rc == SDP_CMD_RESET_NETWORK) {
+#if (DEBUG_LEVEL>2)
+			io_printf(IO_STD, "Got net reset cmd\n");
+#endif
+			// ignore this command if using fixed nodes configuration
+#ifndef USE_FIX_NODES
+			// then broadcast reset network to make maxBlock 0 and nodeBlockID 0xFF
+			spin1_send_mc_packet(MCPL_BCAST_RESET_NET, 0, WITH_PAYLOAD);
+#endif
 		}
 	}
 	else if(port==SDP_PORT_FRAME_INFO) {
@@ -379,9 +463,10 @@ void hSDP(uint mBox, uint port)
 		// sekuensial:
 		// pxBuffer.pxSeq = 0;	// dan juga harus di-reset di bagian SDP_PORT_FRAME_INFO
 
+#if (DEBUG_LEVEL > 0)
 		//debugging:
 		io_printf(IO_STD, "Processing begin...\n");
-
+#endif
 		spin1_send_mc_packet(MCPL_BCAST_START_PROC, 0, WITH_PAYLOAD);
 	}
 
@@ -397,61 +482,3 @@ void hTimer(uint tick, uint Unused)
 	}
 }
 
-/*------------------------------------------------------------------------------*/
-/*------------------------------------------------------------------------------*/
-/*------------------------------------------------------------------------------*/
-/*------------------- Sub functions called by main handler ---------------------*/
-
-void configure_network(uint mBox)
-{
-	sdp_msg_t *msg = (sdp_msg_t *)mBox;
-	if(msg->cmd_rc == SDP_CMD_CONFIG_NETWORK) {
-		uint payload;   // for broadcasting
-		// encoding strategy:
-		// seq = (opType << 8) | (wFilter << 4) | wHistEq;
-
-		blkInfo->opType = msg->seq >> 8;
-		blkInfo->opFilter = msg->seq >> 4;
-		blkInfo->opSharpen = msg->seq & 0xF;
-
-		payload = msg->seq;
-		spin1_send_mc_packet(MCPL_BCAST_OP_INFO, payload, WITH_PAYLOAD);
-		// the remaining blkInfo is determined by get_def_Nblocks() and get_block_id()
-
-		// additional broadcasting for nodes configuration if not USE_FIX_NODES
-#ifndef USE_FIX_NODES
-		// convention: chip<0,0> must be root, it has the ETH
-		if(sv->p2p_addr==0) blkInfo->nodeBlockID = 0;
-
-		// chip<0,0> will be the root-node!
-		// arg1, arg2, arg3 contain node-1, node-2, node-3
-		chips[0].id = 0; chips[0].x = 0; chips[0].y = 0;
-		chips[1].id = 1; chips[1].x = msg->arg1 >> 8; chips[1].y = msg->arg1 & 0xFF;
-		chips[2].id = 2; chips[2].x = msg->arg2 >> 8; chips[2].y = msg->arg2 & 0xFF;
-		chips[3].id = 3; chips[3].x = msg->arg3 >> 8; chips[3].y = msg->arg3 & 0xFF;
-
-		// infer from msg->length
-		uchar restNodes = (msg->length - sizeof(sdp_hdr_t) - sizeof(cmd_hdr_t)) / 2;
-		if(restNodes > 0) {
-			for(uchar i=0; i<restNodes; i++) {
-				chips[i].id = i+4;
-				chips[i].x = msg->data[i*2];
-				chips[i].y = msg->data[i*2 + 1];
-			}
-		}
-		blkInfo->maxBlock = restNodes + 4;	// hence, minBlock = 4
-		//blkInfo->maxBlock = msg->arg1;
-		// then broadcast
-
-		// Note: the other node will use the maxBlock info for counting
-		for(uchar i=1; i<blkInfo->maxBlock; i++) {
-			payload = blkInfo->maxBlock << 24;
-			payload += (chips[i].id << 16) + (chips[i].x << 8) + (chips[i].y);
-			spin1_send_mc_packet(MCPL_BCAST_NODES_INFO, payload, WITH_PAYLOAD);
-		}
-#endif
-	}
-
-	// debugging:
-	// give_report(DEBUG_REPORT_BLKINFO, 0);
-}

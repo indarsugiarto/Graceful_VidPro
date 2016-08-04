@@ -138,19 +138,14 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum, quint8 edgeOperator
     // collect the parameters
     if(SpinIdx==SPIN3) {
         ha = QHostAddress(QString(SPIN3_IP));
-        qDebug() << "Will use SpiN-3";
+        qDebug() << QString("Will use SpiN-3 with %1 nodes").arg(N_nodes);
     }
     else {
         ha = QHostAddress(QString(SPIN5_IP));
-        qDebug() << "Will use SpiN-5";
+        qDebug() << QString("Will use SpiN-5 with %1 nodes").arg(N_nodes);
     }
 
-    N_nodes = nodesNum;			// by default it uses 4 nodes (spin3)
-    opType = edgeOperator;      // operator typ: SOBEL, LAPLACE
-    wFilter = withFiltering;	// with Gaussian filtering?
-    wHistEq = withSharping;     // with Histogram Equalization?
-
-    // send to spinnaker
+    // first, send notification to reset the network to spinnaker
     sdp_hdr_t h;
     h.flags = 0x07;
     h.tag = 0;
@@ -160,8 +155,35 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum, quint8 edgeOperator
     h.srce_addr = 0;
 
     cmd_hdr_t c;
+    c.cmd_rc = SDP_CMD_RESET_NETWORK;
+    sendSDP(h, scp(c));
+
+    // give a delay
+    giveDelay(100000);
+
+    // and the new configuraiton
+    N_nodes = nodesNum;			// by default it uses 4 nodes (spin3)
+    opType = edgeOperator;      // operator typ: SOBEL, LAPLACE
+    wFilter = withFiltering;	// with Gaussian filtering?
+    wHistEq = withSharping;     // with Histogram Equalization?
+
+    qDebug() << QString("opType = %1, wFilter = %2, wHistEq = %3")
+                .arg(opType).arg(wFilter).arg(wHistEq);
+
+
+    /*
+    if(opType==0) qDebug() << "Will use Sobel operator"; else
+                  qDebug() << "Will use Laplace operator";
+    if(wFilter==0) qDebug() << "Will use no filtering"; else
+                   qDebug() << "Will use filtering";
+    if(wHistEq==0) qDebug() << "Will use no sharpening"; else
+                   qDebug() << "Will use sharpening";
+    */
+    // send to spinnaker
     c.cmd_rc = SDP_CMD_CONFIG_NETWORK;
     c.seq = (opType << 8) | (wFilter << 4) | wHistEq;
+
+    qDebug() << QString("c.seq = %1").arg(c.seq);
     // node-0 should be in chip<0,0>
     // node-1 is contained in arg1, node-2 is in arg2, and node-3 is in arg3
     c.arg1 = (nodes[1].chipX << 8) | (nodes[1].chipY);
@@ -208,6 +230,26 @@ void cSpiNNcomm::readDebug()
 	ba.resize(sdpDebug->pendingDatagramSize());
 	sdpDebug->readDatagram(ba.data(), ba.size());
 	// then process it before emit the signal
+
+	// especially for workload:
+	sdp_hdr_t h;
+	cmd_hdr_t c;
+	quint16 pad;
+	QDataStream stream(&ba, QIODevice::ReadOnly);
+	stream.setVersion(QDataStream::Qt_4_8);
+	stream.setByteOrder(QDataStream::LittleEndian);
+	stream >> pad >> h.flags >> h.tag >> h.dest_port >> h.srce_port
+		   >> h.dest_addr >> h.srce_addr
+		   >> c.cmd_rc >> c.seq >> c.arg1 >> c.arg2 >> c.arg3;
+	quint16 mxBlk = c.cmd_rc >> 8;
+	quint16 blkID = c.cmd_rc & 0xFF;
+	quint16 numWorker = c.seq >> 8;
+	quint16 wID = c.seq & 0xFF;
+	quint16 sLine = c.arg1 >> 16;
+	quint16 eLine = c.arg1 & 0xFFFF;
+	qDebug() << QString("Chip<%5,%6>\tblkID-%1\twID-%2\tsLine-%3\teLine-%4")
+				.arg(blkID).arg(wID).arg(sLine).arg(eLine)
+				.arg(h.srce_addr >> 8).arg(h.srce_addr & 0xFF);
 }
 
 void cSpiNNcomm::readResult()
@@ -239,6 +281,7 @@ void cSpiNNcomm::readResult()
 	}
 	// Note: we receive a result notification (only gray result!)
 	else {
+		spinElapse = h.srce_addr;
 		// copy to frResult
 		int cntr = 0;
 		QRgb value;
@@ -254,8 +297,8 @@ void cSpiNNcomm::readResult()
 		// and clear pixel buffers
 		pxBuff.clear();
 		// how fast?
-		spinElapse = h.srce_addr;
-		qDebug() << QString("Receiving %1 lines").arg(recvLineCntr);
+		qDebug() << QString("Receiving %1 lines in %2-ms")
+					.arg(recvLineCntr).arg(spinElapse);
 	}
 }
 
@@ -293,7 +336,7 @@ void cSpiNNcomm::frameIn(const QImage &frame)
     gArray = (uchar *)malloc(szImg);
     bArray = (uchar *)malloc(szImg);
 
-	TODO: cara di atas bikin xArray NULL, kenapa? Coba nanti buat aja QByteArray
+    // TODO: cara di atas bikin xArray NULL, kenapa? karena szImg sebelumnya dibuat uint16, seharusnya uint32
 
 	// prepare the container's pointer
 	uchar *rPtr;
@@ -343,7 +386,8 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 		sendImgLine(hdrb, bPtr, sz);
 
 		// then give sufficient delay
-		giveDelay(DEF_QT_WAIT_VAL*1000000);
+		giveDelay(DEF_QT_WAIT_VAL*5000);	// ini biasanya yang aku pakai
+		//giveDelay(DEF_QT_WAIT_VAL*3000);	// rusak, tapi masih bisa dilihat
 		// then adjust array position
 		rPtr += sz;
 		gPtr += sz;
@@ -352,9 +396,12 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 		remaining -= sz;
 	}
 
-	qDebug() << QString("Total pxSeq = %1").arg(pxSeq);
+	//qDebug() << QString("Total pxSeq = %1").arg(pxSeq);
 	// then we have to send empty msg via SDP_PORT_FRAME_END to start decoding
-	// sendImgLine(hdre, NULL, 0);
+	sendImgLine(hdre, NULL, 0);
+
+	// emit signal
+	emit sendFrameDone();
 
 	// release memory
 	free(rArray);
@@ -366,7 +413,36 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 	recvLineCntr = 0;
 }
 
+void cSpiNNcomm::sendTest(int testID)
+{
+    sdp_hdr_t h;
+    h.flags = 7;
+    h.tag = 0;
+    h.srce_addr = 0;
+    h.srce_port = 255;
+    h.dest_addr = 0;
+    h.dest_port = (SDP_PORT_CONFIG << 5) | 1;
 
+    // Current possible test:
+    // 0 - Workers ID
+    // 1 - Network Configuration
+    // 2 - BlockInfo
+    // 3 - Workload
+    // 4 - FrameInfo
+    // 5 - Performance Measurement
+
+    cmd_hdr_t c;
+    c.cmd_rc = SDP_CMD_GIVE_REPORT;
+    switch(testID) {
+    case 0: c.seq = DEBUG_REPORT_WID; break;
+    case 1: c.seq = DEBUG_REPORT_NET_CONFIG; break;
+    case 2: c.seq = DEBUG_REPORT_BLKINFO; break;
+    case 3: c.seq = DEBUG_REPORT_WLOAD; break;
+    case 4: c.seq = DEBUG_REPORT_FRAMEINFO; break;
+    case 5: c.seq = DEBUG_REPORT_PERF; break;
+    }
+    sendSDP(h, scp(c));
+}
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -397,3 +473,5 @@ quint64 cSpiNNcomm::elapsed(timespec start, timespec end)
 	result = temp.tv_sec*1000000000+temp.tv_nsec;
 	return result;
 }
+
+

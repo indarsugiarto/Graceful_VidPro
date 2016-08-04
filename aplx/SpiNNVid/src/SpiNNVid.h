@@ -7,11 +7,27 @@
 #ifndef SPINNVID_H
 #define SPINNVID_H
 
+/*--------- For experiment ---------*/
+#define SPECIAL_CORE_TO_REPORT_T_EDGE    1
+
+
 #include <spin1_api.h>
 #include <stdfix.h>
 #include "defSpiNNVid.h"        // all definitions go here
 
+/*------------- From timer2 code from Steve Temple -------------*/
+// Use "timer2" to measure elapsed time.
+// Times up to around 10 sec should be OK.
 
+// Enable timer - free running, 32-bit
+#define ENABLE_TIMER() tc[T2_CONTROL] = 0x82
+
+// To measure, set timer to 0
+#define START_TIMER() tc[T2_LOAD] = 0
+
+// It produces the clock cycle
+#define READ_TIMER() (0 - tc[T2_COUNT])
+/*--------------------------------------------------------------*/
 
 
 /* 3x3 GX and GY Sobel mask.  Ref: www.cee.hw.ac.uk/hipr/html/sobel.html */
@@ -80,7 +96,8 @@ typedef struct w_info {
 	ushort nLinesPerBlock;
 	ushort startLine;
 	ushort endLine;
-	uint cntPixel;			// how many pixels will be fetch by dtcmImgBuf?
+	uint szDtcmImgBuf;			// how many pixels will be fetch by dtcmImgBuf?
+	uchar active;			// if nLinesPerBlock > tAvailable, this will be on,
 	// helper pointers
 	ushort wImg;		// just a copy of block_info_t.wImg
 	ushort hImg;		// just a copy of block_info_t.hImg
@@ -96,6 +113,7 @@ typedef struct w_info {
 	uchar *imgOut3;		// idem
 
 	// NOTE: only leadAp needs the following variables (for sending result to host)
+	uchar tRunning;			// the actual number of currently involved workers
 	uchar *blkImgRIn;	// this will be shared among cores in the same chip
 	uchar *blkImgGIn;	// will be used when sending report to host-PC
 	uchar *blkImgBIn;	// hence, only leadAp needs it
@@ -199,9 +217,9 @@ uchar needSendDebug;
 uint myCoreID;
 uint dmaTID;
 
-uchar nFiltJobDone;				// will be used to count how many workers have
-uchar nEdgeJobDone;				// finished their job in either filtering or edge detection
-uchar nBlockDone;
+volatile uchar nFiltJobDone;				// will be used to count how many workers have
+volatile uchar nEdgeJobDone;				// finished their job in either filtering or edge detection
+volatile uchar nBlockDone;
 
 // to speed up, let's allocate these two buffers in computeWLoad()
 uchar *dtcmImgBuf;
@@ -209,9 +227,12 @@ uchar *resImgBuf;
 ushort pixelCntr;				// how many pixel has been processed?
 
 // for performance measurement
+typedef struct meas {
+    uint tEdge;                 // measuring edge detection for each core
+} meas_t;
 volatile uint64 tic, toc;
 volatile ushort elapse;
-
+meas_t perf;
 
 /*------------------------- Forward declarations ----------------------------*/
 

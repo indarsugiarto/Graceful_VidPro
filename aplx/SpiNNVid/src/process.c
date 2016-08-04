@@ -5,6 +5,16 @@
 
 void initIDcollection(uint withBlkInfo, uint Unused)
 {
+	// We begin by counting, how many workers are there, so that we can know exactly
+	// how many ping-reply is expected from workers
+
+	// Found that Nworkers is different before and after spin1_start()
+	blkInfo->Nworkers = get_Nworkers();
+#if (DEBUG_LEVEL>2)
+	io_printf(IO_STD, "Nworkers = %d\n", blkInfo->Nworkers);
+#endif
+
+
 #if(DEBUG_LEVEL > 0)
 	io_printf(IO_BUF, "initIDcollection...\n");
 #endif
@@ -43,47 +53,102 @@ void bcastWID(uint Unused, uint null)
 // computeWLoad will be executed by all cores (including leadAps) in all chips
 void computeWLoad(uint withReport, uint arg1)
 {
+	// if the node is not involved, simply disable the core
+	if(blkInfo->maxBlock==0) {
+		workers.active = FALSE;
+		return;
+	}
+
 	//io_printf(IO_BUF, "Computing workload...\n");
 	// keep local (for each core) and to speed up
+	ushort i,j;
 	ushort w = blkInfo->wImg; workers.wImg = w;
 	ushort h = blkInfo->hImg; workers.hImg = h;
+	ushort maxBlock = blkInfo->maxBlock;
+	ushort nodeBlockID = blkInfo->nodeBlockID;
 
-	workers.opFilter = blkInfo->opFilter;
-	workers.opType = blkInfo->opType;
+	/*--------------------------------------------------------------------------*/
+	/*----------- let's distribute the region even-ly accross nodes ------------*/
+	ushort wl[48], sp[48], ep[48];	// assuming 48 nodes at max
+	// first, make "default" block-size. Here wl contains the block-size:
+	ushort nLinesPerBlock = h / maxBlock;
+	ushort nRemInBlock = h % maxBlock;
+	for(i=0; i<maxBlock; i++) {
+		wl[i] = nLinesPerBlock;
+	}
+	// then distribute the remaining part
+	i = 0;
+	while(nRemInBlock > 0) {
+		wl[i]++; i++; nRemInBlock--;
+	}
+	// then compute the blkStart according to wl (block-size)
+	ushort blkStart, blkEnd;
+	// for root, it should start at 0 position
+	if(sv->p2p_addr==0)	{
+		blkStart = 0;
+		blkEnd = wl[0] - 1;
+	}
+	else {
+		blkStart = nodeBlockID*wl[nodeBlockID-1];
+		blkEnd = blkStart + wl[nodeBlockID] - 1;
+	}
+	// then locally record these block info
+	workers.nLinesPerBlock = wl[nodeBlockID];
+	workers.blkStart = blkStart;
+	workers.blkEnd = blkEnd;
 
-	// block-wide
-	workers.nLinesPerBlock = h / blkInfo->maxBlock;
-	ushort nRemInBlock = h % blkInfo->maxBlock;
-	workers.blkStart = blkInfo->nodeBlockID * workers.nLinesPerBlock;
+	TADI SAMPAI DISINI, BELUM SELESAI
 
-	// core-wide
+	/*--------------------------------------------------------------------------*/
+	/*----------------- then compute local region for each core ----------------*/
+	// if there's remaining lines, then give them to the last block
 	if(blkInfo->nodeBlockID==blkInfo->maxBlock-1)
 		workers.nLinesPerBlock += nRemInBlock;
 	workers.blkEnd = workers.blkStart + workers.nLinesPerBlock - 1;
 
-	ushort nLinesPerCore = workers.nLinesPerBlock / workers.tAvailable;
-	ushort nRemInCore = workers.nLinesPerBlock % workers.tAvailable;
-	ushort wl[17], sp[17], ep[17];	// assuming 17 cores at max
-	ushort i,j;
+	// core-wide
+	ushort nLinesPerCore;
+	ushort nRemInCore;
+	// if the number of available cores is less then or equal total lines per block:
+	if(workers.tAvailable <= workers.nLinesPerBlock) {
+		workers.tRunning = workers.tAvailable;
 
-	// initialize starting point with respect to blkStart
-	for(i=0; i<17; i++)
-		sp[i] = workers.blkStart;
+		nLinesPerCore = workers.nLinesPerBlock / workers.tAvailable;
+		nRemInCore = workers.nLinesPerBlock % workers.tAvailable;
 
-	for(i=0; i<workers.tAvailable; i++) {
-		wl[i] = nLinesPerCore;
-		if(nRemInCore > 0) {
-			wl[i]++;
-			for(j=i+1; j<workers.tAvailable; j++) {
-				sp[j]++;
+		// initialize starting point with respect to blkStart
+		for(i=0; i<17; i++)
+			sp[i] = workers.blkStart;
+
+		// then adjust to the actual number of cores in the chip
+		for(i=0; i<workers.tAvailable; i++) {
+			wl[i] = nLinesPerCore;
+			if(nRemInCore > 0) {
+				wl[i]++;
+				for(j=i+1; j<workers.tAvailable; j++) {
+					sp[j]++;
+				}
+				nRemInCore--;
 			}
-			nRemInCore--;
+			sp[i] += i*nLinesPerCore;
+			ep[i] = sp[i]+wl[i]-1;
 		}
-		sp[i] += i*nLinesPerCore;
-		ep[i] = sp[i]+wl[i]-1;
+		workers.startLine = sp[workers.subBlockID];
+		workers.endLine = ep[workers.subBlockID];
+		workers.active = TRUE;
 	}
-	workers.startLine = sp[workers.subBlockID];
-	workers.endLine = ep[workers.subBlockID];
+	// if the number of available cores is higher, then select some cores only
+	else {
+		workers.tRunning = workers.nLinesPerBlock;
+		if(workers.subBlockID < workers.nLinesPerBlock) {
+			workers.startLine = workers.blkStart + workers.subBlockID;
+			workers.endLine = workers.startLine;
+			workers.active = TRUE;
+		}
+		else {
+			workers.active = FALSE;
+		}
+	}
 
 	// then align the internal/worker pointer accordingly
 	workers.imgRIn = blkInfo->imgRIn + w*workers.startLine;
@@ -107,9 +172,14 @@ void computeWLoad(uint withReport, uint arg1)
 		workers.blkImgOut3 = blkInfo->imgOut3 + offset;
 	}
 
+	// other locally copied data
+	workers.opFilter = blkInfo->opFilter;
+	workers.opType = blkInfo->opType;
+	workers.opSharpen = blkInfo->opSharpen;
+
 	// prepare the pixel buffers
 	ushort szMask = blkInfo->opType == IMG_SOBEL ? 3:5;
-	workers.cntPixel = szMask * w;
+	workers.szDtcmImgBuf = szMask * w;
 
 	// when first called, dtcmImgBuf should be NULL
 	if(dtcmImgBuf != NULL) {
@@ -117,7 +187,7 @@ void computeWLoad(uint withReport, uint arg1)
 		sark_free(resImgBuf);
 	}
 	// dtcmImgBuf can be 3 or 5 times the image width
-	dtcmImgBuf = sark_alloc(workers.cntPixel, sizeof(uchar));
+	dtcmImgBuf = sark_alloc(workers.szDtcmImgBuf, sizeof(uchar));
 	resImgBuf = sark_alloc(w, sizeof(uchar));	// just one line!
 	//io_printf(IO_BUF, "my startline = %d, my endline = %d\n", workers.startLine, workers.endLine);
 
@@ -172,7 +242,7 @@ void processGrayScaling(uint arg0, uint arg1)
 	uint offset = pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK;
 
 
-	io_printf(IO_STD, "pxSeq = %d, offset = 0x%x\n", pxBuffer.pxSeq, offset);
+	// io_printf(IO_STD, "pxSeq = %d, offset = 0x%x\n", pxBuffer.pxSeq, offset);
 
 
 	// at this point, although workers.imgRIn... workers.imgOut1... have been initialized,
@@ -339,7 +409,7 @@ void collectGrayPixels(uint arg0, uint arg1)
 void triggerProcessing(uint arg0, uint arg1)
 {
 	// debugging:
-	io_printf(IO_BUF, "triggerProcessing()\n");
+	// io_printf(IO_BUF, "triggerProcessing()\n");
 	// prepare measurement
 	tic = sv->clock_ms;
 
@@ -359,6 +429,10 @@ void triggerProcessing(uint arg0, uint arg1)
 
 void imgFiltering(uint arg0, uint arg1)
 {
+	if(workers.active==FALSE) {
+		io_printf(IO_BUF, "I'm disabled!\n");
+		return;
+	}
 	// step-1: do filtering
 
 	// step-2: call imgDetection
@@ -366,22 +440,29 @@ void imgFiltering(uint arg0, uint arg1)
 
 void imgDetection(uint arg0, uint arg1)
 {
-	io_printf(IO_BUF, "Start edge detection\n");
-	//io_printf(IO_BUF, "Begin edge detection...\n");
+	if(workers.active==FALSE) {
+		io_printf(IO_BUF, "I'm disabled!\n");
+		return;
+	}
+
+	// Use timer-2 to measure the performance
+	START_TIMER();
+
 	ushort offset = workers.opType == IMG_SOBEL ? 1:2;
+	offset *= workers.wImg;
+
+	// io_printf(IO_BUF, "offset = %d, szDtcmImgBuf = %d\n", offset, workers.szDtcmImgBuf);
+
 	short l,c,n,i,j;
 	uchar *sdramImgIn, *sdramImgOut;
 	uchar *dtcmLine;	//point to the current image line in the DTCM (not in SDRAM!)
+	//uchar *debugging;
 	int sumX, sumY, sumXY;
-
-	uint adj;
 
 	uint dmatag;
 
 	// how many lines this worker has?
 	n = workers.endLine - workers.startLine + 1;
-
-	// io_printf(IO_BUF, "n = %d\n", n);
 
 	// prepare the correct line address in sdram
 	if(workers.opFilter==IMG_WITHOUT_FILTER) {
@@ -394,34 +475,38 @@ void imgDetection(uint arg0, uint arg1)
 
 	// scan for all lines in the working block
 	for(l=0; l<n; l++) {
-		// adjust pointer for each line
-		adj = l*workers.wImg;
-		sdramImgIn += adj;
-		sdramImgOut += adj;
-
-		// shift by mask size for fetching via dma
-		sdramImgIn -= offset*workers.wImg;
 
 		dmaImgFromSDRAMdone = 0;
+		dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
 		do {
-			dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
-			dmaTID = spin1_dma_transfer(dmatag, (void *)sdramImgIn,
-										  (void *)dtcmImgBuf, DMA_READ, workers.cntPixel);
-
+			dmaTID = spin1_dma_transfer(dmatag, (void *)sdramImgIn - offset,
+										(void *)dtcmImgBuf, DMA_READ, workers.szDtcmImgBuf);
 			if(dmaTID==0)
-				io_printf(IO_BUF, "[Edging] DMA full! Retry...\n");
-			/*
-			else
-				io_printf(IO_BUF, "DMA tag-0x%x tid-%d is requested\n", dmatag, dmaTID);
-			*/
+				io_printf(IO_BUF, "[Edging] DMA full for tag-0x%x! Retry...\n", dmatag);
 		} while (dmaTID==0);
 
 		// wait until dma above is completed
 		while(dmaImgFromSDRAMdone==0) {
 		}
 
+		//sark_mem_cpy(dtcmImgBuf, sdramImgIn - offset, workers.szDtcmImgBuf);
+
 		// point to the current image line in the DTCM (not in SDRAM!)
-		dtcmLine = dtcmImgBuf + offset*workers.wImg;	// mind the offset since dtcmImgBuf contains additional data
+		dtcmLine = dtcmImgBuf + offset;	// faster, but the result is "darker"
+		//dtcmLine = dtcmImgBuf;	// Aneh, ini hasilnya bagus :(
+		//dtcmLine = sdramImgIn;	// very slow, but the result is "better"
+
+		/*
+		debugging = sdramImgIn;
+		ushort _cntr = 0;
+		for(ushort chk=0; chk<workers.wImg; chk++) {
+			if(dtcmLine[chk] != debugging[chk]) {
+				io_printf(IO_BUF, "Different at offset %d\n", chk);
+				_cntr++;
+			}
+		}
+		io_printf(IO_BUF, "Found %d mismatch!\n", _cntr);
+		*/
 
 		// scan for all column in the line
 		for(c=0; c<workers.wImg; c++) {
@@ -461,34 +546,50 @@ void imgDetection(uint arg0, uint arg1)
 			if(sumXY<0) sumXY = 0;
 
 			// resImgBuf is just one line and it doesn't matter, where it is!
-			*(resImgBuf + c) = 255 - (uchar)(sumXY);
-			//*(resImgBuf + c) = (uchar)(sumXY);
-			//dmaTID = spin1_dma_transfer((myCoreID << 16) + DMA_STORE_IMG_TAG, (void *)sdramImgOut,
-			//			   (void *)resImgBuf, DMA_WRITE, workers.wImg);
+			//*(resImgBuf + c) = 255 - (uchar)(sumXY);
+			*(resImgBuf + c) = (uchar)(sumXY);
 
 		} // end for c-loop
 
 		// then copy the resulting line into sdram
+
+		//sark_mem_cpy((void *)sdramImgOut, (void *)resImgBuf, workers.wImg);
+
+		dmatag = (myCoreID << 16) | DMA_STORE_IMG_TAG;
 		do {
-			dmaTID = spin1_dma_transfer((myCoreID << 16) + DMA_STORE_IMG_TAG, (void *)sdramImgOut,
+			dmaTID = spin1_dma_transfer(dmatag, (void *)sdramImgOut,
 						   (void *)resImgBuf, DMA_WRITE, workers.wImg);
+			if(dmaTID==0)
+				io_printf(IO_BUF, "[Edging] DMA full for tag-0x%x! Retry...\n", dmatag);
 		} while(dmaTID==0);
+
+
+		// move to the next line
+		sdramImgIn += workers.wImg;
+		sdramImgOut += workers.wImg;
 
 	} // end for l-loop
 
-    // at the end, send MCPL_EDGE_DONE
-    io_printf(IO_BUF, "Done! send MCPL_EDGE_DONE!\n");
-    spin1_send_mc_packet(MCPL_EDGE_DONE, 0, WITH_PAYLOAD);
+	perf.tEdge = READ_TIMER();
+
+	// at the end, send MCPL_EDGE_DONE
+#if (DEBUG_LEVEL > 0)
+	io_printf(IO_BUF, "Done! send MCPL_EDGE_DONE!\n");
+#endif
+	spin1_send_mc_packet(MCPL_EDGE_DONE, 0, WITH_PAYLOAD);
+
 }
+
 
 // AfterProcessingDone() is managed by the leadAp in each node.
 // But in root-node, afterProcessingDone() will trigger sending the result.
 void afterProcessingDone(uint arg0, uint arg1)
 {
     if(proc==PROC_EDGING) {
+#if (DEBUG_LEVEL > 0)
         // optional, won't be used in video streaming:
         io_printf(IO_BUF, "Node-%d is done edging in %d-ms!\n", blkInfo->nodeBlockID, elapse);
-
+#endif
         // if root-node, trigger to send the result
         if(sv->p2p_addr==0) {
 #if (DESTINATION==DEST_HOST)
@@ -507,11 +608,18 @@ void afterProcessingDone(uint arg0, uint arg1)
 // NOTE: in this version, we'll send the gray image. Refer to pA for rgb version!
 void sendDetectionResult2Host(uint nodeID, uint arg1)
 {
+
 	// if I'm not include in the list, skip this
 	if(blkInfo->maxBlock==0) return;
 
 	//io_printf(IO_STD, "Expecting processing by node-%d\n", arg0);
 	if(nodeID != blkInfo->nodeBlockID) return;
+
+#if (DEBUG_LEVEL > 0)
+	io_printf(IO_STD, "Block-%d is sending with perf = %u\n",
+			  blkInfo->nodeBlockID, perf.tEdge);
+#endif
+
 	// format sdp (scp_segment + data_segment):
 	// srce_addr = line number
 	// so, it relies on udp reliability (packet might be dropped)
@@ -519,12 +627,12 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 	// is dropped, and the next line is sent, then it produces "defect"
 	uchar *imgOut;
 	ushort rem, sz;
-	ushort l,c;
+	//ushort l,c;
 
 	// Note: dtcmImgBuf has been allocated in computeWLoad(), but it can be 3 or 5 times the image width.
 	// For fetching only one line, use resImgBuf instead
 
-	l = 0;	// for the imgXOut pointer
+	//l = 0;	// for the imgXOut pointer
 	if(workers.opFilter==IMG_WITHOUT_FILTER)
 		imgOut = workers.blkImgOut2;
 	else
@@ -537,13 +645,14 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 	   for notifying host, use srce_port 0xFE
 	   we cannot use 0xFF, because 0xFF is special for ETH
 	*/
+	uint dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
 	for(ushort lines=workers.blkStart; lines<=workers.blkEnd; lines++) {
 		// get the line from sdram
-		imgOut += l*workers.wImg;
+		//imgOut += l*workers.wImg;
 
 		dmaImgFromSDRAMdone = 0;	// will be altered in hDMA
 		do {
-			dmaTID = spin1_dma_transfer(DMA_FETCH_IMG_TAG | (myCoreID << 16), (void *)imgOut,
+			dmaTID = spin1_dma_transfer(dmatag, (void *)imgOut,
 										(void *)resImgBuf, DMA_READ, workers.wImg);
 			if(dmaTID==0)
 				io_printf(IO_BUF, "[Sending] DMA full! Retry!\n");
@@ -553,23 +662,30 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 		while(dmaImgFromSDRAMdone==0) {
 		}
 		// then sequentially copy & send via sdp
-		c = 0;
+		//c = 0;
 		rem = workers.wImg;
 		resultMsg.srce_addr = lines;	// is it useful??? for debugging!!!
+		uchar *resPtr = resImgBuf;
 		do {
-			resultMsg.srce_port = c;	// is it useful???
+			//resultMsg.srce_port = c;	// is it useful???
 			sz = rem > 272 ? 272 : rem;
-			spin1_memcpy((void *)&resultMsg.cmd_rc, (void *)(resImgBuf + c*272), sz);
-			resultMsg.length = sizeof(sdp_hdr_t) + sz;
+			//spin1_memcpy((void *)&resultMsg.cmd_rc, (void *)(resImgBuf + c*272), sz);
+			spin1_memcpy((void *)&resultMsg.cmd_rc, resPtr, sz);
 
+			resultMsg.length = sizeof(sdp_hdr_t) + sz;
 			spin1_send_sdp_msg(&resultMsg, 10);
 			//giveDelay(DEF_DEL_VAL);
-			sark_delay_us(500);
+			sark_delay_us(100);
 
-			c++;		// for the resImgBuf pointer
+			//c++;		// for the resImgBuf pointer
+			resPtr += sz;
 			rem -= sz;
 		} while(rem > 0);
-		l++;
+
+		// move to the next address
+		imgOut += workers.wImg;
+
+		// l++;
 	}
 
 	//io_printf(IO_STD, "Block-%d done!\n", blkInfo->nodeBlockID);
@@ -586,10 +702,12 @@ void sendDetectionResult2FPGA(uint nodeID, uint arg1)
 
 }
 
-
+// notifyDestDone() is executed by <0,0,leadAp> only
 void notifyDestDone(uint arg0, uint arg1)
 {
-	io_printf(IO_STD, "Processing is done. Notify host with elapse-%d\n", elapse);
+#if (DEBUG_LEVEL > 0)
+	io_printf(IO_STD, "Processing is done. Notify host with elapse %d-ms\n", elapse);
+#endif
 #if (DESTINATION==DEST_HOST)
 	resultMsg.srce_addr = elapse;
 	resultMsg.srce_port = SDP_SRCE_NOTIFY_PORT;

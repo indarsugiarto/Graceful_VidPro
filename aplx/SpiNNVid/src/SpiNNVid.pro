@@ -21,7 +21,8 @@ DISTFILES += \
     TODO \
     ../../tester/testStreamFrame.py \
     Makefile.3 \
-    Makefile.5
+    Makefile.5 \
+    museum
 
 HEADERS += \
     SpiNNVid.h \

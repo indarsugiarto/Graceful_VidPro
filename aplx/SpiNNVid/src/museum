@@ -1,0 +1,273 @@
+void imgDetection(uint arg0, uint arg1)
+{
+	// debugging:
+	io_printf(IO_BUF, "Start edge detection\n");
+	//io_printf(IO_BUF, "Begin edge detection...\n");
+	ushort offset = workers.opType == IMG_SOBEL ? 1:2;
+	offset *= workers.wImg;
+
+	short l,c,n,i,j;
+	uchar *sdramImgIn, *sdramImgOut;
+	uchar *dtcmLine;	//point to the current image line in the DTCM (not in SDRAM!)
+	int sumX, sumY, sumXY;
+
+	uint adj;
+
+	uint dmatag;
+
+	// how many lines this worker has?
+	n = workers.endLine - workers.startLine + 1;
+
+	// io_printf(IO_BUF, "n = %d\n", n);
+
+	// prepare the correct line address in sdram
+	if(workers.opFilter==IMG_WITHOUT_FILTER) {
+		sdramImgIn = workers.imgOut1;
+		sdramImgOut = workers.imgOut2;
+	} else {
+		sdramImgIn = workers.imgOut2;
+		sdramImgOut = workers.imgOut3;
+	}
+	/*
+	io_printf(IO_BUF, "dtcmImgBuf = 0x%x\n", dtcmImgBuf);
+	io_printf(IO_BUF, "resImgBuf = 0x%x\n", resImgBuf);
+	io_printf(IO_BUF, "workers.wImg = %d = 0x%x\n", workers.wImg, workers.wImg);
+	io_printf(IO_BUF, "workers.imgOut1 = 0x%x\n", workers.imgOut1);
+	io_printf(IO_BUF, "workers.imgOut2 = 0x%x\n", workers.imgOut2);
+	io_printf(IO_BUF, "workers.blkImgOut1 = 0x%x\n", workers.blkImgOut1);
+	io_printf(IO_BUF, "workers.blkImgOut2 = 0x%x\n-----------------------------\n",
+			  workers.blkImgOut2);
+	*/
+	// scan for all lines in the working block
+	for(l=0; l<n; l++) {
+		// io_printf(IO_BUF, "sdramImgIn = 0x%x, sdramImgOut = 0x%x\n", sdramImgIn, sdramImgOut);
+		// adjust pointer for each line
+		/*
+		adj = l*workers.wImg;
+		sdramImgIn += adj;
+		sdramImgOut += adj;
+		*/
+
+		// shift by mask size for fetching via dma
+		//sdramImgIn -= offset*workers.wImg;
+		//sdramImgIn -= offset;
+
+		dmaImgFromSDRAMdone = 0;
+		dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
+		do {
+			/**/
+			dmaTID = spin1_dma_transfer(dmatag, (void *)sdramImgIn - offset,
+										(void *)dtcmImgBuf, DMA_READ, workers.szDtcmImgBuf);
+			/**/
+			/*
+			dmaTID = spin1_dma_transfer(dmatag, (void *)sdramImgIn,
+										(void *)dtcmImgBuf, DMA_READ, workers.szDtcmImgBuf);
+			*/
+			if(dmaTID==0)
+				io_printf(IO_BUF, "[Edging] DMA full for tag-0x%x! Retry...\n", dmatag);
+		} while (dmaTID==0);
+
+		// wait until dma above is completed
+		while(dmaImgFromSDRAMdone==0) {
+		}
+
+		// point to the current image line in the DTCM (not in SDRAM!)
+		// mind the offset since dtcmImgBuf contains additional data
+		//dtcmLine = dtcmImgBuf + offset*workers.wImg;
+		dtcmLine = dtcmImgBuf + offset;
+
+		// scan for all column in the line
+		for(c=0; c<workers.wImg; c++) {
+			// if offset is 1, then it is for sobel, otherwise it is for laplace
+			if(offset==1) {
+				sumX = 0;
+				sumY = 0;
+				if(workers.startLine+l == 0 || workers.startLine+l == workers.hImg-1)
+					sumXY = 0;
+				else if(c==0 || c==workers.wImg-1)
+					sumXY = 0;
+				else {
+					for(i=-1; i<=1; i++)
+						for(j=-1; j<=1; j++) {
+							sumX += (int)((*(dtcmLine + c + i + j*workers.wImg)) * GX[i+1][j+1]);
+							sumY += (int)((*(dtcmLine + c + i + j*workers.wImg)) * GY[i+1][j+1]);
+						}
+					// python version: sumXY[0] = math.sqrt(math.pow(sumX[0],2) + math.pow(sumY[0],2))
+					sumXY = (abs(sumX) + abs(sumY))*7/10;	// 7/10 = 0.717 -> cukup dekat dengan akar
+				}
+			}
+			else {	// for laplace operation
+				sumXY = 0;
+				if((workers.startLine+l) < 2 || (workers.hImg-workers.startLine+l) <= 2)
+					sumXY = 0;
+				else if(c<2 || (workers.wImg-c)<=2)
+					sumXY = 0;
+				else {
+					for(i=-1; i<=2; i++)
+						for(j=-2; j<=2; j++)
+							sumXY += (int)((*(dtcmLine + c + i + j*workers.wImg)) * LAP[i+2][j+2]);
+				}
+			}
+
+			// make necessary correction
+			if(sumXY>255) sumXY = 255;
+			if(sumXY<0) sumXY = 0;
+
+			// resImgBuf is just one line and it doesn't matter, where it is!
+			// *(resImgBuf + c) = 255 - (uchar)(sumXY);
+			resImgBuf[c] = 255 - (uchar)(sumXY); // identik dengan yang di atas
+
+			// *(resImgBuf + c) = (uchar)(sumXY);
+			//dmaTID = spin1_dma_transfer((myCoreID << 16) + DMA_STORE_IMG_TAG, (void *)sdramImgOut,
+			//			   (void *)resImgBuf, DMA_WRITE, workers.wImg);
+
+		} // end for c-loop
+
+		// then copy the resulting line into sdram
+
+		dmatag = (myCoreID << 16) | DMA_STORE_IMG_TAG;
+		do {
+			dmaTID = spin1_dma_transfer(dmatag, (void *)sdramImgOut,
+						   (void *)resImgBuf, DMA_WRITE, workers.wImg);
+			if(dmaTID==0)
+				io_printf(IO_BUF, "[Edging] DMA full for tag-0x%x! Retry...\n", dmatag);
+		} while(dmaTID==0);
+
+
+		// move to the next line
+		sdramImgIn += workers.wImg;
+		sdramImgOut += workers.wImg;
+
+
+    } // end for l-loop
+
+    // at the end, send MCPL_EDGE_DONE
+    io_printf(IO_BUF, "Done! send MCPL_EDGE_DONE!\n");
+    spin1_send_mc_packet(MCPL_EDGE_DONE, 0, WITH_PAYLOAD);
+}
+
+
+void imgDetection(uint arg0, uint arg1)
+{
+	//io_printf(IO_BUF, "Begin edge detection...\n");
+	ushort szMask = blkInfo->opType == IMG_SOBEL ? 3:5;
+	ushort offset = blkInfo->opType == IMG_SOBEL ? 1:2;
+
+	ushort w = blkInfo->wImg;
+	ushort h = blkInfo->hImg;
+	uint cntPixel = szMask * w;
+	short l,c,n,i,j;
+	uchar *sdramImgIn, *sdramImgOut;
+	uchar *dtcmLine;
+	int sumX, sumY, sumXY;
+
+	uchar *resImgBuf, *dtcmImgBuf;
+
+	uint dmaCheck;
+
+	uint dmatag;
+
+	offset *= w;
+
+	// how many lines this worker has?
+	n = workers.endLine - workers.startLine + 1;
+	// when first called, dtcmImgBuf should be NULL
+	// and img*In must point to the BASE
+	dtcmImgBuf = sark_alloc(cntPixel, sizeof(uchar));
+	resImgBuf = sark_alloc(w, sizeof(uchar));	// just one line!
+
+
+		// scan for all lines in the working block
+		for(l=0; l<n; l++) {
+			// get the current line address in sdram
+			// prepare the correct line address in sdram
+			if(workers.opFilter==IMG_WITHOUT_FILTER) {
+				sdramImgIn = workers.imgOut1 + l*w;
+				sdramImgOut = workers.imgOut2 + l*w;
+			} else {
+				sdramImgIn = workers.imgOut2 + l*w;
+				sdramImgOut = workers.imgOut3 + l*w;
+			}
+
+			// shift by mask size for fetching via dma
+			sdramImgIn -= offset;
+
+			dmaImgFromSDRAMdone = 0;
+			dmatag = (myCoreID << 16) +  DMA_FETCH_IMG_TAG;
+			do {
+				dmaCheck = spin1_dma_transfer(dmatag, (void *)sdramImgIn,
+								   (void *)dtcmImgBuf, DMA_READ, cntPixel);
+				if(dmaCheck==0)
+					io_printf(IO_BUF, "[Edging] DMA full! Retry...\n");
+			} while (dmaCheck==0);
+
+			while(dmaImgFromSDRAMdone==0) {
+			}
+
+			// point to the current image line in the DTCM (not in SDRAM!)
+			dtcmLine = dtcmImgBuf + offset;	// mind the offset since dtcmImgBuf contains additional data
+
+			// scan for all column in the line
+			for(c=0; c<w; c++) {
+				// if offset is 1, then it is for sobel, otherwise it is for laplace
+				if(offset==1) {
+					sumX = 0;
+					sumY = 0;
+					if(workers.startLine+l == 0 || workers.startLine+l == h-1)
+						sumXY = 0;
+					else if(c==0 || c==w-1)
+						sumXY = 0;
+					else {
+						for(i=-1; i<=1; i++)
+							for(j=-1; j<=1; j++) {
+								sumX += (int)((*(dtcmLine + c + i + j*w)) * GX[i+1][j+1]);
+								sumY += (int)((*(dtcmLine + c + i + j*w)) * GY[i+1][j+1]);
+							}
+						// python version: sumXY[0] = math.sqrt(math.pow(sumX[0],2) + math.pow(sumY[0],2))
+						sumXY = (abs(sumX) + abs(sumY))*7/10;	// 7/10 = 0.717 -> cukup dekat dengan akar
+					}
+				}
+				else {	// for laplace operation
+					sumXY = 0;
+					if((workers.startLine+l) < 2 || (h-workers.startLine+l) <= 2)
+						sumXY = 0;
+					else if(c<2 || (w-c)<=2)
+						sumXY = 0;
+					else {
+						for(i=-1; i<=2; i++)
+							for(j=-2; j<=2; j++)
+								sumXY += (int)((*(dtcmLine + c + i + j*w)) * LAP[i+2][j+2]);
+					}
+				}
+				if(sumXY>255) sumXY = 255;
+				if(sumXY<0) sumXY = 0;
+				// resImgBuf is just one line and it doesn't matter, where it is!
+				*(resImgBuf + c) = 255 - (uchar)(sumXY);
+				//*(resImgBuf + c) = (uchar)(sumXY);
+				// TODO: what if dma full?
+				//spin1_dma_transfer((myCoreID << 16) + DMA_STORE_IMG_TAG, (void *)sdramImgOut,
+				//				   (void *)resImgBuf, DMA_WRITE, w);
+			} // end for c-loop
+			dmatag = (myCoreID << 16) | DMA_STORE_IMG_TAG;
+			do {
+				dmaTID = spin1_dma_transfer(dmatag, (void *)sdramImgOut,
+							   (void *)resImgBuf, DMA_WRITE, workers.wImg);
+				if(dmaTID==0)
+					io_printf(IO_BUF, "[Edging] DMA full for tag-0x%x! Retry...\n", dmatag);
+			} while(dmaTID==0);
+
+		} // end for l-loop
+
+		/*
+		// if img is grey, stop with R-channel only
+		if(rgbCntr>=1 && blkInfo->isGrey==1)
+			break;
+		*/
+
+    // clean-up memory in DTCM
+    sark_free(resImgBuf);  //resImgBuf = NULL;
+    sark_free(dtcmImgBuf); //dtcmImgBuf = NULL; // -> this will create WDOG!!!
+    // at the end, send MCPL_EDGE_DONE
+    // io_printf(IO_BUF, "Done! send MCPL_EDGE_DONE!\n");
+    spin1_send_mc_packet(MCPL_EDGE_DONE, 0, WITH_PAYLOAD);
+}

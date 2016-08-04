@@ -5,6 +5,7 @@
 #include <QThread>
 #include <QTimer>
 #include <QCloseEvent>
+#include <QImage>
 
 #include "cdecoder.h"
 #include "cscreen.h"
@@ -29,18 +30,25 @@ public:
 	cScreen *screen;
 	cScreen *edge;
     cSpiNNcomm *spinn;
+    QImage loadedImage;
+    QString imgFilename;
+    int oldNchips;
 
 public slots:
     void errorString(QString err);
-    void pbLoadClicked();
+    void pbVideoClicked();
 	void pbPauseClicked();
-    void pbTestClicked();
+	void pbImageClicked();
+	void pbSendImageClicked();
     void pbConfigureClicked();
+    void pbTestClicked();
+    void newChipsNum();
     void refreshUpdate();
 	void videoFinish();
 	void setSize(int w, int h);
 	void cbSpiNNchanged(int idx);
 	void frameReady();
+	void frameSent();
 
 private:
     bool isPaused;

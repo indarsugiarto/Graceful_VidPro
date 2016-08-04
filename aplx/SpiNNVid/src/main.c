@@ -26,6 +26,9 @@ void c_main(void)
 	// Other initialization
 	initOther();	// it initialize: pixelCntr, fwdPktBuffer
 
+	// Let's assume that all cores will be used for processing
+	workers.active = TRUE;
+
 	// Currently, we fix to core-1 as the leader
 	//            so that we can use core-2, core-3 and core-4 for handling frames
 	//if(leadAp) {
@@ -53,6 +56,7 @@ void c_main(void)
 			blkInfo->myY = CHIP_Y(sv->p2p_addr);
 			initImage();	// some of blkInfo are initialized there
 #ifdef USE_FIX_NODES
+			// all chips (including the root) will be given a specific ID:
 			blkInfo->maxBlock = get_def_Nblocks();
 			blkInfo->nodeBlockID = get_block_id();
 #else
@@ -93,17 +97,15 @@ void c_main(void)
 
 		// then trigger worker-ID collection
 		// NOTE: during run time, leadAp may broadcast wID collection for fault-tolerance!
-		// We begin by counting, how many workers are there, so that we can know exactly
-		// how many ping-reply is expected from workers
-		blkInfo->Nworkers = get_Nworkers();
 
 		//give_report(DEBUG_REPORT_NWORKERS, 1);
 		// send the ping command, AND followed by broadcasting blkInfo:
 		spin1_schedule_callback(initIDcollection, TRUE, 0, PRIORITY_PROCESSING);
 		// during run time, blkInfo is not necessary to broadcasted (it has the same content)
 	}
+
+	// then for other cores
 	else {
-		// TODO: check if leadAp is running
 #ifdef USE_FIX_NODES
 #if (FWD_FULL_COLOR==TRUE)
 			io_printf(IO_BUF, "[FIX_NODES:FWD_RGB] SpiNNVid-v%d.%d for Spin%d\n",
@@ -117,6 +119,9 @@ void c_main(void)
 					  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
 #endif
 	}
+
+	// Enable performance measurement timer
+	ENABLE_TIMER();
 
 	spin1_start(SYNC_NOWAIT);
 }

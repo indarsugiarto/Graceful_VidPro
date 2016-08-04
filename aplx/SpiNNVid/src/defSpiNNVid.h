@@ -55,6 +55,9 @@
 #define DEBUG_REPORT_BLKINFO	3		// only leadAp
 #define DEBUG_REPORT_MYWID		4		// all cores
 #define DEBUG_REPORT_WLOAD		5		// all cores, report via tag-3
+#define DEBUG_REPORT_FRAMEINFO	6       // all cores
+#define DEBUG_REPORT_NET_CONFIG 7       // only leadAp
+#define DEBUG_REPORT_PERF       8       // all cores
 
 // We use timer to do some debugging facilities
 #define TIMER_TICK_PERIOD_US 	1000000
@@ -95,6 +98,7 @@
 //#define SDP_CMD_CONFIG			1	// will be sent via SDP_PORT_CONFIG
 #define SDP_CMD_CONFIG_NETWORK  1   // for setting up the network
 #define SDP_CMD_GIVE_REPORT		2
+#define SDP_CMD_RESET_NETWORK   3   // will be sent so that all chips will have ID 0xFF
 
 //#define SDP_CMD_CONFIG_CHAIN	11  // maybe we don't need it?
 #define SDP_CMD_PROCESS			3	// will be sent via SDP_PORT_CONFIG
@@ -141,6 +145,7 @@
 #define MCPL_BCAST_ALL_REPORT		0xbca50006	// the payload might contain specific reportType
 #define MCPL_BCAST_START_PROC		0xbca50007
 #define MCPL_BCAST_SEND_RESULT		0xbca50008	// trigger the node to send the result to dest
+#define MCPL_BCAST_RESET_NET        0xbca50009  // reset the network
 
 // mechanism for controlling the image processing
 #define MCPL_EDGE_DONE				0x1ead0003

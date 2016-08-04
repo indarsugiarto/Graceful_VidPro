@@ -13,6 +13,7 @@ uchar get_Nworkers()
 				nApp++;
 		}
 	}
+	//io_printf(IO_STD, "Found %d available workers\n", nApp);
 	return nApp;
 }
 
@@ -65,7 +66,7 @@ uchar get_block_id()
 
 
 
-
+// give_report might be executed by all cores or just leadAp
 void give_report(uint reportType, uint target)
 {
 
@@ -78,48 +79,63 @@ void give_report(uint reportType, uint target)
 			io_printf(dest, "Total workers = %d:\n---------------------\n", workers.tAvailable);
 			for(uint i=0; i<workers.tAvailable; i++)
 				io_printf(IO_BUF, "wID-%d is core-%d\n", i, workers.wID[i]);
-			io_printf(dest, "------------------------\n", workers.tAvailable);
+			io_printf(dest, "------------------------\n");
 		}
 		else if(reportType==DEBUG_REPORT_NWORKERS) {
 			io_printf(dest, "Found %d active cores\n", get_Nworkers());
 		}
+		else if(reportType==DEBUG_REPORT_NET_CONFIG) {
+			io_printf(dest, "\n--- Network configuration ---\n");
+			io_printf(dest, "Node-ID  = %d\n", blkInfo->nodeBlockID);
+			io_printf(dest, "MaxBlock = %d\n", blkInfo->maxBlock);
+			io_printf(dest, "-----------------------------\n");
+		}
 	}
+	// for all cores
 	if(reportType==DEBUG_REPORT_MYWID) {
 		io_printf(dest, "My wID = %d\n", workers.subBlockID);
 	}
+	else if(reportType==DEBUG_REPORT_PERF){
+		io_printf(dest, "[wID-%d] perf.tEdge = %u\n",
+				  workers.subBlockID, perf.tEdge);
+	}
 	else if(reportType==DEBUG_REPORT_BLKINFO) {
-		io_printf(dest, "Node block info\n---------------------\n");
-		//io_printf(dest, "@blkInfo = 0x%x\n", blkInfo);
-		io_printf(dest, "Node-ID  = %d\n", blkInfo->nodeBlockID);
-		io_printf(dest, "MaxBlock = %d\n", blkInfo->maxBlock);
-		io_printf(dest, "Nworkers = %d\n", blkInfo->Nworkers);
-		switch(blkInfo->opType){
-		case 0: io_printf(dest, "OpType   = SOBEL\n"); break;
-		case 1: io_printf(dest, "OpType   = LAPLACE\n"); break;
-		}
-		switch(blkInfo->opFilter){
-		case 0: io_printf(dest, "OpFilter = no FILTERING\n"); break;
-		case 1: io_printf(dest, "OpFilter = with FILTERING\n"); break;
-		}
-		switch(blkInfo->opSharpen){
-		case 0: io_printf(dest, "OpFilter = no SHARPENING\n"); break;
-		case 1: io_printf(dest, "OpFilter = with SHARPENING\n"); break;
-		}
+		if(workers.active==TRUE) {
+			//io_printf(dest, "opType=%d, opFilter=%d, opSharp=%d\n",
+			//		  blkInfo->opType, blkInfo->opFilter, blkInfo->opSharpen);
+			io_printf(dest, "Node block info\n---------------------\n");
+			//io_printf(dest, "@blkInfo = 0x%x\n", blkInfo);
+			io_printf(dest, "Node-ID  = %d\n", blkInfo->nodeBlockID);
+			io_printf(dest, "MaxBlock = %d\n", blkInfo->maxBlock);
+			io_printf(dest, "Nworkers = %d\n", blkInfo->Nworkers);
+			io_printf(dest, "my wID   = %d\n", workers.subBlockID);
+			switch(blkInfo->opType){
+			case 0: io_printf(dest, "OpType   = SOBEL\n"); break;
+			case 1: io_printf(dest, "OpType   = LAPLACE\n"); break;
+			}
+			switch(blkInfo->opFilter){
+			case 0: io_printf(dest, "OpFilter = no FILTERING\n"); break;
+			case 1: io_printf(dest, "OpFilter = with FILTERING\n"); break;
+			}
+			switch(blkInfo->opSharpen){
+			case 0: io_printf(dest, "OpSharp  = no SHARPENING\n"); break;
+			case 1: io_printf(dest, "OpSharp  = with SHARPENING\n"); break;
+			}
 
-		io_printf(dest, "wFrame   = %d\n", blkInfo->wImg);
-		io_printf(dest, "hFrame   = %d\n", blkInfo->hImg);
-		io_printf(dest, "------------------------\n", workers.tAvailable);
+			io_printf(dest, "wFrame   = %d\n", blkInfo->wImg);
+			io_printf(dest, "hFrame   = %d\n", blkInfo->hImg);
+			io_printf(dest, "------------------------\n", workers.tAvailable);
+		}
+		else {
+			io_printf(dest, "[wID-%d] Nothing to report yet (maybe I'm disabled?)\n",
+					  workers.subBlockID);
+		}
 	}
 	else if(reportType==DEBUG_REPORT_WLOAD) {
-		// send the workload via tag-3
-		// let's print the resulting workload
-		io_printf(IO_BUF, "blkInfo->wImg = %d, blkInfo->hImg = %d\n",
-				  blkInfo->wImg, blkInfo->hImg);
-		io_printf(IO_BUF, "blkID-%d, wID-%d, sp = %d, ep = %d\n",
-				  blkInfo->nodeBlockID, workers.subBlockID, workers.startLine, workers.endLine);
-		// printWLoad();
-		// cmd_rc: how many blocks in the network and what's current blockID
-		if(target==0) {
+		if(workers.active==TRUE) {
+			io_printf(dest, "[wID-%d] blkID-%d, sp = %d, ep = %d\n",
+					  workers.subBlockID, blkInfo->nodeBlockID, workers.startLine,
+					  workers.endLine);
 			debugMsg.cmd_rc = (blkInfo->maxBlock << 8) + blkInfo->nodeBlockID;
 			// seq: how many workers in the block and what's current worker ID
 			debugMsg.seq = (blkInfo->Nworkers << 8) + workers.subBlockID;
@@ -127,9 +143,24 @@ void give_report(uint reportType, uint target)
 			debugMsg.arg2 = (uint)workers.imgRIn;	// not important, just for check
 			debugMsg.arg3 = (uint)workers.imgOut1;	// not important
 			spin1_delay_us((blkInfo->nodeBlockID*17+workers.subBlockID)*100);
+
+			spin1_send_sdp_msg(&debugMsg, 10);
+		} else {
+			io_printf(dest, "[wID-%d] blkID-%d, sp = %d, ep = %d: But I'm disabled!!!\n",
+					  workers.subBlockID, blkInfo->nodeBlockID, workers.startLine,
+					  workers.endLine);
+		}
+	}
+	else if(reportType==DEBUG_REPORT_FRAMEINFO) {
+		if(workers.active==TRUE) {
+			io_printf(dest, "[wID-%d] blkInfo->wImg = %d, blkInfo->hImg = %d\n",
+					  workers.subBlockID, blkInfo->wImg, blkInfo->hImg);
+		} else {
+			io_printf(dest, "[wID-%d] blkInfo->wImg = %d, blkInfo->hImg = %d:",
+					  workers.subBlockID, blkInfo->wImg, blkInfo->hImg);
+			io_printf(dest, "But I'm disabled!!!\n");
 		}
 
-		spin1_send_sdp_msg(&debugMsg, 10);
 	}
 #endif
 }
