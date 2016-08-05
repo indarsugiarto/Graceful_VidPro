@@ -1,5 +1,7 @@
 #include "SpiNNVid.h"
 
+extern void initProfiler();
+
 // the sanity check:
 // 1. check if the board is correct --> we use fix N-nodes
 void initCheck()
@@ -116,13 +118,14 @@ void initRouter()
 	else if(x>0 && y==0)	dest = (1 << 3);	// west
 	else if(x==0 && y>0)	dest = (1 << 5);	// south
 	else					dest = leader;
-	e = rtr_alloc(1);
+	e = rtr_alloc(2);
 	if(e==0)
 	{
 		io_printf(IO_STD, "initRouter err!\n");
 		rt_error(RTE_ABORT);
 	} else {
 		rtr_mc_set(e, MCPL_BLOCK_DONE, 0xFFFFFFFF, dest); e++;
+		rtr_mc_set(e, MCPL_BLOCK_DONE_TEDGE, 0xFFFFFFFF, dest); e++;
 	}
 
 
@@ -209,14 +212,20 @@ void initSDP()
 
 	// prepare the result data
 	resultMsg.flags = 0x07;
-	resultMsg.tag = SDP_TAG_RESULT;
 	// what if:
 	// - srce_addr contains image line number + rgb info
 	// - srce_port contains the data sequence
 	//resultMsg.srce_port = myCoreID;		// during sending, this must be modified
 	//resultMsg.srce_addr = sv->p2p_addr;
+#if (DESTINATION==DEST_HOST)
+	resultMsg.tag = SDP_TAG_RESULT;
 	resultMsg.dest_port = PORT_ETH;
 	resultMsg.dest_addr = sv->eth_addr;
+#elif (DESTINATION==DEST_FPGA)
+	resultMsg.tag = 0;
+	resultMsg.dest_port = (SDP_PORT_FPGA_OUT << 5) + 1;
+	resultMsg.dest_addr = 0;
+#endif
 	//resultMsg.length = ??? --> need to be modified later
 
 	// and the debug data

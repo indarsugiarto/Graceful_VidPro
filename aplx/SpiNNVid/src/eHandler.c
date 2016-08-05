@@ -5,6 +5,15 @@
 /*------------------------------------------------------------------------------*/
 /*------------------- Sub functions called by main handler ---------------------*/
 
+void setFreq(uint f, uint null)
+{
+	changeFreq(f);
+#if (DEBUG_LEVEL>0)
+		if(sv->p2p_addr==0)
+			io_printf(IO_STD, "Set freq to %d\n", f);
+#endif
+}
+
 void configure_network(uint mBox)
 {
 #if (DEBUG_LEVEL>2)
@@ -21,6 +30,12 @@ void configure_network(uint mBox)
 		blkInfo->opSharpen = msg->seq & 0xF;
 
 		payload = msg->seq;
+		// add frequency information
+		payload |= ((uint)msg->srce_port << 16);
+
+		// then apply frequency requirement
+		setFreq(msg->srce_port, NULL);
+
 		spin1_send_mc_packet(MCPL_BCAST_OP_INFO, payload, WITH_PAYLOAD);
 		// the remaining blkInfo is determined by get_def_Nblocks() and get_block_id()
 
@@ -209,6 +224,7 @@ void hMCPL(uint key, uint payload)
 		blkInfo->opType = payload >> 8;
 		blkInfo->opFilter = (payload >> 4) & 0xF;
 		blkInfo->opSharpen = payload & 0xF;
+		spin1_schedule_callback(setFreq, (payload >> 16), NULL, PRIORITY_PROCESSING);
 	}
 	else if(key==MCPL_BCAST_NODES_INFO) {
 		// how to disable default node-ID to prevent a chip accidently active due to its
@@ -246,10 +262,14 @@ void hMCPL(uint key, uint payload)
 
 	// MCPL_EDGE_DONE is sent by every core to leadAp
 	else if(key==MCPL_EDGE_DONE) {
+		// the payload carries information about timing
 		nEdgeJobDone++;
+		perf.tEdgeNode += payload;
+
 		// I think we have a problem with comparing to tAvailable,
 		// because not all cores might be used (eg. the frame is small)
 		if(nEdgeJobDone==workers.tRunning) {
+			perf.tEdgeNode /= nEdgeJobDone;
 			// collect measurement
 			// Note: this also includes time for filtering, since filtering also trigger edging
 			toc = sv->clock_ms;
@@ -279,6 +299,10 @@ void hMCPL(uint key, uint payload)
 			spin1_send_mc_packet(MCPL_BCAST_SEND_RESULT, payload+1, WITH_PAYLOAD);
 			//spin1_send_mc_packet(MCPL_BCAST_SEND_RESULT, ++payload, WITH_PAYLOAD);
 		}
+	}
+	// id addition to MCPL_BLOCK_DONE, a node might send its performance measure
+	else if(key==MCPL_BLOCK_DONE_TEDGE) {
+		perf.tEdgeTotal += payload;
 	}
 
 	else if(key==MCPL_BCAST_SEND_RESULT) {
@@ -468,6 +492,31 @@ void hSDP(uint mBox, uint port)
 		io_printf(IO_STD, "Processing begin...\n");
 #endif
 		spin1_send_mc_packet(MCPL_BCAST_START_PROC, 0, WITH_PAYLOAD);
+	}
+
+	else if(port==SDP_PORT_FPGA_OUT) {
+		// TODO: extract the data and convert into fix-route
+		// The sending uses "special" modification of the header:
+		// resultMsg.srce_addr = lines;	// is it useful??? for debugging!!!
+		// resultMsg.srce_port = c;	// is it useful???
+		// When all lines has been sent, the following will be sent SDP_SRCE_NOTIFY_PORT
+		// by chip<0,0>. So, we don't need this!
+		ushort x, c, i, l;
+		uchar px;
+		uchar *p;
+		ushort y = msg->srce_addr;
+		if(msg->srce_port!=SDP_SRCE_NOTIFY_PORT) {
+			l = msg->length-sizeof(sdp_hdr_t);
+			c = msg->srce_port;
+			p = (uchar *)&msg->cmd_rc;
+			for(i=0; i<l; i++) {
+				x = c*272+i;
+				px = *(p+i);
+			}
+			// we don't need to modify msb of x and y because we send gray image
+			// in the future, we might change this!
+			// now we have [x,y,px]
+		}
 	}
 
 	// Note: variable msg might be released somewhere else

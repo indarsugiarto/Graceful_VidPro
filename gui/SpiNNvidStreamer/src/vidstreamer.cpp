@@ -60,8 +60,20 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	*/
 
 	oldNchips = 0;
-	//ui->rbLaplace->setChecked(true);
-	imgFilename = "../../../images/Elephant-uxga.bmp";
+	experiment = 3;
+
+	if(experiment > 0) {
+		ui->rbLaplace->setChecked(true);
+		ui->cbFreq->setCurrentIndex(1);
+		switch(experiment){
+		case 1: imgFilename = "../../../images/Elephant-vga.bmp"; break;
+		case 2: imgFilename = "../../../images/Elephant-svga.bmp"; break;
+		case 3: imgFilename = "../../../images/Elephant-xga.bmp"; break;
+		case 4: imgFilename = "../../../images/Elephant-svga.bmp"; break;
+		case 5: imgFilename = "../../../images/Elephant-uxga.bmp"; break;
+		}
+
+	}
 }
 
 void vidStreamer::cbSpiNNchanged(int idx)
@@ -95,11 +107,16 @@ void vidStreamer::pbConfigureClicked()
     if(ui->rbFilterOn->isChecked()) wFilter = 1;
     quint8 wHist = 0;
     if(ui->rbSharpOn->isChecked()) wHist = 1;
-    spinn->configSpin(spinIdx, nNodes, opType, wFilter, wHist);
+    quint8 freq = 200;
+    if(ui->cbFreq->currentIndex()==1)
+        freq = 250;
+    spinn->configSpin(spinIdx, nNodes, opType, wFilter, wHist, freq);
 
-    // just for experiment: it's boring...
-    pbImageClicked();
-    pbSendImageClicked();
+    // just for the experiment: it's boring...
+    if(experiment > 0) {
+        pbImageClicked();
+        pbSendImageClicked();
+    }
 }
 
 void vidStreamer::pbPauseClicked()
@@ -215,13 +232,11 @@ void vidStreamer::pbImageClicked()
 	qDebug() << QString("Dummy Elapsed = %1-ns").arg(temp.tv_sec*1000000000+temp.tv_nsec);
 
     /* Test-1: Send QImage-frame to SpiNNaker and display the result */
-    //fName = "../../../../SpiNN-3.jpg";
-
-    /*
-    imgFilename = QFileDialog::getOpenFileName(this, "Open Image File", "../../../images", "*");
-    if(fName.isEmpty())
-        return;
-    */
+    if(experiment == 0) {
+        imgFilename = QFileDialog::getOpenFileName(this, "Open Image File", "../../../images", "*");
+        if(imgFilename.isEmpty())
+            return;
+    }
 
 
     ui->pbSendImage->setEnabled(true);
@@ -229,14 +244,16 @@ void vidStreamer::pbImageClicked()
     loadedImage.load(imgFilename);
 
     screen->putFrame(loadedImage);
-    screen->show();
+    if(experiment == 0)
+        screen->show();
     //send frame info to spinn
     spinn->frameInfo(loadedImage.width(), loadedImage.height());
 }
 
 void vidStreamer::pbSendImageClicked()
 {
-    edge->show();
+    if(experiment == 0)
+        edge->show();
     // disable the button to see if the image is sent
     ui->pbSendImage->setEnabled(false);
     // send the frame to spinn
@@ -258,6 +275,7 @@ void vidStreamer::pbTestClicked()
     // 3 - Workload
     // 4 - FrameInfo
     // 5 - Performance Measurement
+    // 6 - PLL report
     spinn->sendTest(ui->cbTest->currentIndex());
 }
 

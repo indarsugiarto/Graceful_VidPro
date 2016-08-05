@@ -7,7 +7,8 @@ SOURCES += main.c \
     init.c \
     eHandler.c \
     util.c \
-    process.c
+    process.c \
+    profiler.c
 
 INCLUDEPATH += /opt/spinnaker_tools_134/include
 
@@ -26,4 +27,5 @@ DISTFILES += \
 
 HEADERS += \
     SpiNNVid.h \
-    defSpiNNVid.h
+    defSpiNNVid.h \
+    profiler.h

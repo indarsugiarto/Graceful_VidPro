@@ -73,7 +73,9 @@ public:
 public slots:
 	void readResult();
 	void readDebug();
-	void configSpin(quint8 SpinIdx, quint8 nodesNum, quint8 edgeOperator, quint8 withFiltering, quint8 withSharping);
+	void configSpin(quint8 SpinIdx, quint8 nodesNum,
+					quint8 edgeOperator, quint8 withFiltering,
+					quint8 withSharping, quint8 freq);
 	void frameInfo(int imgW, int imgH);
 	void frameIn(const QImage &frame);
 	void sendImgLine(sdp_hdr_t h, uchar *pixel, quint16 len);

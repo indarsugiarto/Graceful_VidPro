@@ -97,21 +97,19 @@ void computeWLoad(uint withReport, uint arg1)
 	workers.blkStart = blkStart;
 	workers.blkEnd = blkEnd;
 
-	TADI SAMPAI DISINI, BELUM SELESAI
-
 	/*--------------------------------------------------------------------------*/
 	/*----------------- then compute local region for each core ----------------*/
 	// if there's remaining lines, then give them to the last block
-	if(blkInfo->nodeBlockID==blkInfo->maxBlock-1)
-		workers.nLinesPerBlock += nRemInBlock;
-	workers.blkEnd = workers.blkStart + workers.nLinesPerBlock - 1;
+//	if(blkInfo->nodeBlockID==blkInfo->maxBlock-1)
+//		workers.nLinesPerBlock += nRemInBlock;
+//	workers.blkEnd = workers.blkStart + workers.nLinesPerBlock - 1;
 
 	// core-wide
 	ushort nLinesPerCore;
 	ushort nRemInCore;
 	// if the number of available cores is less then or equal total lines per block:
 	if(workers.tAvailable <= workers.nLinesPerBlock) {
-		workers.tRunning = workers.tAvailable;
+		workers.tRunning = workers.tAvailable;	// useful for leadAp only!
 
 		nLinesPerCore = workers.nLinesPerBlock / workers.tAvailable;
 		nRemInCore = workers.nLinesPerBlock % workers.tAvailable;
@@ -139,7 +137,10 @@ void computeWLoad(uint withReport, uint arg1)
 	}
 	// if the number of available cores is higher, then select some cores only
 	else {
+		// leadAp needs to know, how many actual workers will be working
 		workers.tRunning = workers.nLinesPerBlock;
+
+		// select some workers while disable unused one
 		if(workers.subBlockID < workers.nLinesPerBlock) {
 			workers.startLine = workers.blkStart + workers.subBlockID;
 			workers.endLine = workers.startLine;
@@ -172,7 +173,7 @@ void computeWLoad(uint withReport, uint arg1)
 		workers.blkImgOut3 = blkInfo->imgOut3 + offset;
 	}
 
-	// other locally copied data
+	// other locally copied data (in DTCM, rather than in SysRam)
 	workers.opFilter = blkInfo->opFilter;
 	workers.opType = blkInfo->opType;
 	workers.opSharpen = blkInfo->opSharpen;
@@ -415,6 +416,8 @@ void triggerProcessing(uint arg0, uint arg1)
 
 	// how many workers/blocks have finished the process?
 	nEdgeJobDone = 0;
+	perf.tEdgeNode = 0;
+	perf.tEdgeTotal = 0;
 	nBlockDone = 0;
 
 	if(blkInfo->opFilter==1) {
@@ -576,7 +579,7 @@ void imgDetection(uint arg0, uint arg1)
 #if (DEBUG_LEVEL > 0)
 	io_printf(IO_BUF, "Done! send MCPL_EDGE_DONE!\n");
 #endif
-	spin1_send_mc_packet(MCPL_EDGE_DONE, 0, WITH_PAYLOAD);
+	spin1_send_mc_packet(MCPL_EDGE_DONE, perf.tEdge, WITH_PAYLOAD);
 
 }
 
@@ -617,7 +620,7 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 
 #if (DEBUG_LEVEL > 0)
 	io_printf(IO_STD, "Block-%d is sending with perf = %u\n",
-			  blkInfo->nodeBlockID, perf.tEdge);
+			  blkInfo->nodeBlockID, perf.tEdgeNode);
 #endif
 
 	// format sdp (scp_segment + data_segment):
@@ -662,12 +665,12 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 		while(dmaImgFromSDRAMdone==0) {
 		}
 		// then sequentially copy & send via sdp
-		//c = 0;
+		uchar c = 0;
 		rem = workers.wImg;
 		resultMsg.srce_addr = lines;	// is it useful??? for debugging!!!
 		uchar *resPtr = resImgBuf;
 		do {
-			//resultMsg.srce_port = c;	// is it useful???
+			resultMsg.srce_port = c;	// is it useful???
 			sz = rem > 272 ? 272 : rem;
 			//spin1_memcpy((void *)&resultMsg.cmd_rc, (void *)(resImgBuf + c*272), sz);
 			spin1_memcpy((void *)&resultMsg.cmd_rc, resPtr, sz);
@@ -677,7 +680,7 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 			//giveDelay(DEF_DEL_VAL);
 			sark_delay_us(100);
 
-			//c++;		// for the resImgBuf pointer
+			c++;		// for the resImgBuf pointer
 			resPtr += sz;
 			rem -= sz;
 		} while(rem > 0);
@@ -693,20 +696,23 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 
 	// then send notification to chip<0,0> that my part is complete
 	spin1_send_mc_packet(MCPL_BLOCK_DONE, blkInfo->nodeBlockID, WITH_PAYLOAD);
-
+	spin1_send_mc_packet(MCPL_BLOCK_DONE_TEDGE, perf.tEdgeNode, WITH_PAYLOAD);
 }
 
 // TODO: waiting for Gengting...
 void sendDetectionResult2FPGA(uint nodeID, uint arg1)
 {
-
+	// Since the SpiNN-link is connected to chip<0,0> we don't need
+	// different routing, but just using SDP to chip<0,0>
 }
 
 // notifyDestDone() is executed by <0,0,leadAp> only
 void notifyDestDone(uint arg0, uint arg1)
 {
+	perf.tEdgeTotal /= blkInfo->maxBlock;
 #if (DEBUG_LEVEL > 0)
-	io_printf(IO_STD, "Processing is done. Notify host with elapse %d-ms\n", elapse);
+	io_printf(IO_STD, "Processing with %d-nodes is done. Elapse %d-ms, tclk = %u\n",
+			  blkInfo->maxBlock, elapse, perf.tEdgeTotal);
 #endif
 #if (DESTINATION==DEST_HOST)
 	resultMsg.srce_addr = elapse;

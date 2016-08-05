@@ -11,7 +11,7 @@ SCRIPT = $(SPINN_DIRS)/lib/sark.lnk
 
 # List of objects making up the application. If there are other files
 # in the application, add their object file names to this variable.
-OBJECTS = main.o init.o eHandler.o process.o util.o
+OBJECTS = main.o init.o eHandler.o process.o util.o profiler.o
 
 ifndef GNUBIN
     GNUBIN := /opt/arm-2013.05/bin
@@ -72,6 +72,9 @@ $(APP).elf: $(OBJECTS) $(SCRIPT) $(LIBRARY)
 
 
 # Build the object files.
+profiler.o: profiler.c profiler.h defSpiNNVid.h
+	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)$@
+
 util.o: util.c SpiNNVid.h
 	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)$@
 

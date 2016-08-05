@@ -58,6 +58,7 @@
 #define DEBUG_REPORT_FRAMEINFO	6       // all cores
 #define DEBUG_REPORT_NET_CONFIG 7       // only leadAp
 #define DEBUG_REPORT_PERF       8       // all cores
+#define DEBUG_REPORT_PLL_INFO   9       // only leadAp
 
 // We use timer to do some debugging facilities
 #define TIMER_TICK_PERIOD_US 	1000000
@@ -66,7 +67,8 @@
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
 /*----------------------------- Basic spin1_api related -----------------------------*/
-#define PRIORITY_LOWEST                 4
+#define PRIORITY_LOWEST         4
+#define PRIORITY_IDLE           PRIORITY_LOWEST
 #define PRIORITY_TIMER			3
 #define PRIORITY_PROCESSING		2
 #define PRIORITY_SDP			1
@@ -89,6 +91,7 @@
 #define SDP_PORT_B_IMG_DATA		3	// port for sending B-channel
 #define SDP_PORT_FRAME_END      4   // instruct spinn to start decoding
 #define SDP_PORT_FRAME_INFO     5   // will be used to send the basic info about frame
+#define SDP_PORT_FPGA_OUT       6
 #define SDP_PORT_CONFIG			7	// for sending image/frame info
 
 // special for sending result and notification, srce_port can be used for chunk counter
@@ -152,6 +155,7 @@
 
 //special key (with values)
 #define MCPL_BLOCK_DONE			0x1ead1ead	// should be sent to <0,0,1>
+#define MCPL_BLOCK_DONE_TEDGE   0x1eaddea1 // should be sent to <0,0,1>
 
 
 // mechanism for forwarding pixel packets

@@ -14,6 +14,7 @@
 #include <spin1_api.h>
 #include <stdfix.h>
 #include "defSpiNNVid.h"        // all definitions go here
+#include "profiler.h"
 
 /*------------- From timer2 code from Steve Temple -------------*/
 // Use "timer2" to measure elapsed time.
@@ -229,6 +230,8 @@ ushort pixelCntr;				// how many pixel has been processed?
 // for performance measurement
 typedef struct meas {
     uint tEdge;                 // measuring edge detection for each core
+    uint tEdgeNode;
+    uint tEdgeTotal;
 } meas_t;
 volatile uint64 tic, toc;
 volatile ushort elapse;

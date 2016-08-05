@@ -133,7 +133,9 @@ sdp_hdr_t cSpiNNcomm::get_hdr(QByteArray const &ba)
 /*---------------------------------------------------------------------------*/
 /*----------------- Image Processing / Network related stuffs----------------*/
 // it should be called when Configure button is clicked
-void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum, quint8 edgeOperator, quint8 withFiltering, quint8 withSharping)
+void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
+                            quint8 edgeOperator, quint8 withFiltering,
+                            quint8 withSharping, quint8 freq)
 {
     // collect the parameters
     if(SpinIdx==SPIN3) {
@@ -150,7 +152,7 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum, quint8 edgeOperator
     h.flags = 0x07;
     h.tag = 0;
     h.dest_port = (SDP_PORT_CONFIG << 5) + leadAp;
-    h.srce_port = ETH_PORT;
+    h.srce_port = freq;
     h.dest_addr = 0;
     h.srce_addr = 0;
 
@@ -241,15 +243,25 @@ void cSpiNNcomm::readDebug()
 	stream >> pad >> h.flags >> h.tag >> h.dest_port >> h.srce_port
 		   >> h.dest_addr >> h.srce_addr
 		   >> c.cmd_rc >> c.seq >> c.arg1 >> c.arg2 >> c.arg3;
-	quint16 mxBlk = c.cmd_rc >> 8;
-	quint16 blkID = c.cmd_rc & 0xFF;
-	quint16 numWorker = c.seq >> 8;
-	quint16 wID = c.seq & 0xFF;
-	quint16 sLine = c.arg1 >> 16;
-	quint16 eLine = c.arg1 & 0xFFFF;
-	qDebug() << QString("Chip<%5,%6>\tblkID-%1\twID-%2\tsLine-%3\teLine-%4")
-				.arg(blkID).arg(wID).arg(sLine).arg(eLine)
-				.arg(h.srce_addr >> 8).arg(h.srce_addr & 0xFF);
+	if(c.cmd_rc==DEBUG_REPORT_WLOAD){
+		/*
+		quint16 mxBlk = c.cmd_rc >> 8;
+		quint16 blkID = c.cmd_rc & 0xFF;
+		quint16 numWorker = c.seq >> 8;
+		quint16 wID = c.seq & 0xFF;
+		quint16 sLine = c.arg1 >> 16;
+		quint16 eLine = c.arg1 & 0xFFFF;
+		*/
+		quint16 mxBlk = c.arg1 >> 8;
+		quint16 blkID = c.arg1 & 0xFF;
+		quint16 numWorker = c.arg2 >> 8;
+		quint16 wID = c.arg2 & 0xFF;
+		quint16 sLine = c.arg3 >> 16;
+		quint16 eLine = c.arg3 & 0xFFFF;
+		qDebug() << QString("Chip<%5,%6>\tblkID-%1\twID-%2\tsLine-%3\teLine-%4")
+					.arg(blkID).arg(wID).arg(sLine).arg(eLine)
+					.arg(h.srce_addr >> 8).arg(h.srce_addr & 0xFF);
+	}
 }
 
 void cSpiNNcomm::readResult()
@@ -336,7 +348,8 @@ void cSpiNNcomm::frameIn(const QImage &frame)
     gArray = (uchar *)malloc(szImg);
     bArray = (uchar *)malloc(szImg);
 
-    // TODO: cara di atas bikin xArray NULL, kenapa? karena szImg sebelumnya dibuat uint16, seharusnya uint32
+    // TODO: cara di atas bikin xArray NULL, kenapa?
+    // karena szImg sebelumnya dibuat uint16, seharusnya uint32
 
 	// prepare the container's pointer
 	uchar *rPtr;
@@ -430,6 +443,7 @@ void cSpiNNcomm::sendTest(int testID)
     // 3 - Workload
     // 4 - FrameInfo
     // 5 - Performance Measurement
+    // 6 - PLL report
 
     cmd_hdr_t c;
     c.cmd_rc = SDP_CMD_GIVE_REPORT;
@@ -440,6 +454,7 @@ void cSpiNNcomm::sendTest(int testID)
     case 3: c.seq = DEBUG_REPORT_WLOAD; break;
     case 4: c.seq = DEBUG_REPORT_FRAMEINFO; break;
     case 5: c.seq = DEBUG_REPORT_PERF; break;
+    case 6: c.seq = DEBUG_REPORT_PLL_INFO; break;
     }
     sendSDP(h, scp(c));
 }

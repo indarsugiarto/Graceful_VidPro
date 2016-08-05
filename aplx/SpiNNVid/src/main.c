@@ -1,5 +1,7 @@
 #include "SpiNNVid.h"
 
+extern void initProfiler();
+
 void c_main(void)
 {
 	// allocate ?pxbuf
@@ -12,6 +14,8 @@ void c_main(void)
 
 	// do sanity check
 	initCheck();
+
+	initProfiler();
 
 	myCoreID = sark_core_id();
 	spin1_callback_on(MCPL_PACKET_RECEIVED, hMCPL, PRIORITY_MCPL);

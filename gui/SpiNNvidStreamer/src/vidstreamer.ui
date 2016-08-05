@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>270</width>
-    <height>485</height>
+    <height>521</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -19,7 +19,7 @@
   <property name="maximumSize">
    <size>
     <width>270</width>
-    <height>500</height>
+    <height>600</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -29,7 +29,7 @@
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>290</y>
+     <y>330</y>
      <width>81</width>
      <height>27</height>
     </rect>
@@ -42,7 +42,7 @@
    <property name="geometry">
     <rect>
      <x>192</x>
-     <y>290</y>
+     <y>330</y>
      <width>71</width>
      <height>29</height>
     </rect>
@@ -57,7 +57,7 @@
      <x>10</x>
      <y>10</y>
      <width>251</width>
-     <height>271</height>
+     <height>311</height>
     </rect>
    </property>
    <property name="frameShape">
@@ -70,7 +70,7 @@
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>190</y>
+      <y>230</y>
       <width>131</width>
       <height>21</height>
      </rect>
@@ -83,7 +83,7 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>226</y>
+      <y>270</y>
       <width>131</width>
       <height>31</height>
      </rect>
@@ -103,7 +103,7 @@
     <property name="geometry">
      <rect>
       <x>160</x>
-      <y>226</y>
+      <y>270</y>
       <width>71</width>
       <height>29</height>
      </rect>
@@ -119,7 +119,7 @@
     <property name="geometry">
      <rect>
       <x>160</x>
-      <y>186</y>
+      <y>226</y>
       <width>71</width>
       <height>31</height>
      </rect>
@@ -266,12 +266,45 @@
      </property>
     </widget>
    </widget>
+   <widget class="QComboBox" name="cbFreq">
+    <property name="geometry">
+     <rect>
+      <x>160</x>
+      <y>190</y>
+      <width>71</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <item>
+     <property name="text">
+      <string>200</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>250</string>
+     </property>
+    </item>
+   </widget>
+   <widget class="QLabel" name="label_3">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>194</y>
+      <width>131</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>#SpiNNaker freq:</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QPushButton" name="pbImage">
    <property name="geometry">
     <rect>
      <x>100</x>
-     <y>290</y>
+     <y>330</y>
      <width>81</width>
      <height>27</height>
     </rect>
@@ -284,7 +317,7 @@
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>360</y>
+     <y>400</y>
      <width>251</width>
      <height>111</height>
     </rect>
@@ -334,6 +367,11 @@
       <string>Performance Measurement</string>
      </property>
     </item>
+    <item>
+     <property name="text">
+      <string>PLL report</string>
+     </property>
+    </item>
    </widget>
    <widget class="QPushButton" name="pbTest">
     <property name="geometry">
@@ -366,7 +404,7 @@
    <property name="geometry">
     <rect>
      <x>100</x>
-     <y>320</y>
+     <y>360</y>
      <width>81</width>
      <height>27</height>
     </rect>

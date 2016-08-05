@@ -25,7 +25,6 @@ public:
     QThread *worker;
     cDecoder *decoder;
     VideoState *is;
-    QString fName;
     QTimer *refresh;
 	cScreen *screen;
 	cScreen *edge;
@@ -33,6 +32,7 @@ public:
     QImage loadedImage;
     QString imgFilename;
     int oldNchips;
+    int experiment;
 
 public slots:
     void errorString(QString err);
