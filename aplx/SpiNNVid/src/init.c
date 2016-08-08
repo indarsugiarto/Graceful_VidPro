@@ -262,6 +262,7 @@ void initOther()
 		fwdPktBuffer[ch].pxLen = 0;
 }
 
+// TODO: iptags aren't set properly for different IP address
 void initIPTag()
 {
 	// only chip <0,0>

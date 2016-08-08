@@ -2,11 +2,12 @@
 #define DEFSPINNVID_H
 
 #define MAJOR_VERSION           0
-#define MINOR_VERSION           2
+#define MINOR_VERSION           3
 
 // Version log
 // 0.1 Sending frame to SpiNNaker at 10MBps
-// 0.2 Do the edge detection
+// 0.2 Do the edge detection and smoothing
+// 0.3 Do histogram equalization
 
 
 /*-----------------------------------------------------------------------------------*/
@@ -171,7 +172,12 @@
 #define MCPL_FWD_PIXEL_MASK			0xFFFF0000	// lower word is used for core-ID
 
 
-
+// mechanism for propagating histogram
+#define MCPL_BCAST_REPORT_HIST		0xbca5000A	// broadcasted from chip<0,0,leadAp>
+#define MCPL_BCAST_REPORT_HIST_MASK	0xFFFFFFFF	// it asks nodes to report in a tree mechanism
+#define MCPL_BCAST_HIST_RESULT				// simply broadcast the histogram result
+#define MCPL_BCAST_HIST_RESULT_MASK	0xFFFF0000	// where the key contains the seq, and the 
+							// payload contains 4 pixels
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
