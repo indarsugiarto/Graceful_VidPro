@@ -63,8 +63,8 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	experiment = 5;
 
 	if(experiment > 0) {
-		//ui->rbLaplace->setChecked(true);
-		ui->cbFreq->setCurrentIndex(1);
+		ui->rbLaplace->setChecked(true);
+		//ui->cbFreq->setCurrentIndex(1);
 		switch(experiment){
 		case 1: imgFilename = "../../../images/Elephant-vga.bmp"; break;
 		case 2: imgFilename = "../../../images/Elephant-svga.bmp"; break;
