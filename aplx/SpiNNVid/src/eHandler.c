@@ -516,6 +516,10 @@ void hSDP(uint mBox, uint port)
 			// we don't need to modify msb of x and y because we send gray image
 			// in the future, we might change this!
 			// now we have [x,y,px]
+			uint key, dest = 1 << 4;	// NOTE: going to link-4
+			rtr_fr_set(dest);
+			key = (((uint)x << 16) | y) & 0x7FFF7FFF;
+			spin1_send_fr_packet(key, px, WITH_PAYLOAD);
 		}
 	}
 
