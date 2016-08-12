@@ -47,6 +47,7 @@ static const short LAP[5][5] = {{-1,-1,-1,-1,-1},
 				  {-1,-1,-1,-1,-1}};
 
 /* Gaussian filter. Ref:  en.wikipedia.org/wiki/Canny_edge_detector */
+// with sigma  = 1.4
 static const short FILT[5][5] = {{2,4,5,4,2},
 				   {4,9,12,9,4},
 				   {5,12,15,12,5},
