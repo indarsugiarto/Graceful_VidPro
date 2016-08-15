@@ -42,6 +42,7 @@ public slots:
 	void pbSendImageClicked();
     void pbConfigureClicked();
     void pbTestClicked();
+    void pbShowHideTestClicked();
     void newChipsNum();
     void refreshUpdate();
 	void videoFinish();

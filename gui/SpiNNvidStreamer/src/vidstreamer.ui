@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>270</width>
-    <height>521</height>
+    <height>450</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -29,7 +29,7 @@
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>330</y>
+     <y>370</y>
      <width>81</width>
      <height>27</height>
     </rect>
@@ -42,7 +42,7 @@
    <property name="geometry">
     <rect>
      <x>192</x>
-     <y>330</y>
+     <y>370</y>
      <width>71</width>
      <height>29</height>
     </rect>
@@ -57,7 +57,7 @@
      <x>10</x>
      <y>10</y>
      <width>251</width>
-     <height>311</height>
+     <height>351</height>
     </rect>
    </property>
    <property name="frameShape">
@@ -70,7 +70,7 @@
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>230</y>
+      <y>253</y>
       <width>131</width>
       <height>21</height>
      </rect>
@@ -83,7 +83,7 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>270</y>
+      <y>310</y>
       <width>131</width>
       <height>31</height>
      </rect>
@@ -103,7 +103,7 @@
     <property name="geometry">
      <rect>
       <x>160</x>
-      <y>270</y>
+      <y>310</y>
       <width>71</width>
       <height>29</height>
      </rect>
@@ -119,7 +119,7 @@
     <property name="geometry">
      <rect>
       <x>160</x>
-      <y>226</y>
+      <y>250</y>
       <width>71</width>
       <height>31</height>
      </rect>
@@ -270,7 +270,7 @@
     <property name="geometry">
      <rect>
       <x>160</x>
-      <y>190</y>
+      <y>220</y>
       <width>71</width>
       <height>31</height>
      </rect>
@@ -290,7 +290,7 @@
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>194</y>
+      <y>224</y>
       <width>131</width>
       <height>21</height>
      </rect>
@@ -299,12 +299,57 @@
      <string>#SpiNNaker freq:</string>
     </property>
    </widget>
+   <widget class="QLineEdit" name="ipAddr">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>280</y>
+      <width>131</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>192.168.240.253</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_4">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>193</y>
+      <width>131</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>#Pixel Processing:</string>
+    </property>
+   </widget>
+   <widget class="QSpinBox" name="sbPixelWorkers">
+    <property name="geometry">
+     <rect>
+      <x>160</x>
+      <y>190</y>
+      <width>71</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="minimum">
+     <number>1</number>
+    </property>
+    <property name="maximum">
+     <number>16</number>
+    </property>
+    <property name="value">
+     <number>16</number>
+    </property>
+   </widget>
   </widget>
   <widget class="QPushButton" name="pbImage">
    <property name="geometry">
     <rect>
      <x>100</x>
-     <y>330</y>
+     <y>370</y>
      <width>81</width>
      <height>27</height>
     </rect>
@@ -317,7 +362,7 @@
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>400</y>
+     <y>480</y>
      <width>251</width>
      <height>111</height>
     </rect>
@@ -404,13 +449,26 @@
    <property name="geometry">
     <rect>
      <x>100</x>
-     <y>360</y>
+     <y>400</y>
      <width>81</width>
      <height>27</height>
     </rect>
    </property>
    <property name="text">
     <string>Send Image</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="pbShowHideTest">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>440</y>
+     <width>271</width>
+     <height>10</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string/>
    </property>
   </widget>
  </widget>

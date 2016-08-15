@@ -37,6 +37,11 @@
 #define REAL_CONST(x)           x##k
 
 
+// how many cores are used for pixel propagation (and histogram calculation)?
+// this value MUST BE THE SAME with the number of cores used during SDP
+// transfer for sending image's pixels
+#define NUM_CORES_FOR_BCAST_PIXEL   16
+
 // all constants below must be positive
 #define R_GRAY                  REAL_CONST(0.2989)
 #define G_GRAY                  REAL_CONST(0.5870)
@@ -174,10 +179,22 @@
 #define MCPL_FWD_PIXEL_MASK			0xFFFF0000	// lower word is used for core-ID
 
 
+/* 1. The root node will broadcast MCPL_BCAST_REPORT_HIST to all chips
+ * 2. Each node then check if it is a leaf node
+ *    A leaf node is a node which doesn't have any children.
+ *    If it is a leaf node, then it send its histogram to the parent
+ * 3. If it is not a leaf node, it will wait until its children send
+ *    their histogram. Once it has received histogram from its children,
+ *    it starts computing its own histogram and send the result to its
+ *    parent.
+ * 4. The process continues until it reaches the root node.
+ * */
 // mechanism for propagating histogram
 #define MCPL_BCAST_REPORT_HIST		0xbca5000A	// broadcasted from chip<0,0,leadAp>
 #define MCPL_BCAST_REPORT_HIST_MASK	0xFFFFFFFF	// it asks nodes to report in a tree mechanism
-#define MCPL_BCAST_HIST_RESULT				// simply broadcast the histogram result
+#define MCPL_REPORT_HIST2LEAD		0x1eaC0000	// each core report to leadAp using this key
+#define MCPL_REPORT_HIST2LEAD_MASK	0xFFFF0000	//
+#define MCPL_BCAST_HIST_RESULT		0xbcaC0000		// simply broadcast the histogram result
 #define MCPL_BCAST_HIST_RESULT_MASK	0xFFFF0000	// where the key contains the seq, and the 
 							// payload contains 4 pixels
 

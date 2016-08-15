@@ -11,6 +11,9 @@ void c_main(void)
 	ypxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, sizeof(uchar));
 	dtcmImgBuf = NULL;
 	resImgBuf = NULL;
+	// by default, we assign NUM_CORES_FOR_BCAST_PIXEL cores for pre-processing
+	// (i.e. grayscaling and histogram counting)
+	nCoresForPixelPreProc = NUM_CORES_FOR_BCAST_PIXEL;	// can be changed via SDP
 
 	// do sanity check
 	initCheck();

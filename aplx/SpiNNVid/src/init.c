@@ -58,7 +58,7 @@ void initRouter()
 			rtr_mc_set(e+i, i+1, 0xFFFFFFFF, (MC_CORE_ROUTE(i+1)));
 	}
 	// other broadcasting keys
-	e = rtr_alloc(4);
+	e = rtr_alloc(5);
 	if(e==0)
 	{
 		io_printf(IO_STD, "initRouter err!\n");
@@ -68,6 +68,7 @@ void initRouter()
 		rtr_mc_set(e, MCPL_PING_REPLY,		0xFFFFFFFF, leader);	e++;
 		rtr_mc_set(e, MCPL_BCAST_GET_WLOAD, 0xFFFFFFFF, allRoute);	e++;
 		rtr_mc_set(e, MCPL_EDGE_DONE,		0xFFFFFFFF, leader);	e++;
+		rtr_mc_set(e, MCPL_REPORT_HIST2LEAD, MCPL_REPORT_HIST2LEAD_MASK, leader); e++;
 	}
 
 	/*-----------------------------------------------*/
@@ -187,7 +188,7 @@ void initRouter()
 	if(sv->p2p_addr==0)
 		dest += 1 + (1<<1) + (1<<2);
 #endif
-	e = rtr_alloc(2);
+	e = rtr_alloc(4);
 	if(e==0)
 	{
 		io_printf(IO_STD, "initRouter err!\n");
@@ -195,6 +196,9 @@ void initRouter()
 	} else {
 		rtr_mc_set(e, MCPL_BCAST_ALL_REPORT, 0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_START_PROC, 0xFFFFFFFF, dest); e++;
+		// regarding histogram equalization
+		rtr_mc_set(e, MCPL_BCAST_REPORT_HIST, MCPL_BCAST_REPORT_HIST_MASK, dest); e++;
+		rtr_mc_set(e, MCPL_BCAST_HIST_RESULT, MCPL_BCAST_HIST_RESULT_MASK, dest); e++;
 	}
 }
 

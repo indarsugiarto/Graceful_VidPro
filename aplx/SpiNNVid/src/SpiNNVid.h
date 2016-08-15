@@ -164,6 +164,9 @@ typedef struct pxBuf {
 } pxBuf_t;
 pxBuf_t pxBuffer;
 
+
+
+
 // Ada masalah jika buffer dimasukkan ke dalam struct. Coba jika ditaruh di luar:
 // Ternyata masih bermasalah. Sekarang mari kota coba dengan benar-benar membuat
 // berada di boundary 4-byte.
@@ -200,9 +203,22 @@ typedef enum proc_type_e proc_t;	//!< Typedef for enum spin_lock_e
 
 proc_t proc;
 
+
+
+
+typedef struct btree {
+  short p;              // parent node
+  short c[2];           // childred nodes
+} btree_t;
+
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
 /*-------------------------- Global/Static Variables --------------------------------*/
+
+// histogram data
+uint hist[256];
+btree_t histPropTree;
+
 
 // SDP containers
 sdp_msg_t replyMsg;				// prepare the reply message
@@ -238,6 +254,9 @@ volatile uint64 tic, toc;
 volatile ushort elapse;
 meas_t perf;
 
+
+uchar nCoresForPixelPreProc;
+
 /*------------------------- Forward declarations ----------------------------*/
 
 // Initialization
@@ -264,11 +283,14 @@ void bcastWID(uint Unused, uint null);
 
 void computeWLoad(uint withReport, uint arg1);
 
+
 void fwdImgData(uint arg0, uint arg1);	// isLastChannel==1 for B-channel
 void processGrayScaling(uint arg0, uint arg1);
 void recvFwdImgData(uint key, uint payload);
 void collectGrayPixels(uint arg0, uint arg1);
 
+void initHistData();    // will be called by computeWLoad(), contains construction of HistPropTree
+void computeHist();     // will use ypxbuf to compute the histogram
 
 void triggerProcessing(uint arg0, uint arg1);
 void imgFiltering(uint arg0, uint arg1);

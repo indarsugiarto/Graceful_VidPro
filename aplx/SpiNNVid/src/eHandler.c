@@ -313,7 +313,21 @@ void hMCPL(uint key, uint payload)
 #endif
 	}
 
+	/*----------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------*/
+	/*----------------- Certain cores for histogram processing -------------------*/
+	// NOTE: during gray pixel forwarding, it involves almost all cores
+	// hence, when a core receive MCPL_BCAST_REPORT_HIST:
+	// 1. it forwards its histogram content to leadAp
+	// 2. leadAp then collect all histogram from workers and combine them into
+	//    one unified histogram of the node
+	// 3. the leadAp then forward this unified histogram if it is a leaf node
+	//    Otherwise, it will wait the children nodes to send their histrogram
+	//MCPL_BCAST_REPORT_HIST
 
+	else if(key==MCPL_BCAST_REPORT_HIST) {
+		// each core need to report its histogram to leadAp:
+	}
 
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/

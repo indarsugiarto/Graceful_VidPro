@@ -1,3 +1,10 @@
+
+Terakhir, aku taruh perintah computeHist() di bagian collectGrayPixels()
+Lah, kalau semua chip bisa computeHist(), berarti ndak perlu propagasi dengan cara binary tree?
+
+Mekanisme MCPL untuk histogram belum dibuat
+Perhitungan waktunya juga belum
+
 // All distributed processing mechanisms are in this file
 #include "SpiNNVid.h"
 #include <stdlib.h>	// need for abs()
@@ -194,6 +201,9 @@ void computeWLoad(uint withReport, uint arg1)
 
 	// debugging:
 	//give_report(DEBUG_REPORT_WLOAD, 1);
+
+	// final step: reset histogram data
+	initHistData();		// here, histPropTree will be constructed
 }
 
 
@@ -401,6 +411,11 @@ void collectGrayPixels(uint arg0, uint arg1)
 	uint offset = pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK;
 	// coba dengan manual copy: hasilnya? SEMPURNA !!!!
 	sark_mem_cpy((void *)blkInfo->imgOut1+offset, (void *)ypxbuf, pxBuffer.pxLen);
+
+	// then compute the histogram
+	// this will be performed by (almost) all cores in the chip that receive
+	// the gray pixels from root node
+	computeHist();
 }
 
 /*------------------------------------------------------------------------------------------*/
@@ -420,7 +435,17 @@ void triggerProcessing(uint arg0, uint arg1)
 	perf.tEdgeTotal = 0;
 	nBlockDone = 0;
 
-	if(blkInfo->opFilter==1) {
+	if(blkInfo->opSharpen==1) {
+		proc = PROC_HISTEQ;
+		// only if root-node and leadAp, trigger the histogram equalisation chain
+		if(sv->p2p_addr==0 && leadAp)
+			spin1_send_mc_packet(MCPL_BCAST_REPORT_HIST, 0, WITH_PAYLOAD);
+			// MCPL_BCAST_REPORT_HIST will be broadcasted to all cores in all chips
+			// only core-1 to core-4 in all chips will response to this call, because
+			// for sending 256 item of uint, we require 4 active "thread". Hence, we assign
+			// 4 cores to do this.
+	}
+	else if(blkInfo->opFilter==1) {
 		proc = PROC_FILTERING;
 		imgFiltering(0,0);	// inside imgFiltering, it will then call imgDetection
 	}
@@ -729,6 +754,47 @@ void notifyDestDone(uint arg0, uint arg1)
 
 #endif
 }
+
+
+// initHistData() should be called whenever a new image arrives
+// i.e., during the computeWLoad()
+void initHistData()
+{
+	for(uchar i=0; i<256; i++)
+		hist[i] = 0;
+	// construct histPropTree, so we know where to send the histogram result
+	// parent = (myNodeID - 1) / 2
+	// child_1 = (myNodeID * 2) + 1
+	// child_2 = child_1 + 1
+	if(blkInfo->nodeBlockID == 0)
+		histPropTree.p = -1;	// no parent
+	else
+		histPropTree.p = (blkInfo->nodeBlockID - 1) / 2;
+	short c;
+	histPropTree.c[0] = -1;		// no childer, by default
+	histPropTree.c[1] = -1;
+	c = blkInfo->nodeBlockID * 2 +1;
+	if(c < blkInfo->maxBlock) {
+		histPropTree.c[0] = c;
+		if((c + 1) < blkInfo->maxBlock)
+			histPropTree.c[1] = c + 1;
+	}
+}
+
+// computeHist() will use data in the ypxbuf
+void computeHist()
+{
+	for(ushort i=0; i<pxBuf.pxLen; i++) {
+		hist[ypxbuf[i]]++;
+	}
+}
+
+
+
+
+
+
+
 
 
 

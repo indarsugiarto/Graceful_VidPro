@@ -37,6 +37,7 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	connect(ui->pbConfigure, SIGNAL(pressed()), this, SLOT(pbConfigureClicked()));
 	connect(ui->sbNchips, SIGNAL(editingFinished()), this, SLOT(newChipsNum()));
 	connect(ui->pbTest, SIGNAL(pressed()), this, SLOT(pbTestClicked()));
+	connect(ui->pbShowHideTest, SIGNAL(pressed()), this, SLOT(pbShowHideTestClicked()));
 	connect(spinn, SIGNAL(frameOut(const QImage &)), edge, SLOT(putFrame(const QImage &)));
 	connect(spinn, SIGNAL(frameOut(const QImage &)), this, SLOT(frameReady()));
 	connect(spinn, SIGNAL(sendFrameDone()), this, SLOT(frameSent()));
@@ -81,10 +82,27 @@ void vidStreamer::cbSpiNNchanged(int idx)
 	if(idx==0) {
 		ui->sbNchips->setValue(4);
 		ui->sbNchips->setEnabled(false);
+		ui->ipAddr->setText("192.168.240.253");
 	} else {
 		ui->sbNchips->setEnabled(true);
+		ui->ipAddr->setText("192.168.240.1");
 	}
 
+}
+
+void vidStreamer::pbShowHideTestClicked()
+{
+    int _x,_y,w,h;
+    _x = x(); _y = y();
+    w = width(); h = height();
+    if(h < 600) {
+        this->setGeometry(_x,_y,w,600);
+        return;
+    }
+    if(h > 450) {
+        this->setGeometry(_x,_y,w,450);
+        return;
+    }
 }
 
 void vidStreamer::pbConfigureClicked()
