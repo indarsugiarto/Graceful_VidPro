@@ -67,6 +67,7 @@
 #define DEBUG_REPORT_NET_CONFIG 7       // only leadAp
 #define DEBUG_REPORT_PERF       8       // all cores
 #define DEBUG_REPORT_PLL_INFO   9       // only leadAp
+#define DEBUG_REPORT_HISTPROP   10      // only leadAp in root-node
 
 // We use timer to do some debugging facilities
 #define TIMER_TICK_PERIOD_US 	1000000
@@ -100,6 +101,7 @@
 #define SDP_PORT_FRAME_END      4   // instruct spinn to start decoding
 #define SDP_PORT_FRAME_INFO     5   // will be used to send the basic info about frame
 #define SDP_PORT_FPGA_OUT       6
+#define SDP_PORT_HISTO          6
 #define SDP_PORT_CONFIG			7	// for sending image/frame info
 
 // special for sending result and notification, srce_port can be used for chunk counter
@@ -110,6 +112,8 @@
 #define SDP_CMD_CONFIG_NETWORK  1   // for setting up the network
 #define SDP_CMD_GIVE_REPORT		2
 #define SDP_CMD_RESET_NETWORK   3   // will be sent so that all chips will have ID 0xFF
+#define SDP_CMD_SEND_PX_FPGA    4   // for sending pixels to FPGA board
+#define SDP_CMD_REPORT_HIST     5   // for sending histogram to parent node
 
 //#define SDP_CMD_CONFIG_CHAIN	11  // maybe we don't need it?
 #define SDP_CMD_PROCESS			3	// will be sent via SDP_PORT_CONFIG

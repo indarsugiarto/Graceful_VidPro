@@ -290,6 +290,9 @@ void give_report(uint reportType, uint target)
 		}
 
 	}
+	else if(reportType==DEBUG_REPORT_HISTPROP) {
+		io_printf(dest, "Histogram propagation clock period = %u\n", perf.tHistProp);
+	}
 #endif
 }
 
@@ -403,4 +406,16 @@ volatile uint giveDelay(uint delVal)
     step++;
   }
   return dummy;
+}
+
+
+void getChipXYfromID(ushort id, ushort *X, ushort *Y)
+{
+    for(ushort i=0; i<blkInfo->maxBlock; i++) {
+        if(chips[i].id = id) {
+            *X = chips[i].x;
+            *Y = chips[i].y;
+            break;
+        }
+    }
 }

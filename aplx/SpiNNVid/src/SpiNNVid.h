@@ -207,16 +207,31 @@ proc_t proc;
 
 
 typedef struct btree {
-  short p;              // parent node
-  short c[2];           // childred nodes
+  short p;                  // parent node
+  short c[2];               // childred nodes
+  uchar isLeaf;             // 1 if the node is a leaf, 0 otherwise
+  // for leadAp only:
+  uint  maxHistMCPLItem;    // should equal (nCoresForPixelPreProc-1)*256
+  uint MCPLItemCntr;
+  uchar maxHistSDPItem;     // should equal num_of_childre*4
+  uchar SDPItemCntr;
 } btree_t;
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
 /*-------------------------- Global/Static Variables --------------------------------*/
 
-// histogram data
+// newImageFlag will be set on in the beginning or when the host send something via
+// SDP_PORT_FRAME_END, and it will be set off when any pixel arrives.
+// newImageFlag will be usedful to indicate if the new image just arrives, for example
+// for computing the histogram
+uchar newImageFlag;
+
+// histogram-related data
+uint maxHistValue;
 uint hist[256];
+uint child1hist[256];
+uint child2hist[256];
 btree_t histPropTree;
 
 
@@ -224,7 +239,7 @@ btree_t histPropTree;
 sdp_msg_t replyMsg;				// prepare the reply message
 sdp_msg_t resultMsg;			// prepare the result data
 sdp_msg_t debugMsg;				// and the debug data
-
+sdp_msg_t histMsg;              // for propagating histogram data
 
 //ushort nodeCntr;				// to count, how many non-root nodes are present/active
 chain_t chips[MAX_NODES];
@@ -249,6 +264,8 @@ typedef struct meas {
     uint tEdge;                 // measuring edge detection for each core
     uint tEdgeNode;
     uint tEdgeTotal;
+    uint tHistProp;                 // measuring histogram propagation
+    uint tHist;                     // histogram computation in each core
 } meas_t;
 volatile uint64 tic, toc;
 volatile ushort elapse;
@@ -265,6 +282,7 @@ void initSDP();
 void initImage();
 void initIPTag();
 void initOther();
+void initHistData(uint arg0, uint arg1);    // will be called by computeWLoad(), contains construction of HistPropTree
 
 // Event handlers
 void hMCPL(uint key, uint payload);
@@ -276,6 +294,7 @@ void initCheck();
 uchar get_Nworkers();			// leadAp might want to know, how many workers are active
 uchar get_def_Nblocks();
 uchar get_block_id();			// get the block id, given the number of chips available
+void getChipXYfromID(ushort id, ushort *X, ushort *Y);
 
 // processing: worker discovery
 void initIDcollection(uint withBlkInfo, uint Unused);
@@ -289,11 +308,11 @@ void processGrayScaling(uint arg0, uint arg1);
 void recvFwdImgData(uint key, uint payload);
 void collectGrayPixels(uint arg0, uint arg1);
 
-void initHistData();    // will be called by computeWLoad(), contains construction of HistPropTree
-void computeHist();     // will use ypxbuf to compute the histogram
+void computeHist(uint arg0, uint arg1);     // will use ypxbuf to compute the histogram
 
 void triggerProcessing(uint arg0, uint arg1);
 void imgFiltering(uint arg0, uint arg1);
+void imgSharpening(uint arg0, uint arg1);
 void imgDetection(uint arg0, uint arg1);
 void afterProcessingDone(uint arg0, uint arg1);
 void sendDetectionResult2Host(uint nodeID, uint arg1);

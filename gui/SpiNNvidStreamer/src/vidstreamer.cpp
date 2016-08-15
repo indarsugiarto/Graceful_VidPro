@@ -61,7 +61,7 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	*/
 
 	oldNchips = 0;
-	experiment = 5;
+	experiment = 0;
 
 	if(experiment > 0) {
 		ui->rbLaplace->setChecked(true);
@@ -72,6 +72,7 @@ vidStreamer::vidStreamer(QWidget *parent) :
 		case 3: imgFilename = "../../../images/Elephant-xga.bmp"; break;
 		case 4: imgFilename = "../../../images/Elephant-sxga.bmp"; break;
 		case 5: imgFilename = "../../../images/Elephant-uxga.bmp"; break;
+		case 6: imgFilename = "../../../images/halfMillionCoreComplete-huxga.jpg"; break;
 		}
 
 	}

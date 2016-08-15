@@ -1,10 +1,3 @@
-
-Terakhir, aku taruh perintah computeHist() di bagian collectGrayPixels()
-Lah, kalau semua chip bisa computeHist(), berarti ndak perlu propagasi dengan cara binary tree?
-
-Mekanisme MCPL untuk histogram belum dibuat
-Perhitungan waktunya juga belum
-
 // All distributed processing mechanisms are in this file
 #include "SpiNNVid.h"
 #include <stdlib.h>	// need for abs()
@@ -202,8 +195,8 @@ void computeWLoad(uint withReport, uint arg1)
 	// debugging:
 	//give_report(DEBUG_REPORT_WLOAD, 1);
 
-	// final step: reset histogram data
-	initHistData();		// here, histPropTree will be constructed
+	// IT IS WRONG to put the initHistData() here, because initHistData MUST
+	// BE CALLED everytime a new image has arrived. So, we move it to processGrayScaling()
 }
 
 
@@ -342,6 +335,15 @@ void processGrayScaling(uint arg0, uint arg1)
 	// then forward the pixels to similar cores but in other chips
 	if(sv->p2p_addr==0)
 		spin1_schedule_callback(fwdImgData,0,0,PRIORITY_PROCESSING);
+
+	// final step: reset histogram data
+	if(newImageFlag==TRUE)
+		// here, histPropTree will be constructed
+		spin1_schedule_callback(initHistData, 0, 0, PRIORITY_PROCESSING);
+	else
+		spin1_schedule_callback(computeHist, 0, 0, PRIORITY_PROCESSING);
+	// then reset the newImageFlag
+	newImageFlag=FALSE;
 }
 
 // once the core receive chunks for all channels, it forwards them
@@ -415,7 +417,13 @@ void collectGrayPixels(uint arg0, uint arg1)
 	// then compute the histogram
 	// this will be performed by (almost) all cores in the chip that receive
 	// the gray pixels from root node
-	computeHist();
+	// final step: reset histogram data
+	if(newImageFlag==TRUE)
+		initHistData(0,0);		// here, histPropTree will be constructed
+	else
+		computeHist(0,0);
+	// then reset newImageFlag
+	newImageFlag=FALSE;
 }
 
 /*------------------------------------------------------------------------------------------*/
@@ -439,6 +447,10 @@ void triggerProcessing(uint arg0, uint arg1)
 		proc = PROC_HISTEQ;
 		// only if root-node and leadAp, trigger the histogram equalisation chain
 		if(sv->p2p_addr==0 && leadAp)
+
+			// start timer to measure time
+			START_TIMER();
+
 			spin1_send_mc_packet(MCPL_BCAST_REPORT_HIST, 0, WITH_PAYLOAD);
 			// MCPL_BCAST_REPORT_HIST will be broadcasted to all cores in all chips
 			// only core-1 to core-4 in all chips will response to this call, because
@@ -458,6 +470,17 @@ void triggerProcessing(uint arg0, uint arg1)
 #else
 		imgDetection(0,0);	// go edge detection directly
 #endif
+	}
+
+	// then reset newImageFlag so that the next frame can be detected properly
+	newImageFlag = TRUE;
+}
+
+void imgSharpening(uint arg0, uint arg1)
+{
+	if(workers.active==FALSE) {
+		io_printf(IO_BUF, "I'm disabled!\n");
+		return;
 	}
 }
 
@@ -640,6 +663,8 @@ void afterProcessingDone(uint arg0, uint arg1)
 // use workers.blkImgROut instead!
 // nodeID is the next node that is supposed to send the result
 // NOTE: in this version, we'll send the gray image. Refer to pA for rgb version!
+// The parameter arg1 is used for delay when sending the output to FPGA.
+// Hence, in normal operation (send the result to host-PC), arg1 should be 0.
 void sendDetectionResult2Host(uint nodeID, uint arg1)
 {
 
@@ -714,6 +739,11 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 			c++;		// for the resImgBuf pointer
 			resPtr += sz;
 			rem -= sz;
+#if (DESTINATION==DEST_FPGA)
+			// use arg1 as delay
+			// NOTE: Think this: if we introduce delay, then it is not efficient anymore!
+			sark_delay_us(arg1);
+#endif
 		} while(rem > 0);
 
 		// move to the next address
@@ -730,11 +760,12 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 	spin1_send_mc_packet(MCPL_BLOCK_DONE_TEDGE, perf.tEdgeNode, WITH_PAYLOAD);
 }
 
-// TODO: waiting for Gengting...
 void sendDetectionResult2FPGA(uint nodeID, uint arg1)
 {
 	// Since the SpiNN-link is connected to chip<0,0> we don't need
 	// different routing, but just using SDP to chip<0,0>
+	uint delayTime_us = 100;
+	sendDetectionResult2Host(nodeID, delayTime_us);
 }
 
 // notifyDestDone() is executed by <0,0,leadAp> only
@@ -756,35 +787,10 @@ void notifyDestDone(uint arg0, uint arg1)
 }
 
 
-// initHistData() should be called whenever a new image arrives
-// i.e., during the computeWLoad()
-void initHistData()
-{
-	for(uchar i=0; i<256; i++)
-		hist[i] = 0;
-	// construct histPropTree, so we know where to send the histogram result
-	// parent = (myNodeID - 1) / 2
-	// child_1 = (myNodeID * 2) + 1
-	// child_2 = child_1 + 1
-	if(blkInfo->nodeBlockID == 0)
-		histPropTree.p = -1;	// no parent
-	else
-		histPropTree.p = (blkInfo->nodeBlockID - 1) / 2;
-	short c;
-	histPropTree.c[0] = -1;		// no childer, by default
-	histPropTree.c[1] = -1;
-	c = blkInfo->nodeBlockID * 2 +1;
-	if(c < blkInfo->maxBlock) {
-		histPropTree.c[0] = c;
-		if((c + 1) < blkInfo->maxBlock)
-			histPropTree.c[1] = c + 1;
-	}
-}
-
 // computeHist() will use data in the ypxbuf
-void computeHist()
+void computeHist(uint arg0, uint arg1)
 {
-	for(ushort i=0; i<pxBuf.pxLen; i++) {
+	for(ushort i=0; i<pxBuffer.pxLen; i++) {
 		hist[ypxbuf[i]]++;
 	}
 }

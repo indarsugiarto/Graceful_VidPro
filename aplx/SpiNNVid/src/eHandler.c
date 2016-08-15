@@ -78,6 +78,62 @@ void configure_network(uint mBox)
 }
 
 
+void reportHistToLeader(uint arg0, uint arg1)
+{
+	if(leadAp) return;
+	for(uchar i=0; i<256; i++) {
+		spin1_send_mc_packet(MCPL_REPORT_HIST2LEAD + i, hist[i], WITH_PAYLOAD);
+	}
+}
+
+// in leaderUpdateHist(), leader will check if the node is leaf and send via SDP
+// accordingly. Alternatively, leaderUpdateHist() will be called if an SDP arrives
+// from children nodes
+
+void propagateHist()
+{
+	uchar i, *ptr;
+	ptr = (uchar *)hist;
+	for(i=0; i<sizeof(uint); i++) {
+		sark_mem_cpy(histMsg.data, ptr, 256);
+		histMsg.arg1 = i;
+		spin1_send_sdp_msg(&histMsg, 10);
+		ptr += 256;
+	}
+}
+
+void leaderUpdateHist(uint arg0, uint arg1)
+{
+	uchar i;
+	if(histPropTree.isLeaf) {
+		propagateHist();
+	}
+	else {
+		// collect histogram from children
+		if(histPropTree.SDPItemCntr == histPropTree.maxHistSDPItem) {
+			for(i=0; i<256; i++)
+				hist[i] += child1hist[i] + child2hist[i];
+			// if not the root-node, go propagate to the next parent
+			if(sv->p2p_addr != 0) {
+				propagateHist();
+			}
+			// if root-node, stop the propagation and broadcast the histogram
+			else {
+				maxHistValue = 0;
+				for(i=0; i<256; i++) {
+					maxHistValue += hist[i];
+					spin1_send_mc_packet(MCPL_BCAST_HIST_RESULT+i, hist[i], WITH_PAYLOAD);
+				}
+				// then measure time
+				perf.tHistProp = READ_TIMER();
+#if (DEBUG_LEVEL > 0)
+				io_printf(IO_STD, "Histogram propagation clock period = %u\n",
+						  perf.tHistProp);
+#endif
+			}
+		}
+	}
+}
 
 /*----------------------------------------------------------------*/
 /*----------------------------------------------------------------*/
@@ -236,6 +292,10 @@ void hMCPL(uint key, uint payload)
 		uchar id = (payload >> 16) & 0xFF;
 		uchar x = (payload >> 8) & 0xFF;
 		uchar y = (payload & 0xFF);
+
+		// put the list, so that it can be used in the future (eg. for histogram)
+		chips[id].id = id; chips[id].x = x; chips[id].y = y;
+
 		// now check if the payload contains information for me
 		if(x==blkInfo->myX && y==blkInfo->myY) {
 			blkInfo->nodeBlockID = id;
@@ -325,8 +385,16 @@ void hMCPL(uint key, uint payload)
 	//    Otherwise, it will wait the children nodes to send their histrogram
 	//MCPL_BCAST_REPORT_HIST
 
-	else if(key==MCPL_BCAST_REPORT_HIST) {
-		// each core need to report its histogram to leadAp:
+	else if(key == MCPL_BCAST_REPORT_HIST) {
+		// each core, EXCEPT the leadAP, needs to report its histogram to leadAp:
+		spin1_schedule_callback(reportHistToLeader, 0, 0, PRIORITY_PROCESSING);
+	}
+	else if(key_hdr == MCPL_REPORT_HIST2LEAD) {
+		hist[key_arg] += payload;
+		histPropTree.MCPLItemCntr++;
+		if(histPropTree.MCPLItemCntr == histPropTree.maxHistMCPLItem) {
+			spin1_schedule_callback(leaderUpdateHist, 0, 0, PRIORITY_PROCESSING);
+		}
 	}
 
 	/*----------------------------------------------------------------------------*/
@@ -509,31 +577,53 @@ void hSDP(uint mBox, uint port)
 	}
 
 	else if(port==SDP_PORT_FPGA_OUT) {
-		// TODO: extract the data and convert into fix-route
-		// The sending uses "special" modification of the header:
-		// resultMsg.srce_addr = lines;	// is it useful??? for debugging!!!
-		// resultMsg.srce_port = c;	// is it useful???
-		// When all lines has been sent, the following will be sent SDP_SRCE_NOTIFY_PORT
-		// by chip<0,0>. So, we don't need this!
-		ushort x, c, i, l;
-		uchar px;
-		uchar *p;
-		ushort y = msg->srce_addr;
-		if(msg->srce_port!=SDP_SRCE_NOTIFY_PORT) {
-			l = msg->length-sizeof(sdp_hdr_t);
-			c = msg->srce_port;
-			p = (uchar *)&msg->cmd_rc;
-			for(i=0; i<l; i++) {
-				x = c*272+i;
-				px = *(p+i);
+		if(msg->cmd_rc==SDP_CMD_SEND_PX_FPGA) {
+			// TODO: extract the data and convert into fix-route
+			// The sending uses "special" modification of the header:
+			// resultMsg.srce_addr = lines;	// is it useful??? for debugging!!!
+			// resultMsg.srce_port = c;	// is it useful???
+			// When all lines has been sent, the following will be sent SDP_SRCE_NOTIFY_PORT
+			// by chip<0,0>. So, we don't need this!
+			ushort x, c, i, l;
+			uchar px;
+			uchar *p;
+			ushort y = msg->srce_addr;
+			if(msg->srce_port!=SDP_SRCE_NOTIFY_PORT) {
+				l = msg->length-sizeof(sdp_hdr_t);
+				c = msg->srce_port;
+				p = (uchar *)&msg->cmd_rc;
+				for(i=0; i<l; i++) {
+					x = c*272+i;
+					px = *(p+i);
+					// we don't need to modify msb of x and y because we send gray image
+					// in the future, we might change this!
+					// now we have [x,y,px]
+					uint key, dest = 1 << 4;	// NOTE: going to link-4
+					rtr_fr_set(dest);
+					key = (((uint)x << 16) | y) & 0x7FFF7FFF;
+					spin1_send_fr_packet(key, px, WITH_PAYLOAD);
+				}
 			}
-			// we don't need to modify msb of x and y because we send gray image
-			// in the future, we might change this!
-			// now we have [x,y,px]
-			uint key, dest = 1 << 4;	// NOTE: going to link-4
-			rtr_fr_set(dest);
-			key = (((uint)x << 16) | y) & 0x7FFF7FFF;
-			spin1_send_fr_packet(key, px, WITH_PAYLOAD);
+		}
+	}
+
+	else if(port==SDP_PORT_HISTO) {
+		if(msg->cmd_rc==SDP_CMD_REPORT_HIST) {
+			uchar *ptr;
+			if(msg->seq == histPropTree.c[0]) {
+				ptr = (uchar *)child1hist;
+			}
+			else {
+				ptr = (uchar *)child2hist;
+			}
+
+			// then copy the sdp data
+			ptr += msg->arg1*256;
+			sark_mem_cpy(ptr, msg->data, 256);
+
+			// then check if all children have reported their histogram
+			histPropTree.SDPItemCntr++;
+			spin1_schedule_callback(leaderUpdateHist, 0, 0, PRIORITY_PROCESSING);
 		}
 	}
 

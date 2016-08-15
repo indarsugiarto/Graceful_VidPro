@@ -240,6 +240,14 @@ void initSDP()
 	debugMsg.dest_port = PORT_ETH;
 	debugMsg.dest_addr = sv->eth_addr;
 	debugMsg.length = sizeof(sdp_hdr_t) + sizeof(cmd_hdr_t);
+
+	// and the histogram data
+	histMsg.flags = 0x07;
+	histMsg.tag = 0;
+	histMsg.srce_addr = sv->p2p_addr;
+	histMsg.srce_port = (SDP_PORT_HISTO << 5) + myCoreID;
+	histMsg.dest_port = (SDP_PORT_HISTO << 5) + 1;	// WARNING: assuming leadAp is core-1
+	histMsg.length = sizeof(sdp_hdr_t) + sizeof(cmd_hdr_t) + 256;
 }
 
 // initImage() should be called by leadAp to initialize buffers
@@ -295,3 +303,55 @@ void initIPTag()
 		spin1_send_sdp_msg(&iptag, 10);
 	}
 }
+
+// initHistData() should be called whenever a new image arrives
+// i.e., during the computeWLoad()
+void initHistData(uint arg0, uint arg1)
+{
+	for(uchar i=0; i<256; i++) {
+		hist[i] = 0;
+		child1hist[i] = 0;
+		child2hist[i] = 0;
+	}
+	// construct histPropTree, so we know where to send the histogram result
+	// parent = (myNodeID - 1) / 2
+	// child_1 = (myNodeID * 2) + 1
+	// child_2 = child_1 + 1
+	if(blkInfo->nodeBlockID == 0)
+		histPropTree.p = -1;	// no parent
+	else
+		histPropTree.p = (blkInfo->nodeBlockID - 1) / 2;
+	short c, nc;
+	histPropTree.c[0] = -1;		// no childer, by default
+	histPropTree.c[1] = -1;
+	c = blkInfo->nodeBlockID * 2 +1;
+	if(c < blkInfo->maxBlock) {
+		histPropTree.c[0] = c;
+		nc = 1;
+		if((c + 1) < blkInfo->maxBlock) {
+			histPropTree.c[1] = c + 1;
+			nc++;
+		}
+		histPropTree.isLeaf = 0;
+	}
+	else {
+		nc = 0;
+		histPropTree.isLeaf = 1;	// I am a leaf node?
+	}
+
+	// prepare histMsg header
+	// TODO: how can the node know the address of its parent?
+	ushort px, py;
+	getChipXYfromID(histPropTree.p, &px, &py);
+	histMsg.dest_addr = (px << 8) + py;
+	histMsg.cmd_rc = SDP_CMD_REPORT_HIST;
+	histMsg.seq = blkInfo->nodeBlockID;
+
+	// additionally for leadAp:
+	// it receives MCPL_REPORT_HIST2LEAD from other cores this many:
+	histPropTree.maxHistMCPLItem = (nCoresForPixelPreProc-1) * 256;
+	histPropTree.MCPLItemCntr = 0;
+	histPropTree.maxHistSDPItem = nc*4;
+	histPropTree.SDPItemCntr = 0;
+}
+

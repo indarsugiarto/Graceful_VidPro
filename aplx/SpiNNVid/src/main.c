@@ -14,6 +14,7 @@ void c_main(void)
 	// by default, we assign NUM_CORES_FOR_BCAST_PIXEL cores for pre-processing
 	// (i.e. grayscaling and histogram counting)
 	nCoresForPixelPreProc = NUM_CORES_FOR_BCAST_PIXEL;	// can be changed via SDP
+	newImageFlag = TRUE;
 
 	// do sanity check
 	initCheck();
