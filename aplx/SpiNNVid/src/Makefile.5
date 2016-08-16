@@ -32,8 +32,8 @@ OUTPUT_DIR := ../../binaries/
 # Set up the various compile/link options for GNU tools
 
 AS := $(GP)-as --defsym GNU=1 -mthumb-interwork -march=armv5te
-CC := $(GP)-gcc -c -Os -mthumb-interwork -march=armv5te -std=gnu99 -I $(INC_DIR) -mthumb -DTHUMB -DUSING_SPIN=5
-#CC := $(GP)-gcc -c -O3 -mthumb-interwork -march=armv5te -std=gnu99 -I $(INC_DIR) -mthumb -DTHUMB
+#CC := $(GP)-gcc -c -Os -mthumb-interwork -march=armv5te -std=gnu99 -I $(INC_DIR) -mthumb -DTHUMB -DUSING_SPIN=5
+CC := $(GP)-gcc -c -O3 -mthumb-interwork -march=armv5te -std=gnu99 -I $(INC_DIR) -mthumb -DTHUMB -DUSING_SPIN=5
 LD := $(GP)-gcc -T$(SCRIPT) -Wl,-e,cpu_reset -Wl,--gc-sections -Wl,--use-blx
 AR := $(GP)-ar -rcs
 OC := $(GP)-objcopy

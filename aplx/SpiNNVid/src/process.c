@@ -336,6 +336,7 @@ void processGrayScaling(uint arg0, uint arg1)
 	if(sv->p2p_addr==0)
 		spin1_schedule_callback(fwdImgData,0,0,PRIORITY_PROCESSING);
 
+	/* Debugging 16 Agustus: matikan dulu histogram-nya
 	// final step: reset histogram data
 	if(newImageFlag==TRUE)
 		// here, histPropTree will be constructed
@@ -343,6 +344,8 @@ void processGrayScaling(uint arg0, uint arg1)
 	else
 		spin1_schedule_callback(computeHist, 0, 0, PRIORITY_PROCESSING);
 	// then reset the newImageFlag
+	*/
+
 	newImageFlag=FALSE;
 }
 
@@ -414,6 +417,9 @@ void collectGrayPixels(uint arg0, uint arg1)
 	// coba dengan manual copy: hasilnya? SEMPURNA !!!!
 	sark_mem_cpy((void *)blkInfo->imgOut1+offset, (void *)ypxbuf, pxBuffer.pxLen);
 
+
+	/* Debugging 16 Agustus: matikan dulu histogram-nya
+
 	// then compute the histogram
 	// this will be performed by (almost) all cores in the chip that receive
 	// the gray pixels from root node
@@ -423,6 +429,9 @@ void collectGrayPixels(uint arg0, uint arg1)
 	else
 		computeHist(0,0);
 	// then reset newImageFlag
+	*/
+
+
 	newImageFlag=FALSE;
 }
 
@@ -443,6 +452,7 @@ void triggerProcessing(uint arg0, uint arg1)
 	perf.tEdgeTotal = 0;
 	nBlockDone = 0;
 
+	/*
 	if(blkInfo->opSharpen==1) {
 		proc = PROC_HISTEQ;
 		// only if root-node and leadAp, trigger the histogram equalisation chain
@@ -471,6 +481,16 @@ void triggerProcessing(uint arg0, uint arg1)
 		imgDetection(0,0);	// go edge detection directly
 #endif
 	}
+
+	*/
+	proc = PROC_EDGING;
+#if (ADAPTIVE_FREQ==TRUE)
+		//changeFreq(250);
+		imgDetection(0,0);	// go edge detection directly
+		//changeFreq(200);
+#else
+		imgDetection(0,0);	// go edge detection directly
+#endif
 
 	// then reset newImageFlag so that the next frame can be detected properly
 	newImageFlag = TRUE;

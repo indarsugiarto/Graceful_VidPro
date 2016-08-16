@@ -51,6 +51,8 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	cbSpiNNchanged(ui->cbSpiNN->currentIndex());
 	connect(ui->cbSpiNN, SIGNAL(currentIndexChanged(int)), this, SLOT(cbSpiNNchanged(int)));
 
+	oldNchips = 0;	// just for tracking if a new number of nodes is entered
+
 	// let's test
 
 	//ui->pbConfigure->click();
@@ -60,12 +62,11 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	spinn->configSpin(1, 350, 350);
 	*/
 
-	oldNchips = 0;
-	experiment = 0;
+	experiment = 10;
 
 	if(experiment > 0) {
 		ui->rbLaplace->setChecked(true);
-		//ui->cbFreq->setCurrentIndex(1);
+		ui->cbFreq->setCurrentIndex(1);
 		switch(experiment){
 		case 1: imgFilename = "../../../images/Elephant-vga.bmp"; break;
 		case 2: imgFilename = "../../../images/Elephant-svga.bmp"; break;
@@ -73,6 +74,10 @@ vidStreamer::vidStreamer(QWidget *parent) :
 		case 4: imgFilename = "../../../images/Elephant-sxga.bmp"; break;
 		case 5: imgFilename = "../../../images/Elephant-uxga.bmp"; break;
 		case 6: imgFilename = "../../../images/halfMillionCoreComplete-huxga.jpg"; break;
+		case 7: imgFilename = "../../../images/spinn-512x512.jpg"; break;
+		case 8: imgFilename = "../../../images/spinn-1024x1024.jpg"; break;
+		case 9: imgFilename = "../../../images/spinn-1476x1680.jpg"; break;
+		case 10: imgFilename = "../../../images/spinn-3936x3936.jpg"; break;
 		}
 
 	}

@@ -418,10 +418,9 @@ void hSDP(uint mBox, uint port)
 	//       especially when delivering frame's channel
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
 	/*
-	io_printf(IO_STD, "got sdp tag = 0x%x, srce_port = 0x%x, srce_addr = 0x%x\n",
-			  msg->tag, msg->srce_port, msg->srce_addr);
+	io_printf(IO_STD, "got sdp tag = 0x%x, srce_port = 0x%x, srce_addr = 0x%x, dest_port = 0x%x\n",
+			  msg->tag, msg->srce_port, msg->srce_addr, msg->dest_port);
 	*/
-
 	if(port==SDP_PORT_CONFIG) {
 		if(msg->cmd_rc == SDP_CMD_CONFIG_NETWORK) {
 			// will send: maxBlock, nodeID, op-type
