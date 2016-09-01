@@ -1,0 +1,7 @@
+In this branch, we want to properly manage the profiler program inside the pC-vidPro,
+because we are going to use pC-vidPro for Graceful scenario with Q-Learning.
+
+The idea:
+- Core-1 will be used for the profiler app, and the remaining cores will be used
+  for pC-vidPro (SpiNNVid*.aplx)
+- The profiler program will have the same app-ID with SpiNNVid*.aplx
