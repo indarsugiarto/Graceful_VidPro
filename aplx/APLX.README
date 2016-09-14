@@ -76,3 +76,13 @@ Ada masalah dengan dma :
 - Meskipun teknik copy manual ke sdram menghasilkan hasil yang sempurna, tapi sepertinya
   hanya berfungsi untuk kecepatan sedang. Kalau kecepatan dinaikkan, hasilnya juga
   ada noise seperti dengan dma.
+
+
+
+------------------ Regarding network/nodes configuration --------------------
+- The network/nodes configuration is sent via SDP port SDP_PORT_CONFIG with command
+  SDP_CMD_CONFIG_NETWORK. So, the sdp format is:
+  cmd_rc = SDP_CMD_CONFIG_NETWORK
+  seq = opType | opFilter | Sharpen -> each is 4 bits
+  srce_port = expected running frequency
+

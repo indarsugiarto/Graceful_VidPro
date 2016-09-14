@@ -9,6 +9,8 @@
  *   it seems that the max frequency is 270MHz
  *
  * CPUs use PLL1
+ *
+ * NOTE: the profiler core doesn't use MCPL but FR
  */
 #include <spin1_api.h>
 #include "defSpiNNVid.h"
@@ -21,6 +23,19 @@
 
 //#define REPORT_TIMER_TICK_PERIOD_US	1000000	// to get 1s resolution in FREQ_REF_200MHZ
 #define FREQ_REF_200MHZ				200
+
+#define IDLE_UPDATE_PERIOD      100     // in microsecs, assuming 200MHz
+#define IDLE_SAMPLE_PERIOD      1000    // the ratio value to IDLE_UPDATE_PERIOD
+                                        // so, if IDLE_UPDATE_PERIOD is 100 and
+                                        // IDLE_SAMPLE_PERIOD is 1000, then
+                                        // the idle counter is sampled every 100ms
+#define IDLE_RAW_FORMAT         0       // in raw format
+#define IDLE_REAL_FORMAT        1       // in relative (percentage) REAL format
+#define IDLE_FLOAT_FORMAT       2       // in relative (percentage) FLOAT format
+
+#define IDLE_VIC_SLOT           SLOT_FIQ
+
+
 
 // related with frequency scalling
 #define lnMemTable					93
@@ -123,28 +138,13 @@ static uchar memTable[lnMemTable][wdMemTable] = {
 {255,1,51},
 };
 
-/* global variables */
-uchar myPhyCore;
-
-// reading temperature sensors
-uint tempVal[3];							// there are 3 sensors in each chip
-uint cpuIdleCntr[18];						// for all cpus
-uint myOwnIdleCntr;							// since my flag in r25 is alway on, it gives me ALWAYS zero counts
-uint avgCPUidle;							// TODO: how to measure it?
-float avgCPUload;							// average CPU load / utilization
-
-// PLL and frequency related (for internal purpose):
-uint _r20, _r21, _r24;						// the original value of r20, r21, and r24
-uint r20, r21, r24, r25;					// the current value of r20, r21 and r24 during *this* experiment
-uint _freq;									// ref/original frequency
-uint currentFreq;
-
-/*----------------------------------------------------------------*/
-/*----------------------------------------------------------------*/
-/*----------------------------------------------------------------*/
 /*----------------------------------------------------------------*/
 /*----------------------------------------------------------------*/
 /*---------------------- function prototypes ---------------------*/
+
+// communication with other cores via MCPL
+void hMCPL_profiler(uint key, uint payload);
+
 // temperature-related
 void readTemp();
 
@@ -155,26 +155,16 @@ void changePLL(uint flag);
 uint readSpinFreqVal();
 
 // cpu-utilisation related
-void idle(uint arg0, uint arg1);
+extern void idle();							// it is moved/defined in isr.c
 void disableCPU(uint virtCoreID, uint none);
 void enableCPU(uint virtCoreID, uint none);
-void computeAvgCPUidle();
+// void computeAvgCPUidle();				// deprecated, replaced with getProcUtil()
+void getProcUtil(uint idleCntr[18], uchar format);
 
-// initProfiler will set timer-2 and PLL
-void initProfiler();		// mainly for changing PLL-2
-void terminateProfiler();	// and for restoring PLL-2
-
-// the following values are based on manual experiment
-typedef struct idle_cntr
-{
-	uint freq;
-	uint cntr;
-} idle_cntr_t;
-// lnMemTable is used in the profiler.h
-idle_cntr_t idle_cntr_table[lnMemTable];
-
-void buildIdleCntrTable();
-uint getMaxCntrFromFreq(uint freq);
+// initProfiler() will set the CPUs frequency to cpuFreq and return
+// the current (real?) frequency -> can be used for reporting/debugging
+uint initProfiler(uint cpuFreq);		// mainly for changing PLL-2
+void terminateProfiler(uint cpuFreq);	// and for restoring PLL-2
 
 #endif // PROFILER_H
 

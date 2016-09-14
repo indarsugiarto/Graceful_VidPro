@@ -1,8 +1,13 @@
+/* Default definitions used in the app SpiNNVid
+ *
+ * This file is also included by the GUI program
+ */
+
 #ifndef DEFSPINNVID_H
 #define DEFSPINNVID_H
 
-#define MAJOR_VERSION           0
-#define MINOR_VERSION           3
+#define MAJOR_VERSION               0
+#define MINOR_VERSION               3
 
 // Version log
 // 0.1 Sending frame to SpiNNaker at 10MBps
@@ -10,7 +15,7 @@
 // 0.3 Do histogram equalization
 
 
-#define ADAPTIVE_FREQ   FALSE
+#define ADAPTIVE_FREQ               FALSE
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
@@ -18,24 +23,32 @@
 // forward RGB or just gray pixels?
 // forwarding RGB is slower, but might be useful for general image processing
 // in the future
-#define FWD_FULL_COLOR          FALSE
+#define FWD_FULL_COLOR              FALSE
 
 // now we have a Makefile that generates two aplx for spin3 and spin5
 //#define USING_SPIN				5	// 3 for spin3, 5 for spin5
+#define SPIN3_END_IP                253
+#define SPIN5_END_IP                1
+
 
 // if USE_FIX_NODES is used, the node configuration MUST be supplied in the beginning
 //#define USE_FIX_NODES               // use 4 chips or 48 chips
 
 #if(USING_SPIN==3)
-#define MAX_NODES               4
+#define MAX_NODES                   4
 #elif(USING_SPIN==5)
-#define MAX_NODES               48
+#define MAX_NODES                   48
 #endif
 
 // related with stdfix.h
-#define REAL                    accum
-#define REAL_CONST(x)           x##k
+#define REAL                        accum
+#define REAL_CONST(x)               x##k
 
+
+// define, which core will take the leading role? Note, core-1 will be used
+// for the profiler. TODO: check all leadAp usage!!!
+#define PROF_CORE					1	// profiler
+#define LEAD_CORE                   2	// lead core for SpiNNVid
 
 // how many cores are used for pixel propagation (and histogram calculation)?
 // this value MUST BE THE SAME with the number of cores used during SDP
@@ -43,103 +56,105 @@
 #define NUM_CORES_FOR_BCAST_PIXEL   16
 
 // all constants below must be positive
-#define R_GRAY                  REAL_CONST(0.2989)
-#define G_GRAY                  REAL_CONST(0.5870)
-#define B_GRAY                  REAL_CONST(0.1140)
+#define R_GRAY                      REAL_CONST(0.2989)
+#define G_GRAY                      REAL_CONST(0.5870)
+#define B_GRAY                      REAL_CONST(0.1140)
 
 // where will the result be sent? To Host or to FPGA board
-#define DEST_HOST			1
-#define DEST_FPGA			2
-#define DESTINATION			DEST_HOST
+#define DEST_HOST                   1
+#define DEST_FPGA                   2
+#define DESTINATION                 DEST_HOST
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
 /*--------------------- Debugging and reporting definition --------------------------*/
 //#define DEBUG_LEVEL				0	// no debugging message at all
-#define DEBUG_LEVEL				1
+#define DEBUG_LEVEL                 1
 // various report for debugging (send by host):
-#define DEBUG_REPORT_NWORKERS	1		// only leadAp
-#define DEBUG_REPORT_WID		2		// only leadAp
-#define DEBUG_REPORT_BLKINFO	3		// only leadAp
-#define DEBUG_REPORT_MYWID		4		// all cores
-#define DEBUG_REPORT_WLOAD		5		// all cores, report via tag-3
-#define DEBUG_REPORT_FRAMEINFO	6       // all cores
-#define DEBUG_REPORT_NET_CONFIG 7       // only leadAp
-#define DEBUG_REPORT_PERF       8       // all cores
-#define DEBUG_REPORT_PLL_INFO   9       // only leadAp
-#define DEBUG_REPORT_HISTPROP   10      // only leadAp in root-node
+#define DEBUG_REPORT_NWORKERS       1		// only leadAp
+#define DEBUG_REPORT_WID            2		// only leadAp
+#define DEBUG_REPORT_BLKINFO        3		// only leadAp
+#define DEBUG_REPORT_MYWID          4		// all cores
+#define DEBUG_REPORT_WLOAD          5		// all cores, report via tag-3
+#define DEBUG_REPORT_FRAMEINFO      6       // all cores
+#define DEBUG_REPORT_NET_CONFIG     7       // only leadAp
+#define DEBUG_REPORT_PERF           8       // all cores
+#define DEBUG_REPORT_PLL_INFO       9       // only leadAp
+#define DEBUG_REPORT_HISTPROP       10      // only leadAp in root-node
 
 // We use timer to do some debugging facilities
-#define TIMER_TICK_PERIOD_US 	1000000
+#define TIMER_TICK_PERIOD_US        1000000
 
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
 /*----------------------------- Basic spin1_api related -----------------------------*/
-#define PRIORITY_LOWEST         4
-#define PRIORITY_IDLE           PRIORITY_LOWEST
-#define PRIORITY_TIMER			3
-#define PRIORITY_PROCESSING		2
-#define PRIORITY_SDP			1
-#define PRIORITY_DMA			0
-#define PRIORITY_MCPL			-1
+#define PRIORITY_LOWEST             4
+#define PRIORITY_IDLE               PRIORITY_LOWEST
+#define PRIORITY_TIMER              3
+#define PRIORITY_PROCESSING         2
+#define PRIORITY_SDP                1
+#define PRIORITY_DMA                0
+#define PRIORITY_MCPL               -1
 
-#define DEF_SEND_PORT                   17893           // tidak bisa diganti dengan yang lain
+#define DEF_SEND_PORT               17893           // tidak bisa diganti dengan yang lain
 
-#define DEF_SDP_TIMEOUT			10		// datasheet says 10 is enough
-#define SDP_TAG_REPLY			1
-#define SDP_UDP_REPLY_PORT		20001
-#define SDP_HOST_IP			0x02F0A8C0	// 192.168.240.2, dibalik!
-#define SDP_TAG_RESULT			2
+#define DEF_SDP_TIMEOUT             10				// datasheet says 10 is enough
+#define SDP_TAG_REPLY               1
+#define SDP_UDP_REPLY_PORT          20001
+//note: if the host IP is different than 192.168.240.2, it should be specified here!!!
+#define SDP_HOST_IP                 0x02F0A8C0		// 192.168.240.2, dibalik!
+#define SDP_TAG_RESULT              2
 #define SDP_UDP_RESULT_PORT        	20002
-#define SDP_TAG_DEBUG                   3
-#define SDP_UDP_DEBUG_PORT              20003
+#define SDP_TAG_DEBUG				3
+#define SDP_UDP_DEBUG_PORT			20003
 
-#define SDP_PORT_R_IMG_DATA		1	// port for sending R-channel
-#define SDP_PORT_G_IMG_DATA		2	// port for sending G-channel
-#define SDP_PORT_B_IMG_DATA		3	// port for sending B-channel
-#define SDP_PORT_FRAME_END      4   // instruct spinn to start decoding
-#define SDP_PORT_FRAME_INFO     5   // will be used to send the basic info about frame
-#define SDP_PORT_FPGA_OUT       6
-#define SDP_PORT_HISTO          6
-#define SDP_PORT_CONFIG			7	// for sending image/frame info
+#define SDP_PORT_R_IMG_DATA			1	// port for sending R-channel
+#define SDP_PORT_G_IMG_DATA			2	// port for sending G-channel
+#define SDP_PORT_B_IMG_DATA			3	// port for sending B-channel
+#define SDP_PORT_FRAME_END			4   // instruct spinn to start decoding
+//#define SDP_PORT_FRAME_INFO			5   // will be used to send the basic info about frame
+#define SDP_PORT_FPGA_OUT			5
+#define SDP_PORT_HISTO				6
+#define SDP_PORT_CONFIG				7	// for sending image/frame info
 
 // special for sending result and notification, srce_port can be used for chunk counter
 // while srce_addr can be used as line number of the image
-#define SDP_SRCE_NOTIFY_PORT	0xFE	// cannot use 0xFF because of ETH
+#define SDP_SRCE_NOTIFY_PORT		0xFE	// cannot use 0xFF because of ETH
 
 //#define SDP_CMD_CONFIG			1	// will be sent via SDP_PORT_CONFIG
-#define SDP_CMD_CONFIG_NETWORK  1   // for setting up the network
-#define SDP_CMD_GIVE_REPORT		2
-#define SDP_CMD_RESET_NETWORK   3   // will be sent so that all chips will have ID 0xFF
-#define SDP_CMD_SEND_PX_FPGA    4   // for sending pixels to FPGA board
-#define SDP_CMD_REPORT_HIST     5   // for sending histogram to parent node
+#define SDP_CMD_CONFIG_NETWORK  	1   // for setting up the network
+#define SDP_CMD_GIVE_REPORT			2
+#define SDP_CMD_RESET_NETWORK   	3   // will be sent so that all chips will have ID 0xFF
+#define SDP_CMD_FRAME_INFO			4
+#define SDP_CMD_SEND_PX_FPGA    	5   // for sending pixels to FPGA board
+#define SDP_CMD_REPORT_HIST     	6   // for sending histogram to parent node
 
 //#define SDP_CMD_CONFIG_CHAIN	11  // maybe we don't need it?
-#define SDP_CMD_PROCESS			3	// will be sent via SDP_PORT_CONFIG
-#define SDP_CMD_CLEAR			4	// will be sent via SDP_PORT_CONFIG
-#define SDP_CMD_ACK_RESULT		5
+#define SDP_CMD_PROCESS				3	// will be sent via SDP_PORT_CONFIG
+#define SDP_CMD_CLEAR				4	// will be sent via SDP_PORT_CONFIG
+#define SDP_CMD_ACK_RESULT			5
 
 
-#define SPINNVID_APP_ID			16
+#define SPINNVID_APP_ID				16
 
 // From my experiment with test_sdp_stream_to_host:
 // for sending chunks to spinnaker:
-#define DEF_QT_WAIT_VAL		200	// in nanosecond
-#define DEF_PY_WAIT_VAL		200
+#define DEF_QT_WAIT_VAL				200	// in nanosecond
+#define DEF_PY_WAIT_VAL				200
 // for sending chunks from spinnaker:
-#define DEF_DEL_VAL		900  // perfect, up to 5.7MBps
+#define DEF_DEL_VAL					900  // perfect, up to 5.7MBps
 
 
 // dma transfer
 //#define DMA_TAG_STORE_FRAME		10
-#define DMA_TAG_STORE_R_PIXELS	20
-#define DMA_TAG_STORE_G_PIXELS	40
-#define DMA_TAG_STORE_B_PIXELS	60
-#define DMA_TAG_STORE_Y_PIXELS	80
+#define DMA_TAG_STORE_R_PIXELS		20
+#define DMA_TAG_STORE_G_PIXELS		40
+#define DMA_TAG_STORE_B_PIXELS		60
+#define DMA_TAG_STORE_Y_PIXELS		80
 
-#define DMA_FETCH_IMG_TAG		100
-#define DMA_STORE_IMG_TAG		120
+#define DMA_FETCH_IMG_TAG			100
+#define DMA_STORE_IMG_TAG			120
 
 
 /*-----------------------------------------------------------------------------------*/
@@ -206,17 +221,20 @@
 /*-----------------------------------------------------------------------------------*/
 /*-------------------------- Image Processing Stuffs --------------------------------*/
 // Where will we put the frames
+/* old version: we use fix address for image location
+ * new version: it should be allocated via sark_xalloc
 #define IMG_R_BUFF0_BASE		0x61000000	// for storing R-channel
 #define IMG_G_BUFF0_BASE		0x62000000	// for storing G-channel
 #define IMG_B_BUFF0_BASE		0x63000000	// for storing B-channel
 #define IMG_O_BUFF1_BASE		0x64000000	// the result
 #define IMG_O_BUFF2_BASE		0x65000000	// optional: result after filtering
 #define IMG_O_BUFF3_BASE		0x66000000	// optional:
+*/
 
-#define IMG_SOBEL				0
-#define IMG_LAPLACE				1
-#define IMG_WITHOUT_FILTER		0
-#define IMG_WITH_FILTER			1
+#define IMG_SOBEL					0
+#define IMG_LAPLACE					1
+#define IMG_WITHOUT_FILTER			0
+#define IMG_WITH_FILTER				1
 
 
 #endif // DEFSPINNVID_H

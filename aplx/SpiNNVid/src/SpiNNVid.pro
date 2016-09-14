@@ -23,7 +23,8 @@ DISTFILES += \
     ../../tester/testStreamFrame.py \
     Makefile.3 \
     Makefile.5 \
-    museum
+    museum \
+    ../../../HOW.DOES.IT.WORK
 
 HEADERS += \
     SpiNNVid.h \

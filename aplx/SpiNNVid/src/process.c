@@ -473,7 +473,7 @@ void triggerProcessing(uint arg0, uint arg1)
 	}
 	else {
 		proc = PROC_EDGING;
-#if (ADAPTIVE_FREQ==TRUE)
+#if (adaptiveFreq==TRUE)
 		//changeFreq(250);
 		imgDetection(0,0);	// go edge detection directly
 		//changeFreq(200);
@@ -484,7 +484,7 @@ void triggerProcessing(uint arg0, uint arg1)
 
 	*/
 	proc = PROC_EDGING;
-#if (ADAPTIVE_FREQ==TRUE)
+#if (adaptiveFreq==TRUE)
 		//changeFreq(250);
 		imgDetection(0,0);	// go edge detection directly
 		//changeFreq(200);

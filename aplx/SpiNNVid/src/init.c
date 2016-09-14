@@ -1,55 +1,61 @@
 #include "SpiNNVid.h"
 
+// just a fwd declaration for the profiler
 extern void initProfiler();
 
 // the sanity check:
-// 1. check if the board is correct --> we use fix N-nodes
+// check if the board and app-id are correct
 void initCheck()
 {
 	uchar ip = sv->ip_addr[3];
+
+	// only root-node has ip variable correctly specified !!!
 	if(sv->p2p_addr==0) {
+
+// note on USING_SPIN: it is defined in the Makefile.3 and Makefile.5
 #if(USING_SPIN==3)
-		if(ip!=253) {
+		if(ip!=SPIN3_END_IP) {
 			io_printf(IO_STD, "Invalid target board! Got IP-%d\n", ip);
-			// rt_error(RTE_ABORT);
-			spin1_exit(RTE_ABORT);
+			// rt_error(RTE_ABORT);	// cannot use rt_error and spin1_exit together!!!
+			// spin1_exit(RTE_ABORT);	// see ~/Projects/SpiNN/general/miscTest/cekTimer
+			terminate_SpiNNVid(IO_DBG, NULL, RTE_SWERR);
 		}
 #else
-		if(ip != 1) {
+		if(ip != SPIN5_END_IP) {
 			io_printf(IO_STD, "Invalid target board! Got IP-%d\n", ip);
-			rt_error(RTE_ABORT);
-			spin1_exit(1);
+			terminate_SpiNNVid(IO_DBG, NULL, RTE_SWERR);
 		}
 #endif
 	}
 
 	// check App-ID
 	if(sark_app_id() != SPINNVID_APP_ID) {
-		io_printf(IO_STD, "Invalid App-ID!\n");
-		// rt_error(RTE_ABORT);
-		spin1_exit(RTE_ABORT);
+		io_printf(IO_STD, "Invalid App-ID! Please assign this ID: %d\n", SPINNVID_APP_ID);
+		terminate_SpiNNVid(IO_DBG, NULL, RTE_SWERR);
 	}
 
 }
 
-/* initRouter() initialize MCPL routing table by leadAp. Normally, there are two keys:
+/* initRouter() initialize MCPL routing table by leadCore. Normally, there are two keys:
  * MCPL_BCAST_KEY and MCPL_TO_LEADER
  * */
 void initRouter()
 {
 	uint allRoute = 0xFFFF80;			// excluding core-0 and external links
+	uint profiler = (1 << (PROF_CORE+6));
 	uint leader = (1 << (myCoreID+6));	// only for leadAp
 	uint workers = allRoute & ~leader;	// for other workers in the chip
+	workers &= (~profiler);				// exclude profiler
 	uint dest;
 	ushort x, y, d;
 
-	/*-----------------------------------------------*/
-	/*--------- keys for intra-chip routing ---------*/
+	/*----------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------*/
+	/*----------------------- keys for intra-chip routing ------------------------*/
 	// first, set individual destination, assuming all 17-cores are available
 	uint e = rtr_alloc(17);
 	if(e==0) {
-		io_printf(IO_STD, "initRouter err!\n");
-		rt_error(RTE_ABORT);
+		terminate_SpiNNVid(IO_STD, "initRouter err for intra-chip!\n", RTE_ABORT);
 	} else {
 		// each destination core might have its own key association
 		// so that leadAp can tell each worker, which region is their part
@@ -61,8 +67,7 @@ void initRouter()
 	e = rtr_alloc(5);
 	if(e==0)
 	{
-		io_printf(IO_STD, "initRouter err!\n");
-		rt_error(RTE_ABORT);
+		terminate_SpiNNVid(IO_STD, "initRouter err for intra-chip!\n", RTE_ABORT);
 	} else {
 		rtr_mc_set(e, MCPL_BCAST_INFO_KEY,	0xFFFFFFFF, workers);	e++;
 		rtr_mc_set(e, MCPL_PING_REPLY,		0xFFFFFFFF, leader);	e++;
@@ -71,8 +76,9 @@ void initRouter()
 		rtr_mc_set(e, MCPL_REPORT_HIST2LEAD, MCPL_REPORT_HIST2LEAD_MASK, leader); e++;
 	}
 
-	/*-----------------------------------------------*/
-	/*--------- keys for inter-chip routing ---------*/
+	/*----------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------*/
+	/*----------------------- keys for inter-chip routing ------------------------*/
 	x = CHIP_X(sv->p2p_addr);
 	y = CHIP_Y(sv->p2p_addr);
 
@@ -103,8 +109,7 @@ void initRouter()
 	e = rtr_alloc(5);
 	if(e==0)
 	{
-		io_printf(IO_STD, "initRouter err!\n");
-		rt_error(RTE_ABORT);
+		terminate_SpiNNVid(IO_STD, "initRouter err for inter-chip!\n", RTE_ABORT);
 	} else {
 		rtr_mc_set(e, MCPL_BCAST_NODES_INFO,	0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_OP_INFO,		0xFFFFFFFF, dest); e++;
@@ -122,16 +127,16 @@ void initRouter()
 	e = rtr_alloc(2);
 	if(e==0)
 	{
-		io_printf(IO_STD, "initRouter err!\n");
-		rt_error(RTE_ABORT);
+		terminate_SpiNNVid(IO_STD, "initRouter err for special keys!\n", RTE_ABORT);
 	} else {
 		rtr_mc_set(e, MCPL_BLOCK_DONE, 0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BLOCK_DONE_TEDGE, 0xFFFFFFFF, dest); e++;
 	}
 
 
-	/*-----------------------------------------------*/
-	/*---------- keys for forwarding pixels ---------*/
+	/*----------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------*/
+	/*------------------------ keys for forwarding pixels ------------------------*/
 	dest = allRoute;
 #if(USING_SPIN==5)
 	if(x==y) {
@@ -155,8 +160,7 @@ void initRouter()
 	e = rtr_alloc(6);
 	if(e==0)
 	{
-		io_printf(IO_STD, "initRouter err!\n");
-		rt_error(RTE_ABORT);
+		terminate_SpiNNVid(IO_STD, "initRouter err for pixel forwarding!\n", RTE_ABORT);
 	} else {
 		rtr_mc_set(e, MCPL_FWD_PIXEL_INFO,	MCPL_FWD_PIXEL_MASK, dest); e++;
 		rtr_mc_set(e, MCPL_FWD_PIXEL_RDATA, MCPL_FWD_PIXEL_MASK, dest); e++;
@@ -166,8 +170,9 @@ void initRouter()
 		rtr_mc_set(e, MCPL_FWD_PIXEL_EOF,	MCPL_FWD_PIXEL_MASK, dest); e++;
 	}
 
-	/*-----------------------------------------------*/
-	/*------------ keys for all routing -------------*/
+	/*----------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------*/
+	/*------------------------- keys for all routing -----------------------------*/
 	dest = allRoute;
 #if(USING_SPIN==5)
 	if(x==y) {
@@ -191,8 +196,7 @@ void initRouter()
 	e = rtr_alloc(4);
 	if(e==0)
 	{
-		io_printf(IO_STD, "initRouter err!\n");
-		rt_error(RTE_ABORT);
+		terminate_SpiNNVid(IO_STD, "initRouter err for all-routing!\n", RTE_ABORT);
 	} else {
 		rtr_mc_set(e, MCPL_BCAST_ALL_REPORT, 0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_START_PROC, 0xFFFFFFFF, dest); e++;
@@ -257,12 +261,15 @@ void initImage()
 	blkInfo->fullRImageRetrieved = 0;
 	blkInfo->fullGImageRetrieved = 0;
 	blkInfo->fullBImageRetrieved = 0;
+
+	/*
 	blkInfo->imgRIn = (uchar *)IMG_R_BUFF0_BASE;
 	blkInfo->imgGIn = (uchar *)IMG_G_BUFF0_BASE;
 	blkInfo->imgBIn = (uchar *)IMG_B_BUFF0_BASE;
 	blkInfo->imgOut1 = (uchar *)IMG_O_BUFF1_BASE;
 	blkInfo->imgOut2 = (uchar *)IMG_O_BUFF2_BASE;
 	blkInfo->imgOut3 = (uchar *)IMG_O_BUFF3_BASE;
+	*/
 }
 
 void initOther()
@@ -282,10 +289,10 @@ void initIPTag()
 		sdp_msg_t iptag;
 		iptag.flags = 0x07;	// no replay
 		iptag.tag = 0;		// internal
-		iptag.srce_addr = sv->p2p_addr;
+		iptag.srce_addr = 0;
 		iptag.srce_port = 0xE0 + myCoreID;	// use port-7
-		iptag.dest_addr = sv->p2p_addr;
-		iptag.dest_port = 0;				// send to "root"
+		iptag.dest_addr = 0;
+		iptag.dest_port = 0;				// send to the "monitor core"
 		iptag.cmd_rc = 26;
 		// set the reply tag
 		iptag.arg1 = (1 << 16) + SDP_TAG_REPLY;

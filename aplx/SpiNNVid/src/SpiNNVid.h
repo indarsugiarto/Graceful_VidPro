@@ -80,7 +80,7 @@ typedef struct block_info {
 	// uchar *imgBOut;
 	uchar *imgOut1;         // to hold primary output
 	uchar *imgOut2;         // will be used if primary output is for filtering
-	uchar *imgOut3;         // additional output
+	uchar *imgOut3;         // will be used if imgOut2 is used (for sharpening)
 	// miscellaneous info
 	uchar imageInfoRetrieved;
 	uchar fullRImageRetrieved;
@@ -242,7 +242,7 @@ sdp_msg_t debugMsg;				// and the debug data
 sdp_msg_t histMsg;              // for propagating histogram data
 
 //ushort nodeCntr;				// to count, how many non-root nodes are present/active
-chain_t chips[MAX_NODES];
+chain_t chips[MAX_NODES];		// the value of MAX_NODES depends on whether Spin3(4) or Spin5(48)
 
 block_info_t *blkInfo;			// general frame info stored in sysram, to be shared with workers
 w_info_t workers;				// specific info each core should hold individually
@@ -274,6 +274,10 @@ meas_t perf;
 
 uchar nCoresForPixelPreProc;
 
+// are we going to run adaptively
+uint freq;
+uchar adaptiveFreq;
+
 /*------------------------- Forward declarations ----------------------------*/
 
 // Initialization
@@ -283,9 +287,10 @@ void initImage();
 void initIPTag();
 void initOther();
 void initHistData(uint arg0, uint arg1);    // will be called by computeWLoad(), contains construction of HistPropTree
+void terminate_SpiNNVid(char *stream, char *msg, uint exitCode);
 
 // Event handlers
-void hMCPL(uint key, uint payload);
+void hMCPL_SpiNNVid(uint key, uint payload);
 void hDMA(uint tag, uint tid);
 void hSDP(uint mBox, uint port);
 

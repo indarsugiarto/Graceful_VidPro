@@ -7,10 +7,18 @@
 
 void setFreq(uint f, uint null)
 {
-	changeFreq(f);
+	// if f is set to 0, then we play the adaptive strategy with initial freq 200MHz
+	if(f==0) {
+		freq = 200;
+		adaptiveFreq = TRUE;
+	} else {
+		freq = f;
+		adaptiveFreq = FALSE;
+	}
+	changeFreq(freq);
+
 #if (DEBUG_LEVEL>0)
-		if(sv->p2p_addr==0)
-			io_printf(IO_STD, "Set freq to %d\n", f);
+		if(sv->p2p_addr==0)	io_printf(IO_STD, "Set freq to %d\n", f);
 #endif
 }
 
@@ -21,6 +29,10 @@ void configure_network(uint mBox)
 #endif
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
 	if(msg->cmd_rc == SDP_CMD_CONFIG_NETWORK) {
+
+		// for safety, reset the network:
+		spin1_send_mc_packet(MCPL_BCAST_RESET_NET, 0, WITH_PAYLOAD);
+
 		uint payload;   // for broadcasting
 		// encoding strategy:
 		// seq = (opType << 8) | (wFilter << 4) | wHistEq;
@@ -34,17 +46,19 @@ void configure_network(uint mBox)
 		payload |= ((uint)msg->srce_port << 16);
 
 		// then apply frequency requirement
+		// if the freq is 0, then use adaptive mechanism:
+		// initially, it runs at 200MHz, but change to 250 during processing
 		setFreq(msg->srce_port, NULL);
 
+		// then tell the other nodes about this op-freq info
 		spin1_send_mc_packet(MCPL_BCAST_OP_INFO, payload, WITH_PAYLOAD);
-		// the remaining blkInfo is determined by get_def_Nblocks() and get_block_id()
 
-		// additional broadcasting for nodes configuration if not USE_FIX_NODES
-#ifndef USE_FIX_NODES
+		// broadcasting for nodes configuration
 		// convention: chip<0,0> must be root, it has the ETH
 		if(sv->p2p_addr==0) blkInfo->nodeBlockID = 0;
 
-		// chip<0,0> will be the root-node!
+		// NOTE: we decide to use at least 4 nodes!!!
+		// another convention:
 		// arg1, arg2, arg3 contain node-1, node-2, node-3
 		chips[0].id = 0; chips[0].x = 0; chips[0].y = 0;
 		chips[1].id = 1; chips[1].x = msg->arg1 >> 8; chips[1].y = msg->arg1 & 0xFF;
@@ -53,24 +67,33 @@ void configure_network(uint mBox)
 
 		// infer from msg->length
 		uchar restNodes = (msg->length - sizeof(sdp_hdr_t) - sizeof(cmd_hdr_t)) / 2;
-		if(restNodes > 0) {
-			for(uchar i=0; i<restNodes; i++) {
-				chips[i+4].id = i+4;
-				chips[i+4].x = msg->data[i*2];
-				chips[i+4].y = msg->data[i*2 + 1];
+		uchar maxAdditionalNodes;
+#if(USING_SPIN==3)
+		maxAdditionalNodes = 0;
+#else
+		maxAdditionalNodes = 44;
+#endif
+		if(restNodes > maxAdditionalNodes) {
+			terminate_SpiNNVid(IO_DBG, "Invalid network size!\n", RTE_SWERR);
+		}
+		else {
+			if(restNodes > 0) {
+				for(uchar i=0; i<restNodes; i++) {
+					chips[i+4].id = i+4;
+					chips[i+4].x = msg->data[i*2];
+					chips[i+4].y = msg->data[i*2 + 1];
+				}
+			}
+			blkInfo->maxBlock = restNodes + 4;	// NOTE: minBlock = 4
+
+			// then broadcast
+			// Note: the other node will use the maxBlock info for counting
+			for(uchar i=0; i<blkInfo->maxBlock; i++) {
+				payload = blkInfo->maxBlock << 24;
+				payload += (chips[i].id << 16) + (chips[i].x << 8) + (chips[i].y);
+				spin1_send_mc_packet(MCPL_BCAST_NODES_INFO, payload, WITH_PAYLOAD);
 			}
 		}
-		blkInfo->maxBlock = restNodes + 4;	// hence, minBlock = 4
-		//blkInfo->maxBlock = msg->arg1;
-		// then broadcast
-
-		// Note: the other node will use the maxBlock info for counting
-		for(uchar i=0; i<blkInfo->maxBlock; i++) {
-			payload = blkInfo->maxBlock << 24;
-			payload += (chips[i].id << 16) + (chips[i].x << 8) + (chips[i].y);
-			spin1_send_mc_packet(MCPL_BCAST_NODES_INFO, payload, WITH_PAYLOAD);
-		}
-#endif
 	}
 
 	// debugging:
@@ -154,7 +177,7 @@ void hDMA(uint tid, uint tag)
 
 
 
-void hMCPL(uint key, uint payload)
+void hMCPL_SpiNNVid(uint key, uint payload)
 {
 	uint key_hdr = 0xFFFF0000 & key;
 	uint key_arg = 0xFFFF & key;
@@ -441,21 +464,16 @@ void hSDP(uint mBox, uint port)
 			spin1_send_mc_packet(MCPL_BCAST_RESET_NET, 0, WITH_PAYLOAD);
 #endif
 		}
-	}
-	else if(port==SDP_PORT_FRAME_INFO) {
-		//io_printf(IO_STD, "Got frame info...\n");
-		// will only send wImg (in cmd_rc) and hImg (in seq)
-		blkInfo->wImg = msg->cmd_rc;
-		blkInfo->hImg = msg->seq;
-		// send frame info to other nodes
-		spin1_send_mc_packet(MCPL_BCAST_FRAME_INFO, (msg->cmd_rc << 16) + msg->seq, WITH_PAYLOAD);
-		// then broadcast to all workers (including leadAp) to compute their workload
-		spin1_send_mc_packet(MCPL_BCAST_GET_WLOAD, 0, WITH_PAYLOAD);
-
-		// Karena srce_addr tidak bisa dipakai untuk pxSeq, kita buat pxSeq secara
-		// sekuensial:
-		// pxBuffer.pxSeq = 0;	// dan juga harus di-reset di bagian SDP_PORT_FRAME_END
-
+		else if(msg->cmd_rc == SDP_CMD_FRAME_INFO) {
+			//io_printf(IO_STD, "Got frame info...\n");
+			// will only send wImg (in arg1.high) and hImg (in arg1.low)
+			blkInfo->wImg = msg->arg1 >> 16;
+			blkInfo->hImg = msg->arg1 & 0xFFFF;
+			// send frame info to other nodes
+			spin1_send_mc_packet(MCPL_BCAST_FRAME_INFO, msg->arg1, WITH_PAYLOAD);
+			// then broadcast to all workers (including leadAp) to compute their workload
+			spin1_send_mc_packet(MCPL_BCAST_GET_WLOAD, 0, WITH_PAYLOAD);
+		}
 	}
 
 	/*--------------------------------------------------------------------------------------*/
@@ -463,6 +481,7 @@ void hSDP(uint mBox, uint port)
 	/*-------------- New revision: several cores may receives frames directly --------------*/
 
 	// NOTE: srce_addr TIDAK BISA DIPAKAI UNTUK pxSeq !!!!!
+	// Karena srce_addr PASTI bernilai 0 jika dikirim dari host-PC
 
 	else if(port==SDP_PORT_R_IMG_DATA) {
 		// chCntr++;

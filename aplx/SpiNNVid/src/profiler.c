@@ -1,41 +1,57 @@
 #include "profiler.h"
 
-/*-------------- The following is from manual experiment ---------------*/
-// Note: problem is, this values are affected by temperature as well!!!
-// TODO: update the value with new regression method!!!
-void buildIdleCntrTable()
+/* global variables */
+uchar myPhyCore;
+
+// reading temperature sensors
+uint tempVal[3];							// there are 3 sensors in each chip
+uint cpuIdleCntr[18];						// for all cpus
+static uint idle_collect_cntr;              // this is for IDLE_COLLECT_PERIOD
+REAL maxIdleCntr;
+REAL normIdleCntr;
+
+uint avgCPUidle;							// TODO: how to measure it?
+float avgCPUload;							// average CPU load / utilization
+
+// PLL and frequency related (for internal purpose):
+uint _r20, _r21, _r24;						// the original value of r20, r21, and r24
+uint r20, r21, r24, r25;					// the current value of r20, r21 and r24 during *this* experiment
+uint _freq;									// ref/original frequency
+
+
+/* Future TODO:
+ * 1. Function to remap physical core to virtual core in case of
+ *    replacing a mulfunction core.
+ * */
+
+
+/*----------------------------------------------------------------*/
+/*----------------------------------------------------------------*/
+/*----------------------------------------------------------------*/
+/*------------------- function implementations -------------------*/
+
+// use timer2 to handle idle processing. Prepare timer2:
+void setup_T2_for_idle_proc()
 {
-	ushort idx = 0;
-	for(ushort f=10; f<=255; f++) {
-		idle_cntr_table[idx].freq = f;
-		idle_cntr_table[idx].cntr = 180000;	// Note: THIS SHOULD BE UPDATED!!!
-	}
-	idx++;
+    tc[T2_CONTROL] = 0xe2;			// Set up count-down mode
+    tc[T2_LOAD] = _freq * IDLE_UPDATE_PERIOD;		// Load time in microsecs
+
+    sark_vic_set (IDLE_VIC_SLOT, TIMER2_INT, 1, idle);	// Set VIC slot 0
 }
-uint getMaxCntrFromFreq(uint f)
+
+void stop_T2_for_idle_proc()
 {
-	uint result;
-	for(ushort i=0; i<lnMemTable; i++) {
-		if(idle_cntr_table[i].freq == f) {
-			result = idle_cntr_table[i].cntr;
-			break;
-		}
-	}
-	// NOTE: there's something wrong with idle_cntr_table!!!
-	//result = 180000;
-	//io_printf(IO_STD, "f=%u, result = %u\n", f, result);
-	return result;
+    tc[T2_CONTROL] = 0x62;
 }
 
 /*----------------------------------------------------------------------*/
 /*----------------------------------------------------------------------*/
 /*----------------------------------------------------------------------*/
-/*----------------------------------------------------------------------*/
 /*-------------------- Initialization & Termination --------------------*/
 // initProfiler: use Timer-2 and change PLL
-void initProfiler()
+// it returns the current SpiNNaker frequency
+uint initProfiler(uint cpuFreq)
 {
-	buildIdleCntrTable();
 
 	// get the original PLL configuration and current frequency
 	// usually, we got these values (so, it can be an reference value):
@@ -46,26 +62,39 @@ void initProfiler()
 	_r20 = sc[SC_PLL1];
 	_r21 = sc[SC_PLL2];
 	_r24 = sc[SC_CLKMUX];
-	_freq = readSpinFreqVal();	// later, we can restore with changeFreq()
+	_freq = cpuFreq;
 
 	// move system AHB and router to PLL-2
 	// PLL-1 will be exclusively used for CPU's clock
 	changePLL(1);
-	currentFreq = readSpinFreqVal();
+
+	// read the current spiNNaker frequency
+	uint currentFreq = readSpinFreqVal();
 #if (DEBUG_LEVEL>1)
-	io_printf(IO_STD, "Switch PLL so that all cores use the same source!\n");
+	io_printf(IO_STD, "Switch PLL so that all cores use the same source from PLL-1!\n");
 	io_printf(IO_STD, "Current frequency = %d-MHz!\n", currentFreq);
 #endif
 
-	// initialize idle process and set the callback loop
+	// initialize idle process counter and stuffs
 	for(uint _idleCntr=0; _idleCntr<18; _idleCntr++)
 		cpuIdleCntr[_idleCntr] = 0;
-	myOwnIdleCntr = 0;
-	spin1_schedule_callback(idle, 0, 0, PRIORITY_LOWEST);
+	maxIdleCntr = (REAL)IDLE_SAMPLE_PERIOD;
+	normIdleCntr = 100.0/maxIdleCntr;
+
+
+	// setup timer-2 to handle the idle process
+	idle_collect_cntr = 0;
+	setup_T2_for_idle_proc();
+
+	return currentFreq;
 }
 
-void terminateProfiler()
+void terminateProfiler(uint freq)
 {
+	stop_T2_for_idle_proc();
+
+	// put freq into _freq so that it affect changePLL(0)
+	_freq = freq;
 	changePLL(0);
 }
 
@@ -73,88 +102,35 @@ void terminateProfiler()
 /*----------------------------------------------------------------------*/
 /*----------------------------------------------------------------------*/
 /*----------------------------------------------------------------------*/
-/*----------------------- Temperature Measurement -----------------------*/
-// in readTemp(), read the sensors and put the result in tempVal[]
-#define MY_CODE			1
-#define PATRICK_CODE	2
-#define READING_VERSION	MY_CODE	// 1 = mine, 2 = patrick's
-void readTemp()
-{
-#if (READING_VERSION==1)
-	uint i, done, S[] = {SC_TS0, SC_TS1, SC_TS2};
-
-	for(i=0; i<3; i++) {
-		done = 0;
-		// set S-flag to 1 and wait until F-flag change to 1
-		sc[S[i]] = 0x80000000;
-		do {
-			done = sc[S[i]] & 0x01000000;
-		} while(!done);
-		// turnoff S-flag and read the value
-		sc[S[i]] = sc[S[i]] & 0x0FFFFFFF;
-		tempVal[i] = sc[S[i]] & 0x00FFFFFF;
-	}
-
-#elif (READING_VERSION==2)
-	uint k, temp1, temp2, temp3;
-
-	// Start tempearture measurement
-	sc[SC_TS0] = 0x80000000;
-	// Wait for measurement TS0 to finish
-	k = 0;
-	while(!(sc[SC_TS0] & (1<<24))) k++;
-	// Get value
-	temp1 = sc[SC_TS0] & 0x00ffffff;
-	// Stop measurement
-	sc[SC_TS0] = 0<<31;
-	//io_printf(IO_BUF, "k(T1):%d\n", k);
-
-	// Start tempearture measurement
-	sc[SC_TS1] = 0x80000000;
-	// Wait for measurement TS1 to finish
-	k=0;
-	while(!(sc[SC_TS1] & (1<<24))) k++;
-	// Get value
-	temp2 = sc[SC_TS1] & 0x00ffffff;
-	// Stop measurement
-	sc[SC_TS1] = 0<<31;
-	//io_printf(IO_BUF, "k(T2):%d\n", k);
-
-	// Start tempearture measurement
-	sc[SC_TS2] = 0x80000000;
-	// Wait for measurement TS2 to finish
-	k=0;
-	while(!(sc[SC_TS2] & (1<<24))) k++;
-	// Get value
-	temp3 = sc[SC_TS2] & 0x00ffffff;
-	// Stop measurement
-	sc[SC_TS2] = 0<<31;
-	//io_printf(IO_BUF, "k(T3):%d\n\n", k);
-	tempVal[0] = temp1;
-	tempVal[1] = temp2;
-	tempVal[2] = temp3;
-#endif
-}
-
-/*____________________________________________ Temperature Measurement __*/
-
-
-
-/*----------------------------------------------------------------------*/
-/*----------------------------------------------------------------------*/
-/*----------------------------------------------------------------------*/
 /*----------------------- CPU Performance stuffs ------------------------*/
-
-void idle(uint arg0, uint arg1)
+// getProcUtil() gets the processor utilization in certain format:
+// raw, stdfix, or float. Note that the core list is STILL in phys cores,
+// app might need to convert it into virt cores.
+void getProcUtil(uint idleCntr[18], uchar format)
 {
-	uint _idleCntr;
-	r25 = sc[SC_SLEEP];
-	for(_idleCntr=0; _idleCntr<18; _idleCntr++)
-		cpuIdleCntr[_idleCntr] += (r25 >> _idleCntr) & 1;
-	myOwnIdleCntr++; //NOTE: it doesn't make any sense, since we're busy!!!
-	spin1_schedule_callback(idle, 0, 0, PRIORITY_IDLE);
+	uchar i;
+	if(format==IDLE_RAW_FORMAT) {
+		for(i=0; i<18; i++)
+			idleCntr[i] = cpuIdleCntr[i];
+	}
+	else {
+		REAL rel;
+		float relf;
+		for(i=0; i<18; i++) {
+			rel = (maxIdleCntr - (REAL)cpuIdleCntr[i]) * normIdleCntr;
+			if(format==IDLE_FLOAT_FORMAT) {
+				relf = rel;
+				sark_mem_cpy((void *)&idleCntr[i], (void *)&relf, sizeof(uint));
+			}
+			else {
+				sark_mem_cpy((void *)&idleCntr[i], (void *)&rel, sizeof(uint));
+			}
+		}
+	}
 }
 
+/*
+// computeAvgCPUidle() is the old version. Not used here!
 void computeAvgCPUidle()
 {
 	// at this point idle() is not execute, so it is safe to compute average
@@ -179,15 +155,11 @@ void computeAvgCPUidle()
 	avgCPUload = (float)diffr / (float)halfmxCntr;
 	avgCPUload *= 100.0;
 
-	/*
-	io_printf(IO_STD, "f=%u, mxCntr=%u, avgCPUidle=%u, halfmxCntr=%u, diffr=%u, avgCPUload=%k\n",
-					  f, getMaxCntrFromFreq(f), avgCPUidle, halfmxCntr, diffr, (REAL)avgCPUload);
-	*/
-
 	// then reset counter
 	for(uchar cpu=0; cpu<18; cpu++)
 		cpuIdleCntr[cpu] = 0;
 }
+*/
 
 /*____________________________________________ CPU Performance stuffs ___*/
 
@@ -304,6 +276,75 @@ void changePLL(uint flag)
 /*----------------------------------------------------------------------*/
 /*----------------------------------------------------------------------*/
 /*----------------------------------------------------------------------*/
+/*----------------------- Temperature Measurement -----------------------*/
+// in readTemp(), read the sensors and put the result in tempVal[]
+#define MY_CODE			1
+#define PATRICK_CODE	2
+#define READING_VERSION	MY_CODE	// 1 = mine, 2 = patrick's
+void readTemp()
+{
+#if (READING_VERSION==1)
+	uint i, done, S[] = {SC_TS0, SC_TS1, SC_TS2};
+
+	for(i=0; i<3; i++) {
+		done = 0;
+		// set S-flag to 1 and wait until F-flag change to 1
+		sc[S[i]] = 0x80000000;
+		do {
+			done = sc[S[i]] & 0x01000000;
+		} while(!done);
+		// turnoff S-flag and read the value
+		sc[S[i]] = sc[S[i]] & 0x0FFFFFFF;
+		tempVal[i] = sc[S[i]] & 0x00FFFFFF;
+	}
+
+#elif (READING_VERSION==2)
+	uint k, temp1, temp2, temp3;
+
+	// Start tempearture measurement
+	sc[SC_TS0] = 0x80000000;
+	// Wait for measurement TS0 to finish
+	k = 0;
+	while(!(sc[SC_TS0] & (1<<24))) k++;
+	// Get value
+	temp1 = sc[SC_TS0] & 0x00ffffff;
+	// Stop measurement
+	sc[SC_TS0] = 0<<31;
+	//io_printf(IO_BUF, "k(T1):%d\n", k);
+
+	// Start tempearture measurement
+	sc[SC_TS1] = 0x80000000;
+	// Wait for measurement TS1 to finish
+	k=0;
+	while(!(sc[SC_TS1] & (1<<24))) k++;
+	// Get value
+	temp2 = sc[SC_TS1] & 0x00ffffff;
+	// Stop measurement
+	sc[SC_TS1] = 0<<31;
+	//io_printf(IO_BUF, "k(T2):%d\n", k);
+
+	// Start tempearture measurement
+	sc[SC_TS2] = 0x80000000;
+	// Wait for measurement TS2 to finish
+	k=0;
+	while(!(sc[SC_TS2] & (1<<24))) k++;
+	// Get value
+	temp3 = sc[SC_TS2] & 0x00ffffff;
+	// Stop measurement
+	sc[SC_TS2] = 0<<31;
+	//io_printf(IO_BUF, "k(T3):%d\n\n", k);
+	tempVal[0] = temp1;
+	tempVal[1] = temp2;
+	tempVal[2] = temp3;
+#endif
+}
+
+/*____________________________________________ Temperature Measurement __*/
+
+
+/*----------------------------------------------------------------------*/
+/*----------------------------------------------------------------------*/
+/*----------------------------------------------------------------------*/
 /*-------------------------- Other Utilities ---------------------------*/
 void disableCPU(uint virtCoreID, uint none)
 {
@@ -348,3 +389,10 @@ void enableCPU(uint virtCoreID, uint none)
 /*__________________________________________________ Other Utilities ____*/
 
 
+
+// Handler for the MCPL packets sent to the profiler.
+// NOTE: the routing table must be defined in initRouter()
+void hMCPL_profiler(uint key, uint payload)
+{
+
+}
