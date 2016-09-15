@@ -1,8 +1,5 @@
 #include "SpiNNVid.h"
 
-// just a fwd declaration for the profiler
-extern void initProfiler();
-
 // the sanity check:
 // check if the board and app-id are correct
 void initCheck()
@@ -35,6 +32,65 @@ void initCheck()
 	}
 
 }
+
+
+inline void initImgBufs()
+{
+	blkInfo->imgRIn = NULL;
+	blkInfo->imgGIn = NULL;
+	blkInfo->imgBIn = NULL;
+	blkInfo->imgOut1 = NULL;
+	blkInfo->imgOut2 = NULL;
+	blkInfo->imgOut3 = NULL;
+	blkInfo->imageInfoRetrieved = 0;
+	blkInfo->fullRImageRetrieved = 0;
+	blkInfo->fullGImageRetrieved = 0;
+	blkInfo->fullBImageRetrieved = 0;
+}
+
+void releaseImgBuf()
+{
+	if(blkInfo->imgRIn != NULL) {
+		sark_free(blkInfo->imgRIn);
+		sark_free(blkInfo->imgGIn);
+		sark_free(blkInfo->imgOut1);
+		sark_free(blkInfo->imgOut2);
+		sark_free(blkInfo->imgOut3);
+	}
+}
+
+// allocatedImgBuf() is for allocating imgRIn etc
+// it should be called with SDP_CMD_FRAME_INFO and MCPL_BCAST_FRAME_INFO
+void allocateImgBuf()
+{
+	// at this point, we just need to know the size of the image
+	uint sz = blkInfo->wImg * blkInfo->hImg;
+
+	// image buffers have been allocated already? if yes, clear them first
+	releaseImgBuf();
+
+	blkInfo->imgRIn = sark_xalloc(sv->sdram_heap, sz, XALLOC_TAG_IMGRIN, ALLOC_LOCK);
+	if(blkInfo->imgRIn==NULL)
+		terminate_SpiNNVid(IO_DBG, "[FATAL] Cannot allocate imgRIn\n", RTE_ABORT);
+	blkInfo->imgGIn = sark_xalloc(sv->sdram_heap, sz, XALLOC_TAG_IMGGIN, ALLOC_LOCK);
+	if(blkInfo->imgGIn==NULL)
+		terminate_SpiNNVid(IO_DBG, "[FATAL] Cannot allocate imgGIn\n", RTE_ABORT);
+	blkInfo->imgBIn = sark_xalloc(sv->sdram_heap, sz, XALLOC_TAG_IMGBIN, ALLOC_LOCK);
+	if(blkInfo->imgBIn==NULL)
+		terminate_SpiNNVid(IO_DBG, "[FATAL] Cannot allocate imgBIn\n", RTE_ABORT);
+	blkInfo->imgOut1 = sark_xalloc(sv->sdram_heap, sz, XALLOC_TAG_IMGOUT1, ALLOC_LOCK);
+	if(blkInfo->imgOut1==NULL)
+		terminate_SpiNNVid(IO_DBG, "[FATAL] Cannot allocate imgOut1\n", RTE_ABORT);
+	blkInfo->imgOut2 = sark_xalloc(sv->sdram_heap, sz, XALLOC_TAG_IMGOUT2, ALLOC_LOCK);
+	if(blkInfo->imgOut2==NULL)
+		terminate_SpiNNVid(IO_DBG, "[FATAL] Cannot allocate imgOut2\n", RTE_ABORT);
+	blkInfo->imgOut3 = sark_xalloc(sv->sdram_heap, sz, XALLOC_TAG_IMGOUT3, ALLOC_LOCK);
+	if(blkInfo->imgOut3==NULL)
+		terminate_SpiNNVid(IO_DBG, "[FATAL] Cannot allocate imgOut3\n", RTE_ABORT);
+	// Remember: clean these if video ends!!!
+}
+
+
 
 /* initRouter() initialize MCPL routing table by leadCore. Normally, there are two keys:
  * MCPL_BCAST_KEY and MCPL_TO_LEADER
@@ -254,24 +310,6 @@ void initSDP()
 	histMsg.length = sizeof(sdp_hdr_t) + sizeof(cmd_hdr_t) + 256;
 }
 
-// initImage() should be called by leadAp to initialize buffers
-void initImage()
-{
-	blkInfo->imageInfoRetrieved = 0;
-	blkInfo->fullRImageRetrieved = 0;
-	blkInfo->fullGImageRetrieved = 0;
-	blkInfo->fullBImageRetrieved = 0;
-
-	/*
-	blkInfo->imgRIn = (uchar *)IMG_R_BUFF0_BASE;
-	blkInfo->imgGIn = (uchar *)IMG_G_BUFF0_BASE;
-	blkInfo->imgBIn = (uchar *)IMG_B_BUFF0_BASE;
-	blkInfo->imgOut1 = (uchar *)IMG_O_BUFF1_BASE;
-	blkInfo->imgOut2 = (uchar *)IMG_O_BUFF2_BASE;
-	blkInfo->imgOut3 = (uchar *)IMG_O_BUFF3_BASE;
-	*/
-}
-
 void initOther()
 {
 	pixelCntr = 0;  // for many purpose, including forwarding using MCPL
@@ -362,3 +400,27 @@ void initHistData(uint arg0, uint arg1)
 	histPropTree.SDPItemCntr = 0;
 }
 
+
+
+
+
+
+
+// initImage() is predecated!!!!
+// initImage() should be called by leadAp to initialize buffers
+void initImage()
+{
+	blkInfo->imageInfoRetrieved = 0;
+	blkInfo->fullRImageRetrieved = 0;
+	blkInfo->fullGImageRetrieved = 0;
+	blkInfo->fullBImageRetrieved = 0;
+
+	/*
+	blkInfo->imgRIn = (uchar *)IMG_R_BUFF0_BASE;
+	blkInfo->imgGIn = (uchar *)IMG_G_BUFF0_BASE;
+	blkInfo->imgBIn = (uchar *)IMG_B_BUFF0_BASE;
+	blkInfo->imgOut1 = (uchar *)IMG_O_BUFF1_BASE;
+	blkInfo->imgOut2 = (uchar *)IMG_O_BUFF2_BASE;
+	blkInfo->imgOut3 = (uchar *)IMG_O_BUFF3_BASE;
+	*/
+}

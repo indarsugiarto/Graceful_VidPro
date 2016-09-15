@@ -134,7 +134,8 @@ void vidStreamer::pbConfigureClicked()
     quint8 freq = 200;
     if(ui->cbFreq->currentIndex()==1)
         freq = 250;
-    spinn->configSpin(spinIdx, nNodes, opType, wFilter, wHist, freq);
+	quint8 nCorePreProc = ui->sbPixelWorkers->value();
+	spinn->configSpin(spinIdx, nNodes, opType, wFilter, wHist, freq, nCorePreProc);
 
     // just for the experiment: it's boring...
     if(experiment > 0) {

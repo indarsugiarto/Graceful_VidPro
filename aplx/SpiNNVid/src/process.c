@@ -162,7 +162,7 @@ void computeWLoad(uint withReport, uint arg1)
 
 	// leadAp needs to know, the address of image block
 	// it will be used for sending result to host-PC
-	if(leadAp) {
+	if(myCoreID == LEAD_CORE) {
 		uint szBlk = (workers.blkEnd - workers.blkStart + 1) * workers.wImg;
 		uint offset = blkInfo->nodeBlockID * szBlk;
 		workers.blkImgRIn = blkInfo->imgRIn + offset;
@@ -182,7 +182,7 @@ void computeWLoad(uint withReport, uint arg1)
 	ushort szMask = blkInfo->opType == IMG_SOBEL ? 3:5;
 	workers.szDtcmImgBuf = szMask * w;
 
-	// when first called, dtcmImgBuf should be NULL
+	// when first called, dtcmImgBuf should be NULL. It is initialized in SpiNNVid_main()
 	if(dtcmImgBuf != NULL) {
 		sark_free(dtcmImgBuf);
 		sark_free(resImgBuf);
@@ -241,8 +241,6 @@ void processGrayScaling(uint arg0, uint arg1)
 
 	// Assuming that we only work with "non icon" image, then the chunk size
 	// will be the same, unless the last one. Hence, we put the fix-size here:
-	//uint offset = pxBuffer.pxSeq*pxBuffer.pxLen;
-	// uint offset = pxBuffer.pxSeq*270;
 	uint offset = pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK;
 
 
@@ -254,58 +252,58 @@ void processGrayScaling(uint arg0, uint arg1)
 	// is independent of wID !!! So, we have to use blkInfo, which is global for all cores
 	// in the chip (it IS independent of wID)
 
-	// coba dengan manual copy: hasilnya? SEMPURNA !!!!
+	// coba dengan manual copy (bukan DMA): hasilnya? SEMPURNA !!!!
+	/*
 	sark_mem_cpy((void *)blkInfo->imgRIn+offset, (void *)rpxbuf, pxBuffer.pxLen);
 	sark_mem_cpy((void *)blkInfo->imgGIn+offset, (void *)gpxbuf, pxBuffer.pxLen);
 	sark_mem_cpy((void *)blkInfo->imgBIn+offset, (void *)bpxbuf, pxBuffer.pxLen);
 	sark_mem_cpy((void *)blkInfo->imgOut1+offset, (void *)ypxbuf, pxBuffer.pxLen);
+	*/
 
-	/*
+	// wait until we get the token
+	while(blkInfo->dmaToken_pxStore != myCoreID) {
+	}
+
 	// the combination of dma and direct memory copying
 	uint dmaDone;
 	do {
 		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_R_PIXELS+myCoreID,
 									 blkInfo->imgRIn+offset,
 									 rpxbuf, DMA_WRITE, pxBuffer.pxLen);
-		//if(dmaDone != 0) io_printf(IO_STD, "dma full!\n");
-		if(dmaDone != 0) {
-			sark_mem_cpy((void *)blkInfo->imgRIn+offset, (void *)rpxbuf, pxBuffer.pxLen);
-			dmaDone = 1;
-		}
 	} while(dmaDone==0);
+	// wait until dma is complete
+	while(blkInfo->dmaDone_rpxStore != myCoreID) {
+	}
+	blkInfo->dmaDone_rpxStore = 0;	// reset to avoid ambiguity
 	do {
 		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_G_PIXELS+myCoreID,
 									 blkInfo->imgGIn+offset,
 									 gpxbuf, DMA_WRITE, pxBuffer.pxLen);
-		//if(dmaDone != 0) io_printf(IO_STD, "dma full!\n");
-		if(dmaDone != 0) {
-			sark_mem_cpy((void *)blkInfo->imgGIn+offset, (void *)gpxbuf, pxBuffer.pxLen);
-			dmaDone = 1;
-		}
 	} while(dmaDone==0);
+	// wait until dma is complete
+	while(blkInfo->dmaDone_gpxStore != myCoreID) {
+	}
+	blkInfo->dmaDone_gpxStore = 0;	// reset to avoid ambiguity
 	do {
 		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_B_PIXELS+myCoreID,
 									 blkInfo->imgBIn+offset,
 									 bpxbuf, DMA_WRITE, pxBuffer.pxLen);
-		//if(dmaDone != 0) io_printf(IO_STD, "dma full!\n");
-		if(dmaDone != 0) {
-			sark_mem_cpy((void *)blkInfo->imgBIn+offset, (void *)bpxbuf, pxBuffer.pxLen);
-			dmaDone = 1;
-		}
 	} while(dmaDone==0);
+	// wait until dma is complete
+	while(blkInfo->dmaDone_bpxStore != myCoreID) {
+	}
+	blkInfo->dmaDone_bpxStore = 0;	// reset to avoid ambiguity
 	do {
 		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_Y_PIXELS+myCoreID,
 									 blkInfo->imgOut1+offset,
 									 ypxbuf, DMA_WRITE, pxBuffer.pxLen);
-		//if(dmaDone != 0) io_printf(IO_STD, "dma full!\n");
-		if(dmaDone != 0) {
-			sark_mem_cpy((void *)blkInfo->imgOut1+offset, (void *)ypxbuf, pxBuffer.pxLen);
-			dmaDone = 1;
-		}
 	} while(dmaDone==0);
-	// Note: jangan broadcast gray pixel, tapi untuk masing-masing channel dan biarkan
-	//       core tujuan yang menghitung gray-scale nya sendiri !!!!!
-	*/
+
+	// then release the token
+	if((blkInfo->dmaToken_pxStore - 1) == NUM_CORES_FOR_BCAST_PIXEL)
+		blkInfo->dmaToken_pxStore = LEAD_CORE;
+	else
+		blkInfo->dmaToken_pxStore++;
 
 
 	/*------------------------ debugging --------------------------*/
@@ -336,6 +334,9 @@ void processGrayScaling(uint arg0, uint arg1)
 	if(sv->p2p_addr==0)
 		spin1_schedule_callback(fwdImgData,0,0,PRIORITY_PROCESSING);
 
+
+
+
 	/* Debugging 16 Agustus: matikan dulu histogram-nya
 	// final step: reset histogram data
 	if(newImageFlag==TRUE)
@@ -347,12 +348,16 @@ void processGrayScaling(uint arg0, uint arg1)
 	*/
 
 	newImageFlag=FALSE;
+
+	// TODO: histogram counting
+
 }
 
 // once the core receive chunks for all channels, it forwards them
 void fwdImgData(uint arg0, uint arg1)
 {
-	uint payload, i, cntr, szpx, remaining, ch;
+	uint payload, i, cntr, szpx, remaining;
+	// payload contains how many pixels and the current chunk-ID
 	payload = (pxBuffer.pxLen << 16) + pxBuffer.pxSeq;
 	cntr = (pxBuffer.pxLen % 4) == 0 ? pxBuffer.pxLen / 4 : (pxBuffer.pxLen / 4) + 1;
 
@@ -360,6 +365,7 @@ void fwdImgData(uint arg0, uint arg1)
 	spin1_send_mc_packet(MCPL_FWD_PIXEL_INFO+myCoreID, payload, WITH_PAYLOAD);
 
 #if (FWD_FULL_COLOR==TRUE)
+	uint ch;
 	// then forward chunks for each channels
 	for(ch=0; ch<3; ch++) {
 		remaining = pxBuffer.pxLen;
@@ -389,7 +395,7 @@ void fwdImgData(uint arg0, uint arg1)
 		}
 	}
 
-#endif
+#else
 	/*-------------- gray pixels forwarding ----------------*/
 
 	remaining = pxBuffer.pxLen;
@@ -405,17 +411,29 @@ void fwdImgData(uint arg0, uint arg1)
 
 	// then, send info end-of-forwarding
 	spin1_send_mc_packet(MCPL_FWD_PIXEL_EOF+myCoreID, 0, WITH_PAYLOAD);
-
+#endif
 }
 
 
-// collectGrayPixels() will be executed by other chips when they
+// collectGrayPixels() will be executed by other chips when
 // all gray-pixel packets from root chip have been received
 void collectGrayPixels(uint arg0, uint arg1)
 {
 	uint offset = pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK;
+	uint dmaDone;
+	// via dma or direct copy?
+	// I think we don't need to use token here, the processing in root-node must
+	// take some time before the next core-broadcasting takes place
+	do {
+		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_Y_PIXELS+myCoreID,
+									 blkInfo->imgOut1+offset,
+									 ypxbuf, DMA_WRITE, pxBuffer.pxLen);
+	} while(dmaDone==0);
+
 	// coba dengan manual copy: hasilnya? SEMPURNA !!!!
-	sark_mem_cpy((void *)blkInfo->imgOut1+offset, (void *)ypxbuf, pxBuffer.pxLen);
+	// sark_mem_cpy((void *)blkInfo->imgOut1+offset, (void *)ypxbuf, pxBuffer.pxLen);
+
+
 
 
 	/* Debugging 16 Agustus: matikan dulu histogram-nya

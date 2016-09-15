@@ -39,21 +39,22 @@ cSpiNNcomm::cSpiNNcomm(QObject *parent): QObject(parent),
 	connect(sdpDebug, SIGNAL(readyRead()), this, SLOT(readDebug()));
 
 	// TODO: ask spinnaker, who's the leadAp
-	// right now, let's assume it is core-1
-	leadAp = 1;
+	// NOTE: core-1 is for the profiler
+	leadAp = LEAD_CORE;
 
 	// prepare headers for transmission
 	hdrr.flags = 0x07;
 	hdrr.tag = 0;
-	hdrr.dest_port = (SDP_PORT_R_IMG_DATA << 5) + leadAp;
+	// now we use several cores to handle pixel grayscaling & histogram counting
+	// hdrr.dest_port = (SDP_PORT_R_IMG_DATA << 5) + leadAp;
 	hdrr.dest_addr = 0;
 	hdrr.srce_port = ETH_PORT;
-	hdrr.srce_addr = ETH_ADDR;
+	hdrr.srce_addr = ETH_ADDR;	// NOTE: this will always 0
 
-	hdrg = hdrr; hdrg.dest_port = (SDP_PORT_G_IMG_DATA << 5) + leadAp;
-	hdrb = hdrr; hdrb.dest_port = (SDP_PORT_B_IMG_DATA << 5) + leadAp;
-	hdre = hdrr; hdre.dest_port = (SDP_PORT_FRAME_END  << 5) + leadAp;
-	hdrf = hdrr; hdrf.dest_port = (SDP_PORT_FRAME_INFO << 5) + leadAp;
+	hdrg = hdrr; // hdrg.dest_port = (SDP_PORT_G_IMG_DATA << 5) + leadAp;
+	hdrb = hdrr; // hdrb.dest_port = (SDP_PORT_B_IMG_DATA << 5) + leadAp;
+	hdre = hdrr; // hdre.dest_port = (SDP_PORT_FRAME_END  << 5) + leadAp;
+	hdrc = hdrr; // hdrc.dest_port = (SDP_PORT_CONFIG     << 5) + leadAp;
 }
 
 cSpiNNcomm::~cSpiNNcomm()
@@ -132,10 +133,13 @@ sdp_hdr_t cSpiNNcomm::get_hdr(QByteArray const &ba)
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /*----------------- Image Processing / Network related stuffs----------------*/
-// it should be called when Configure button is clicked
+// configSpin() should be called when Configure button is clicked
+// Input:
+//	- freq: SpiNN frequency, 0 = adaptive
+//	- nCorePreProc: number of cores used for pixel retrieval
 void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
                             quint8 edgeOperator, quint8 withFiltering,
-                            quint8 withSharping, quint8 freq)
+							quint8 withSharping, quint8 freq, quint8 nCorePreProc)
 {
     // collect the parameters
     if(SpinIdx==SPIN3) {
@@ -147,14 +151,8 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
         qDebug() << QString("Will use SpiN-5 with %1 nodes").arg(N_nodes);
     }
 
-    // first, send notification to reset the network to spinnaker
-    sdp_hdr_t h;
-    h.flags = 0x07;
-    h.tag = 0;
-    h.dest_port = (SDP_PORT_CONFIG << 5) + leadAp;
-    h.srce_port = freq;
-    h.dest_addr = 0;
-    h.srce_addr = 0;
+	/*
+	// first, send notification to reset the network to spinnaker
 
     cmd_hdr_t c;
     c.cmd_rc = SDP_CMD_RESET_NETWORK;
@@ -162,15 +160,19 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
 
     // give a delay
     giveDelay(100000);
+	*/
 
-    // and the new configuraiton
-    N_nodes = nodesNum;			// by default it uses 4 nodes (spin3)
-    opType = edgeOperator;      // operator typ: SOBEL, LAPLACE
-    wFilter = withFiltering;	// with Gaussian filtering?
-    wHistEq = withSharping;     // with Histogram Equalization?
+	// send the new configuraiton
+	quint8 N_nodes, opType, wFilter, wHistEq;
 
-    qDebug() << QString("opType = %1, wFilter = %2, wHistEq = %3")
-                .arg(opType).arg(wFilter).arg(wHistEq);
+	N_nodes = nodesNum;				// by default it uses 4 nodes (spin3)
+	opType = edgeOperator;			// operator typ: SOBEL, LAPLACE
+	wFilter = withFiltering;		// with Gaussian filtering?
+	wHistEq = withSharping;			// with Histogram Equalization?
+	nCore4PxProc = nCorePreProc;	// will be used in frameIn()
+
+	qDebug() << QString("opType = %1, wFilter = %2, wHistEq = %3, freq = %4")
+				.arg(opType).arg(wFilter).arg(wHistEq).arg(freq);
 
 
     /*
@@ -181,18 +183,19 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
     if(wHistEq==0) qDebug() << "Will use no sharpening"; else
                    qDebug() << "Will use sharpening";
     */
+
     // send to spinnaker
-    c.cmd_rc = SDP_CMD_CONFIG_NETWORK;
+	hdrc.srce_port = freq;
+	c.cmd_rc = SDP_CMD_CONFIG_NETWORK;
     c.seq = (opType << 8) | (wFilter << 4) | wHistEq;
 
-    qDebug() << QString("c.seq = %1").arg(c.seq);
     // node-0 should be in chip<0,0>
     // node-1 is contained in arg1, node-2 is in arg2, and node-3 is in arg3
     c.arg1 = (nodes[1].chipX << 8) | (nodes[1].chipY);
     c.arg2 = (nodes[2].chipX << 8) | (nodes[2].chipY);
     c.arg3 = (nodes[3].chipX << 8) | (nodes[3].chipY);
 
-    // build the node list
+	// build the node list (minimum #nodes is 4)
     QByteArray nodeList;
     // here,  we start from 4
     if(N_nodes > 4) {
@@ -201,7 +204,7 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
             nodeList.append(nodes[i].chipY);
         }
     }
-    sendSDP(h, scp(c), nodeList);
+	sendSDP(hdrc, scp(c), nodeList);
 }
 
 // frameInfo() should be called right after file decoding
@@ -221,9 +224,9 @@ void cSpiNNcomm::frameInfo(int imgW, int imgH)
 
     // send to spinnaker
     cmd_hdr_t c;
-    c.cmd_rc = wImg;
-    c.seq = hImg;
-    sendSDP(hdrf, scp(c));
+	c.cmd_rc = SDP_CMD_FRAME_INFO;
+	c.arg1 = (wImg << 16) | hImg;
+	sendSDP(hdrc, scp(c));
 }
 
 void cSpiNNcomm::readDebug()
@@ -326,7 +329,7 @@ void cSpiNNcomm::sendImgLine(sdp_hdr_t h, uchar *pixel, quint16 len)
 }
 
 /* Now we have to revise the frameIn() such that it send image data in ordered fashion:
- * [red_chunk] [green_chunk] [blue_chunk] ...delay... [red_chunk] [green_chunk] etc...
+ * [red_chunk] [green_chunk] [blue_chunk] ...delay... [red_chunk] [green_chunk] [blue_chunk] ...delay... etc...
  *
  *
  * Note: Do you know why we cannot use scanline with uchar directly? See this:
@@ -348,19 +351,22 @@ void cSpiNNcomm::frameIn(const QImage &frame)
     gArray = (uchar *)malloc(szImg);
     bArray = (uchar *)malloc(szImg);
 
-    // TODO: cara di atas bikin xArray NULL, kenapa?
-    // karena szImg sebelumnya dibuat uint16, seharusnya uint32
+	// TODO: cara di atas bikin ?Array NULL, kenapa?
+	// karena szImg sebelumnya dibuat uint16, seharusnya uint32 (atau uint64)
 
 	// prepare the container's pointer
-	uchar *rPtr;
-	uchar *gPtr;
-	uchar *bPtr;
+	uchar *rPtr = rArray;
+	uchar *gPtr = gArray;
+	uchar *bPtr = bArray;
 
-	quint16 pxSeq = 0;
+	quint16 pxSeq = 0;		// pixel chunk counter, a chunk is up to 272 pixels
 	quint8 tag, srce_port;
 	quint32 pxCntr = 0;
+	quint8 core;
 
-	// for all lines in the image
+	// convert 2D image data into 1D array
+	// THINK: is there faster way like using the copy mechanism (on direct address) ???
+	//			NOTE: we cannot simply use scanLine!!!
 	for(int i=0; i<hImg; i++) {
 		for(int j=0; j<wImg; j++) {
 			rArray[pxCntr] = QColor(frame.pixel(j,i)).red();
@@ -377,26 +383,24 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 	memcpy(bArray, frame.scanLine(i)+2*wImg+1, wImg);
 	*/
 
-	// then reset the pointers to the beginning of the lines
-	rPtr = rArray;
-	gPtr = gArray;
-	bPtr = bArray;
-
-	// we work only with color images!!!
+	// we work only with color images!!! No gray video :)
+	// NOTE: we cannot alter srce_addr, hence we encode the pxSeq into tag + srce_port
+	//		 so: tag==pxSeq.high and srce_port==pxSeq.low
+	core = 0;
 	while(remaining > 0) {
 		tag = pxSeq >> 8;
 		srce_port = pxSeq & 0xFF;
 		sz = remaining > 272 ? 272:remaining;
 
-		hdrr.tag = tag; hdrr.srce_port = srce_port;
-		hdrg.tag = tag; hdrg.srce_port = srce_port;
-		hdrb.tag = tag; hdrb.srce_port = srce_port;
-		//hdrr.srce_addr = pxSeq;
-		//hdrg.srce_addr = pxSeq;
-		//hdrb.srce_addr = pxSeq;
-		sendImgLine(hdrr, rPtr, sz);
-		sendImgLine(hdrg, gPtr, sz);
-		sendImgLine(hdrb, bPtr, sz);
+		// split to nCore4PxProc
+		hdrr.dest_port = (SDP_PORT_R_IMG_DATA << 5) | (core + LEAD_CORE);
+		hdrg.dest_port = (SDP_PORT_G_IMG_DATA << 5) | (core + LEAD_CORE);
+		hdrb.dest_port = (SDP_PORT_B_IMG_DATA << 5) | (core + LEAD_CORE);
+		core = (core+1) < nCore4PxProc ? (core+1) : 0;
+
+		hdrr.tag = tag; hdrr.srce_port = srce_port; sendImgLine(hdrr, rPtr, sz);
+		hdrg.tag = tag; hdrg.srce_port = srce_port; sendImgLine(hdrg, gPtr, sz);
+		hdrb.tag = tag; hdrb.srce_port = srce_port; sendImgLine(hdrb, bPtr, sz);
 
 		// then give sufficient delay
 		giveDelay(DEF_QT_WAIT_VAL*5000);	// ini biasanya yang aku pakai
@@ -405,7 +409,7 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 		rPtr += sz;
 		gPtr += sz;
 		bPtr += sz;
-		pxSeq++;
+		pxSeq++;	// prepare the next chunk
 		remaining -= sz;
 	}
 

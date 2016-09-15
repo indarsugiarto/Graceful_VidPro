@@ -6,8 +6,8 @@
 #ifndef DEFSPINNVID_H
 #define DEFSPINNVID_H
 
-#define MAJOR_VERSION               0
-#define MINOR_VERSION               3
+#define MAJOR_VERSION               1
+#define MINOR_VERSION               0
 
 // Version log
 // 0.1 Sending frame to SpiNNaker at 10MBps
@@ -16,7 +16,7 @@
 
 
 #define ADAPTIVE_FREQ               FALSE
-
+#define DEF_FREQ					200
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
 /*----------------------- Basic parameters for compilation --------------------------*/
@@ -42,7 +42,7 @@
 
 // related with stdfix.h
 #define REAL                        accum
-#define REAL_CONST(x)               x##k
+#define REAL_CONST(x)               (x##k)
 
 
 // define, which core will take the leading role? Note, core-1 will be used
@@ -53,7 +53,9 @@
 // how many cores are used for pixel propagation (and histogram calculation)?
 // this value MUST BE THE SAME with the number of cores used during SDP
 // transfer for sending image's pixels
-#define NUM_CORES_FOR_BCAST_PIXEL   16
+//#define NUM_CORES_FOR_BCAST_PIXEL   16
+#define NUM_CORES_FOR_BCAST_PIXEL   15	// some nodes don't have 18 cores, but only 17
+										// hence, we only use core-2 to core-16
 
 // all constants below must be positive
 #define R_GRAY                      REAL_CONST(0.2989)
@@ -129,6 +131,7 @@
 #define SDP_CMD_FRAME_INFO			4
 #define SDP_CMD_SEND_PX_FPGA    	5   // for sending pixels to FPGA board
 #define SDP_CMD_REPORT_HIST     	6   // for sending histogram to parent node
+#define SDP_CMD_END_VIDEO			7	// tell SpiNNaker, the video is over. Clean the memory!!!
 
 //#define SDP_CMD_CONFIG_CHAIN	11  // maybe we don't need it?
 #define SDP_CMD_PROCESS				3	// will be sent via SDP_PORT_CONFIG
@@ -156,6 +159,15 @@
 #define DMA_FETCH_IMG_TAG			100
 #define DMA_STORE_IMG_TAG			120
 
+
+// memory allocation tag
+#define XALLOC_TAG_BLKINFO			1
+#define XALLOC_TAG_IMGRIN			2
+#define XALLOC_TAG_IMGGIN			3
+#define XALLOC_TAG_IMGBIN			4
+#define XALLOC_TAG_IMGOUT1			5
+#define XALLOC_TAG_IMGOUT2			6
+#define XALLOC_TAG_IMGOUT3			7
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/

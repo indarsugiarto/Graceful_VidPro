@@ -163,7 +163,7 @@ void getProcUtil(uint idleCntr[18], uchar format);
 
 // initProfiler() will set the CPUs frequency to cpuFreq and return
 // the current (real?) frequency -> can be used for reporting/debugging
-uint initProfiler(uint cpuFreq);		// mainly for changing PLL-2
+uint initProfiler();		// mainly for changing PLL-2
 void terminateProfiler(uint cpuFreq);	// and for restoring PLL-2
 
 #endif // PROFILER_H

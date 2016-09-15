@@ -9,12 +9,12 @@
 // to make it consistent with the aplx-part:
 #include "defSpiNNVid.h"
 
-#define SPIN3       0
-#define SPIN5       1
-#define SPIN3_IP    "192.168.240.253"
-#define SPIN5_IP    "192.168.240.1"
-#define ETH_PORT    255
-#define ETH_ADDR    0
+#define SPIN3					0	// just a combobox index
+#define SPIN5					1
+#define SPIN3_IP				"192.168.240.253"
+#define SPIN5_IP				"192.168.240.1"
+#define ETH_PORT				255
+#define ETH_ADDR				0
 
 
 #define BLOCK_REPORT_NO         0
@@ -22,7 +22,7 @@
 
 #define MAX_CHIPS               48  // how many chips will be used?
 
-// just for nice indicator
+// just for nice indicator: doesn't work!
 #define QTSLOT                  (void)
 
 typedef struct sdp_hdr		// SDP header
@@ -75,7 +75,7 @@ public slots:
 	void readDebug();
 	void configSpin(quint8 SpinIdx, quint8 nodesNum,
 					quint8 edgeOperator, quint8 withFiltering,
-					quint8 withSharping, quint8 freq);
+					quint8 withSharping, quint8 freq, quint8 nCorePreProc);
 	void frameInfo(int imgW, int imgH);
 	void frameIn(const QImage &frame);
 	void sendImgLine(sdp_hdr_t h, uchar *pixel, quint16 len);
@@ -106,12 +106,13 @@ private:
     sdp_hdr_t get_hdr(QByteArray const &ba);
 
 	quint32 wImg, hImg, szImg;
-	quint8 N_nodes, opType, wFilter, wHistEq;
+	quint8 nCore4PxProc;	// number of cores in root-node that handle pixel transmission
+
 	quint16 spinElapse;
 
 	// let's prepare header for image sending:
-	// rgb, end-of-frame, frame-info
-	sdp_hdr_t hdrr, hdrg, hdrb, hdre, hdrf;
+	// rgb, end-of-frame, config
+	sdp_hdr_t hdrr, hdrg, hdrb, hdre, hdrc;
 
 	QByteArray pxBuff;
 

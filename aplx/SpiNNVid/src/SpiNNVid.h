@@ -86,6 +86,13 @@ typedef struct block_info {
 	uchar fullRImageRetrieved;
 	uchar fullGImageRetrieved;
 	uchar fullBImageRetrieved;
+	// miscellaneous flag
+	volatile uchar dmaToken_pxStore;	// token for storing pixel to SDRAM via dma
+										// the value indicates: who's next?
+	volatile uchar dmaDone_rpxStore;	// who has completed the dma for R-chunk?
+	volatile uchar dmaDone_gpxStore;	// and for G-chunk?
+	volatile uchar dmaDone_bpxStore;	// and for B-chunk?
+	volatile uchar dmaDone_ypxStore;	// and for Y-chunk?
 } block_info_t;
 
 // worker info
@@ -141,7 +148,10 @@ fwdPkt_t fwdPktBuffer[3];	// for each channel
 
 
 
-// Coba cara baru, multiple cores receive frames direcly
+// Coba cara baru, multiple cores receive frames consecutively. This way, each core
+// will have enough time to do grayscaling, histogram, storing/broadcasting.
+// NOTE: pxSeq is the chunk seqment and is contained in the tag and srce_port in
+//		 the SDP data sent to root-node.
 typedef struct pxBuf {
 	ushort pxSeq;	// the segment index of the chunk within the overall frame structure
 	ushort pxLen;	// how many pixels are contained in one channel chunk
@@ -184,6 +194,7 @@ uchar ypxbuf[270];
 */
 
 // Coba ?pxbuf di taruh di heap
+// these are initialized in the SpiNNVid_main()
 uchar *rpxbuf;
 uchar *gpxbuf;
 uchar *bpxbuf;
@@ -286,6 +297,7 @@ void initSDP();
 void initImage();
 void initIPTag();
 void initOther();
+void initImgBufs();
 void initHistData(uint arg0, uint arg1);    // will be called by computeWLoad(), contains construction of HistPropTree
 void terminate_SpiNNVid(char *stream, char *msg, uint exitCode);
 
@@ -307,6 +319,9 @@ void bcastWID(uint Unused, uint null);
 
 void computeWLoad(uint withReport, uint arg1);
 
+// memory management
+void releaseImgBuf();
+void allocateImgBuf();
 
 void fwdImgData(uint arg0, uint arg1);	// isLastChannel==1 for B-channel
 void processGrayScaling(uint arg0, uint arg1);

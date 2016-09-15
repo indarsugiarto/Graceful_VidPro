@@ -50,7 +50,7 @@ void stop_T2_for_idle_proc()
 /*-------------------- Initialization & Termination --------------------*/
 // initProfiler: use Timer-2 and change PLL
 // it returns the current SpiNNaker frequency
-uint initProfiler(uint cpuFreq)
+uint initProfiler()
 {
 
 	// get the original PLL configuration and current frequency
@@ -62,14 +62,13 @@ uint initProfiler(uint cpuFreq)
 	_r20 = sc[SC_PLL1];
 	_r21 = sc[SC_PLL2];
 	_r24 = sc[SC_CLKMUX];
-	_freq = cpuFreq;
 
 	// move system AHB and router to PLL-2
 	// PLL-1 will be exclusively used for CPU's clock
 	changePLL(1);
 
 	// read the current spiNNaker frequency
-	uint currentFreq = readSpinFreqVal();
+	_freq = readSpinFreqVal();
 #if (DEBUG_LEVEL>1)
 	io_printf(IO_STD, "Switch PLL so that all cores use the same source from PLL-1!\n");
 	io_printf(IO_STD, "Current frequency = %d-MHz!\n", currentFreq);
@@ -86,7 +85,7 @@ uint initProfiler(uint cpuFreq)
 	idle_collect_cntr = 0;
 	setup_T2_for_idle_proc();
 
-	return currentFreq;
+	return _freq;
 }
 
 void terminateProfiler(uint freq)

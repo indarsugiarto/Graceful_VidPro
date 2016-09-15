@@ -10,6 +10,8 @@ void c_main(void)
 	// do sanity check: check if the board (Spin3 or Spin5) and app-id are correct
 	initCheck();
 
+
+
 	// first thing: am I a profiler or a SpiNNVid?
 	myCoreID = sark_core_id();
 	if(myCoreID == 1)
@@ -45,6 +47,7 @@ void SpiNNVid_greetings()
 #else
 	io_printf(stream, "[CONFIGURABLE_NODES] SpiNNVid-v%d.%d for Spin%d with FWD_GRAY\n",
 				  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
+#endif
 #endif
 
 	// small delay, so all chips can be seen on Tubotron
@@ -115,7 +118,7 @@ void SpiNNVid_main()
 
 		// only leadAp: prepare chip-level image block information
 		blkInfo = sark_xalloc(sv->sysram_heap, sizeof(block_info_t),
-							  sark_app_id(), ALLOC_LOCK);
+							  XALLOC_TAG_BLKINFO, ALLOC_LOCK);
 		if(blkInfo==NULL) {
 			terminate_SpiNNVid(IO_DBG, "[FATAL] blkInfo alloc error!\n", RTE_ABORT);
 		}
@@ -127,13 +130,9 @@ void SpiNNVid_main()
 			blkInfo->fullRImageRetrieved = 0;
 			blkInfo->fullGImageRetrieved = 0;
 			blkInfo->fullBImageRetrieved = 0;
-			blkInfo->imgRIn = NULL;
-			blkInfo->imgGIn = NULL;
-			blkInfo->imgBIn = NULL;
-			blkInfo->imgOut1 = NULL;
-			blkInfo->imgOut2 = NULL;
-			blkInfo->imgOut3 = NULL;
+			initImgBufs();
 
+			blkInfo->dmaToken_pxStore = LEAD_CORE; // the next core to have dma token is LEAD_CORE
 
 // deprecated: in old version, we use spin3, hence the number of nodes are fix
 #ifdef USE_FIX_NODES
@@ -186,7 +185,6 @@ void SpiNNVid_main()
 /*----------------------------------------------------------------------------*/
 /*----------------------------------------------------------------------------*/
 /*--------------------- Starting point for the profiler ----------------------*/
-extern void initProfiler();
 void profiler_main()
 {
 	initProfiler();

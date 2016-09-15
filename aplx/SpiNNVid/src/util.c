@@ -143,7 +143,7 @@ void give_report(uint reportType, uint target)
 	dest = target==0?IO_BUF:IO_STD;
 #if(DEBUG_LEVEL > 0)
 	// only for leadAp
-	if(leadAp) {
+	if(myCoreID == LEAD_CORE) {
 		if(reportType==DEBUG_REPORT_WID) {
 			io_printf(dest, "Total workers = %d:\n---------------------\n", workers.tAvailable);
 			for(uint i=0; i<workers.tAvailable; i++)
@@ -343,7 +343,7 @@ inline REAL roundr(REAL inVal)
 {
 	uint base = (uint)inVal;
 	uint upper = base + 1;
-	REAL conver = inVal+REAL_CONST(0.5);
+	REAL conver = inVal + REAL_CONST(0.5);
 	if((uint)conver == base)
 		return (REAL)base;
 	else

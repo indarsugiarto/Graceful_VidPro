@@ -103,7 +103,7 @@ void configure_network(uint mBox)
 
 void reportHistToLeader(uint arg0, uint arg1)
 {
-	if(leadAp) return;
+	if(myCoreID==LEAD_CORE) return;
 	for(uchar i=0; i<256; i++) {
 		spin1_send_mc_packet(MCPL_REPORT_HIST2LEAD + i, hist[i], WITH_PAYLOAD);
 	}
@@ -166,13 +166,23 @@ void leaderUpdateHist(uint arg0, uint arg1)
 void hDMA(uint tid, uint tag)
 {
 	//io_printf(IO_BUF, "DMA done tag-0x%x tid-%d\n", tag, tid);
-	if((tag & 0xFFFF) == DMA_FETCH_IMG_TAG) {
-		if((tag >> 16) == myCoreID) {
+	uint key = tag & 0xFFFF;
+	uint core = tag >> 16;
+	if(key == DMA_FETCH_IMG_TAG) {
+		if(core == myCoreID) {
 			//io_printf(IO_BUF, "Reseting dmaImgFromSDRAMdone for core-%d\n", myCoreID);
 			dmaImgFromSDRAMdone = 1;	// so the image processing can continue
 		}
 	}
-
+	else if(key == DMA_TAG_STORE_R_PIXELS) {
+		blkInfo->dmaDone_rpxStore = core;
+	}
+	else if(key == DMA_TAG_STORE_G_PIXELS) {
+		blkInfo->dmaDone_gpxStore = core;
+	}
+	else if(key == DMA_TAG_STORE_B_PIXELS) {
+		blkInfo->dmaDone_bpxStore = core;
+	}
 }
 
 
@@ -217,7 +227,7 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	*/
 
 	// outside root node: make it core-to-core communication
-	// the following 5 else-if are used to transmit a chunk (270 pixels)
+	// the following 5 else-if are used to transmit a chunk (272 pixels)
 	else if(key_hdr == MCPL_FWD_PIXEL_INFO && key_arg == myCoreID) {
 		pxBuffer.pxLen = payload >> 16;
 		pxBuffer.pxSeq = payload & 0xFFFF;
@@ -339,6 +349,10 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	else if(key==MCPL_BCAST_FRAME_INFO) {
 		blkInfo->wImg = payload >> 16;
 		blkInfo->hImg = payload & 0xFFFF;
+
+		// then allocate image buffers in SDRAM
+		allocateImgBuf();
+
 		// then broadcast to all workers (including leadAp) to compute their workload
 		spin1_send_mc_packet(MCPL_BCAST_GET_WLOAD, 0, WITH_PAYLOAD);
 	}
@@ -433,8 +447,6 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	}
 }
 
-
-
 void hSDP(uint mBox, uint port)
 {
 	// Note: the variable msg might be released somewhere else,
@@ -469,10 +481,29 @@ void hSDP(uint mBox, uint port)
 			// will only send wImg (in arg1.high) and hImg (in arg1.low)
 			blkInfo->wImg = msg->arg1 >> 16;
 			blkInfo->hImg = msg->arg1 & 0xFFFF;
+
+			// then allocate image buffer in SDRAM
+			allocateImgBuf();
+
 			// send frame info to other nodes
 			spin1_send_mc_packet(MCPL_BCAST_FRAME_INFO, msg->arg1, WITH_PAYLOAD);
 			// then broadcast to all workers (including leadAp) to compute their workload
 			spin1_send_mc_packet(MCPL_BCAST_GET_WLOAD, 0, WITH_PAYLOAD);
+
+			// we also need to reset the dma token, so that it starts from LEAD_CORE again
+			blkInfo->dmaToken_pxStore = LEAD_CORE;
+		}
+		else if(msg->cmd_rc == SDP_CMD_END_VIDEO) {
+
+
+
+
+
+			// TODO:..... Clean memory
+			releaseImgBuf();
+			initImgBufs();
+
+
 		}
 	}
 
@@ -482,6 +513,13 @@ void hSDP(uint mBox, uint port)
 
 	// NOTE: srce_addr TIDAK BISA DIPAKAI UNTUK pxSeq !!!!!
 	// Karena srce_addr PASTI bernilai 0 jika dikirim dari host-PC
+
+	/* Synopsys:
+	 * Host will send 3 chunks of data (RGB) to one core at one time, and then
+	 * send then next 3 chunks of data (RGB) to the next core. This way, each core
+	 * should have enough time to do grayscaling, histogram counting, storing, and
+	 * broadcasting.
+	 * */
 
 	else if(port==SDP_PORT_R_IMG_DATA) {
 		// chCntr++;
@@ -497,11 +535,9 @@ void hSDP(uint mBox, uint port)
 		//sark_mem_cpy(pxBuffer.rpxbuf, &msg->seq, pxBuffer.pxLen);
 		//sark_mem_cpy(rpxbuf, &msg->seq, pxBuffer.pxLen);
 
-		//pxBuffer.pxSeq = msg->srce_addr;
 		pxBuffer.pxSeq = (msg->tag << 8) | msg->srce_port;
 		pxBuffer.pxLen = msg->length - 8;
-		//we use srce_addr for pxSeq, hence more data can be loaded into scp
-		sark_mem_cpy(rpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
+		sark_mem_cpy(rpxbuf, &msg->cmd_rc, pxBuffer.pxLen);	
 
 
 		///io_printf(IO_STD, "pxSeq = %d\n", pxBuffer.pxSeq);
@@ -526,7 +562,6 @@ void hSDP(uint mBox, uint port)
 		//sark_mem_cpy(pxBuffer.gpxbuf, &msg->seq, pxBuffer.pxLen);
 		//sark_mem_cpy(gpxbuf, &msg->seq, pxBuffer.pxLen);
 
-		//pxBuffer.pxSeq = msg->srce_addr;
 		pxBuffer.pxSeq = (msg->tag << 8) | msg->srce_port;
 		pxBuffer.pxLen = msg->length - 8;
 		sark_mem_cpy(gpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
