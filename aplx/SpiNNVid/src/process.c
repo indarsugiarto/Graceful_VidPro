@@ -197,6 +197,7 @@ void computeWLoad(uint withReport, uint arg1)
 
 	// IT IS WRONG to put the initHistData() here, because initHistData MUST
 	// BE CALLED everytime a new image has arrived. So, we move it to processGrayScaling()
+
 }
 
 
@@ -261,41 +262,60 @@ void processGrayScaling(uint arg0, uint arg1)
 	*/
 
 	// wait until we get the token
+
+
+	//io_printf(IO_BUF, "Storing pixels via DMA...\n");
+	io_printf(IO_BUF, "dmaToken_pxStore = %d\n", blkInfo->dmaToken_pxStore);
 	while(blkInfo->dmaToken_pxStore != myCoreID) {
 	}
+	io_printf(IO_BUF, "dmaToken_pxStore = %d\n", blkInfo->dmaToken_pxStore);
 
 	// the combination of dma and direct memory copying
-	uint dmaDone;
+	uint dmaDone, tg;
 	do {
-		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_R_PIXELS+myCoreID,
-									 blkInfo->imgRIn+offset,
+		tg = (myCoreID << 16) | DMA_TAG_STORE_R_PIXELS;
+		dmaDone = spin1_dma_transfer(tg, blkInfo->imgRIn+offset,
 									 rpxbuf, DMA_WRITE, pxBuffer.pxLen);
 	} while(dmaDone==0);
 	// wait until dma is complete
+
+	io_printf(IO_BUF, "dmaDone_rpxStore = %d\n", blkInfo->dmaDone_rpxStore);
 	while(blkInfo->dmaDone_rpxStore != myCoreID) {
 	}
+	io_printf(IO_BUF, "dmaDone_rpxStore = %d\n", blkInfo->dmaDone_rpxStore);
+
 	blkInfo->dmaDone_rpxStore = 0;	// reset to avoid ambiguity
 	do {
-		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_G_PIXELS+myCoreID,
-									 blkInfo->imgGIn+offset,
+		tg = (myCoreID << 16) | DMA_TAG_STORE_G_PIXELS;
+		dmaDone = spin1_dma_transfer(tg, blkInfo->imgGIn+offset,
 									 gpxbuf, DMA_WRITE, pxBuffer.pxLen);
 	} while(dmaDone==0);
 	// wait until dma is complete
+
+	io_printf(IO_BUF, "dmaDone_gpxStore = %d\n", blkInfo->dmaDone_gpxStore);
 	while(blkInfo->dmaDone_gpxStore != myCoreID) {
 	}
+	io_printf(IO_BUF, "dmaDone_gpxStore = %d\n", blkInfo->dmaDone_gpxStore);
+
 	blkInfo->dmaDone_gpxStore = 0;	// reset to avoid ambiguity
 	do {
-		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_B_PIXELS+myCoreID,
-									 blkInfo->imgBIn+offset,
+		tg = (myCoreID << 16) | DMA_TAG_STORE_B_PIXELS;
+
+		dmaDone = spin1_dma_transfer(tg, blkInfo->imgBIn+offset,
 									 bpxbuf, DMA_WRITE, pxBuffer.pxLen);
 	} while(dmaDone==0);
+
 	// wait until dma is complete
+	io_printf(IO_BUF, "dmaDone_bpxStore = %d\n", blkInfo->dmaDone_bpxStore);
 	while(blkInfo->dmaDone_bpxStore != myCoreID) {
 	}
+	io_printf(IO_BUF, "dmaDone_bpxStore = %d\n", blkInfo->dmaDone_bpxStore);
+
 	blkInfo->dmaDone_bpxStore = 0;	// reset to avoid ambiguity
 	do {
-		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_Y_PIXELS+myCoreID,
-									 blkInfo->imgOut1+offset,
+		tg = (myCoreID << 16) | DMA_TAG_STORE_Y_PIXELS;
+
+		dmaDone = spin1_dma_transfer(tg, blkInfo->imgOut1+offset,
 									 ypxbuf, DMA_WRITE, pxBuffer.pxLen);
 	} while(dmaDone==0);
 
@@ -305,6 +325,7 @@ void processGrayScaling(uint arg0, uint arg1)
 	else
 		blkInfo->dmaToken_pxStore++;
 
+	io_printf(IO_BUF, "dmaToken_pxStore = %d\n", blkInfo->dmaToken_pxStore);
 
 	/*------------------------ debugging --------------------------*/
 	// debugging: to see if original pixels chunks and forwarded are the same
@@ -398,6 +419,10 @@ void fwdImgData(uint arg0, uint arg1)
 #else
 	/*-------------- gray pixels forwarding ----------------*/
 
+
+	io_printf(IO_BUF, "Forwarding gray pixels...\n");
+
+
 	remaining = pxBuffer.pxLen;
 	for(i=0; i<cntr; i++) {
 		if(remaining > sizeof(uint))
@@ -419,6 +444,9 @@ void fwdImgData(uint arg0, uint arg1)
 // all gray-pixel packets from root chip have been received
 void collectGrayPixels(uint arg0, uint arg1)
 {
+
+	io_printf(IO_BUF, "Collecting gray pixels...\n");
+
 	uint offset = pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK;
 	uint dmaDone;
 	// via dma or direct copy?

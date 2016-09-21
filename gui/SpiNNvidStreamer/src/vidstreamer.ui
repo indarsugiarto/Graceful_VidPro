@@ -88,6 +88,9 @@
       <height>31</height>
      </rect>
     </property>
+    <property name="currentIndex">
+     <number>1</number>
+    </property>
     <item>
      <property name="text">
       <string>SpiNN3</string>
@@ -275,6 +278,9 @@
       <height>31</height>
      </rect>
     </property>
+    <property name="currentIndex">
+     <number>0</number>
+    </property>
     <item>
      <property name="text">
       <string>0</string>
@@ -428,6 +434,11 @@
     <item>
      <property name="text">
       <string>PLL report</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Image Buffers</string>
      </property>
     </item>
    </widget>

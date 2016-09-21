@@ -73,16 +73,17 @@
 //#define DEBUG_LEVEL				0	// no debugging message at all
 #define DEBUG_LEVEL                 1
 // various report for debugging (send by host):
-#define DEBUG_REPORT_NWORKERS       1		// only leadAp
-#define DEBUG_REPORT_WID            2		// only leadAp
-#define DEBUG_REPORT_BLKINFO        3		// only leadAp
+#define DEBUG_REPORT_NWORKERS       1		// only leadAp (in all nodes)
+#define DEBUG_REPORT_WID            2		// only leadAp (in all nodes)
+#define DEBUG_REPORT_BLKINFO        3		// only leadAp (in all nodes)
 #define DEBUG_REPORT_MYWID          4		// all cores
 #define DEBUG_REPORT_WLOAD          5		// all cores, report via tag-3
 #define DEBUG_REPORT_FRAMEINFO      6       // all cores
-#define DEBUG_REPORT_NET_CONFIG     7       // only leadAp
+#define DEBUG_REPORT_NET_CONFIG     7       // only leadAp (in all nodes)
 #define DEBUG_REPORT_PERF           8       // all cores
-#define DEBUG_REPORT_PLL_INFO       9       // only leadAp
-#define DEBUG_REPORT_HISTPROP       10      // only leadAp in root-node
+#define DEBUG_REPORT_PLL_INFO       9       // only leadAp (in all nodes)
+#define DEBUG_REPORT_HISTPROP       10      // only leadAp [in root-node]
+#define DEBUG_REPORT_IMGBUFS		11		// only leadAp (in all nodes)
 
 // We use timer to do some debugging facilities
 #define TIMER_TICK_PERIOD_US        1000000
@@ -91,13 +92,14 @@
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
 /*----------------------------- Basic spin1_api related -----------------------------*/
+#define PRIORITY_FIQ				-1
+#define PRIORITY_MCPL               PRIORITY_FIQ
+#define PRIORITY_DMA                0
+#define PRIORITY_SDP                1
+#define PRIORITY_PROCESSING         2
+#define PRIORITY_TIMER              3
 #define PRIORITY_LOWEST             4
 #define PRIORITY_IDLE               PRIORITY_LOWEST
-#define PRIORITY_TIMER              3
-#define PRIORITY_PROCESSING         2
-#define PRIORITY_SDP                1
-#define PRIORITY_DMA                0
-#define PRIORITY_MCPL               -1
 
 #define DEF_SEND_PORT               17893           // tidak bisa diganti dengan yang lain
 
@@ -192,10 +194,12 @@
 // mechanism for controlling the image processing
 #define MCPL_EDGE_DONE				0x1ead0003
 
-//special key (with values)
+// special key (with values)
 #define MCPL_BLOCK_DONE			0x1ead1ead	// should be sent to <0,0,1>
 #define MCPL_BLOCK_DONE_TEDGE   0x1eaddea1 // should be sent to <0,0,1>
 
+// special key for communication with the profiler
+#define MCPL_TO_PROFILER		0x11111111	// profiler is in the 1st core of each node
 
 // mechanism for forwarding pixel packets
 // important: MCPL_FWD_PIXEL_INFO must preceed all chunk pixels!!!
@@ -248,6 +252,10 @@
 #define IMG_WITHOUT_FILTER			0
 #define IMG_WITH_FILTER				1
 
+
+// Profiler message
+#define PROF_MSG_PLL_INFO			1
+#define PROF_MSG_SET_FREQ			2
 
 #endif // DEFSPINNVID_H
 

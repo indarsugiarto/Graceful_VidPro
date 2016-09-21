@@ -8,7 +8,8 @@ SOURCES += main.c \
     eHandler.c \
     util.c \
     process.c \
-    profiler.c
+    profiler.c \
+    isr.c
 
 INCLUDEPATH += /opt/spinnaker_tools_134/include
 
@@ -24,7 +25,9 @@ DISTFILES += \
     Makefile.3 \
     Makefile.5 \
     museum \
-    ../../../HOW.DOES.IT.WORK
+    ../../../HOW.DOES.IT.WORK \
+    Makefile.common \
+    Makefile.profiler
 
 HEADERS += \
     SpiNNVid.h \

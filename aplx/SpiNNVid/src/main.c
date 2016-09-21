@@ -1,26 +1,5 @@
 #include "SpiNNVid.h"
 
-/*----------------------------------------------------------------------------*/
-/*----------------------------------------------------------------------------*/
-/*--------------------- The very main starting point -------------------------*/
-void SpiNNVid_main();	// fwd declaration
-void profiler_main();	// fwd declaration
-void c_main(void)
-{
-	// do sanity check: check if the board (Spin3 or Spin5) and app-id are correct
-	initCheck();
-
-
-
-	// first thing: am I a profiler or a SpiNNVid?
-	myCoreID = sark_core_id();
-	if(myCoreID == 1)
-		profiler_main();
-	else
-		SpiNNVid_main();
-
-}
-
 
 /*----------------------------------------------------------------------------*/
 /*----------------------------------------------------------------------------*/
@@ -28,6 +7,7 @@ void c_main(void)
 void SpiNNVid_greetings()
 {
 	char *stream = sv->p2p_addr == 0 ? IO_STD : IO_BUF;
+	if(myCoreID != LEAD_CORE) stream = IO_BUF;
 
 // deprecated: if using fix number of nodes
 #ifdef USE_FIX_NODES
@@ -54,8 +34,19 @@ void SpiNNVid_greetings()
 	sark_delay_us(get_block_id() * 1000);
 }
 
-void SpiNNVid_main()
+//void SpiNNVid_main()
+void c_main()
 {
+	// do sanity check: check if the board (Spin3 or Spin5) and app-id are correct
+	initCheck();
+
+	// first thing: am I a profiler or a SpiNNVid?
+	myCoreID = sark_core_id();
+	if(myCoreID == PROF_CORE) {
+		terminate_SpiNNVid(IO_DBG, "Invalid core for SpiNNVid!\n", RTE_SWERR);
+		return;
+	}
+
 	/*  allocate ?pxbuf
 		?pxbuf is used to contain a chunk of image pixels (up to 272 pixels),
 		initially sent via SDP and later broadcasted using MCPL */
@@ -184,22 +175,6 @@ void SpiNNVid_main()
 
 /*----------------------------------------------------------------------------*/
 /*----------------------------------------------------------------------------*/
-/*--------------------- Starting point for the profiler ----------------------*/
-void profiler_main()
-{
-	initProfiler();
-
-	/*----------------------------------------------------------------------------*/
-	/*--------------------------- register callbacks -----------------------------*/
-	spin1_callback_on(MCPL_PACKET_RECEIVED, hMCPL_profiler, PRIORITY_MCPL);
-
-	spin1_start(SYNC_NOWAIT);
-}
-
-
-
-/*----------------------------------------------------------------------------*/
-/*----------------------------------------------------------------------------*/
 /*-------------------------- Graceful Termination ----------------------------*/
 void terminate_SpiNNVid(char *stream, char *msg, uint exitCode)
 {
@@ -230,7 +205,7 @@ void terminate_SpiNNVid(char *stream, char *msg, uint exitCode)
 
 	}
 
-	// TODO: then tell profiler to terminate as well
+	// TODO: then tell profiler to terminate as well (by sending an MCPL)
 
 	// finally, exit the spinnaker API
 	spin1_exit(exitCode);

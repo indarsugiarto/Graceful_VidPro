@@ -1,29 +1,33 @@
-#include "profiler.h"
-
-/* global variables */
-uchar myPhyCore;
-
-// reading temperature sensors
-uint tempVal[3];							// there are 3 sensors in each chip
-uint cpuIdleCntr[18];						// for all cpus
-static uint idle_collect_cntr;              // this is for IDLE_COLLECT_PERIOD
-REAL maxIdleCntr;
-REAL normIdleCntr;
-
-uint avgCPUidle;							// TODO: how to measure it?
-float avgCPUload;							// average CPU load / utilization
-
-// PLL and frequency related (for internal purpose):
-uint _r20, _r21, _r24;						// the original value of r20, r21, and r24
-uint r20, r21, r24, r25;					// the current value of r20, r21 and r24 during *this* experiment
-uint _freq;									// ref/original frequency
-
+/* NOTE: since profiler uses a lot xTCM space, we remove it from
+ * the main SpiNNVid program structure. Now it has its own main.
+ * */
 
 /* Future TODO:
  * 1. Function to remap physical core to virtual core in case of
  *    replacing a mulfunction core.
  * */
 
+#include "profiler.h"
+
+
+void c_main()
+{
+	if(sark_core_id() != PROF_CORE) {
+		io_printf(IO_STD, "Invalid core! Put me in core-%d!\n", PROF_CORE);
+	} else {
+		initProfiler();
+
+		/*----------------------------------------------------------------------------*/
+		/*--------------------------- register callbacks -----------------------------*/
+		spin1_callback_on(MCPL_PACKET_RECEIVED, hMCPL_profiler, PRIORITY_PROCESSING);
+
+		spin1_start(SYNC_NOWAIT);	// timer2-nya jadi ndak jalan!!!
+		// cpu_sleep();	// nah, kalo pakai timer-2, apakah hMCPL_profiler bisa jalan?
+		//TODO: think, timer1 or timer2 ??? maybe we need to use timer-1, because
+		//		if we use timer2, we HAVE TO use cpu_sleep()
+		//		jika pakai timer1, maka harus ada kompensasi frequensi untuk PERIOD-nya!!!
+	}
+}
 
 /*----------------------------------------------------------------*/
 /*----------------------------------------------------------------*/
@@ -31,17 +35,54 @@ uint _freq;									// ref/original frequency
 /*------------------- function implementations -------------------*/
 
 // use timer2 to handle idle processing. Prepare timer2:
-void setup_T2_for_idle_proc()
+void idle(uint tick, uint arg1)
 {
-    tc[T2_CONTROL] = 0xe2;			// Set up count-down mode
-    tc[T2_LOAD] = _freq * IDLE_UPDATE_PERIOD;		// Load time in microsecs
+	uint _idleCntr;
+	r25 = sc[SC_SLEEP];
+	for(_idleCntr=0; _idleCntr<18; _idleCntr++)
+		cpuIdleCntr[_idleCntr] += (r25 >> _idleCntr) & 1;
 
-    sark_vic_set (IDLE_VIC_SLOT, TIMER2_INT, 1, idle);	// Set VIC slot 0
+	//NOTE: the following doesn't make any sense, since we're always busy!!!
+	//myOwnIdleCntr++;
+
+	if(idle_collect_cntr >= IDLE_COLLECT_PERIOD) {
+	  for(_idleCntr=0; _idleCntr<18; _idleCntr++)
+		  cpuIdleCntr[_idleCntr] = 0;
+	  idle_collect_cntr = 0;
+
+	}
+	else {
+	  idle_collect_cntr++;
+	}
+
+	// previous version: repeat the idle process
+	//spin1_schedule_callback(idle, 0, 0, PRIORITY_IDLE);
 }
 
-void stop_T2_for_idle_proc()
+void setup_Timer_for_idle_proc()
 {
-    tc[T2_CONTROL] = 0x62;
+	T2Ticks = 0;
+	idle_collect_cntr = 0;
+
+	// correct the PERIOD due to frequency different and then set the callback
+	uint p = IDLE_SAMPLE_PERIOD * _freq / 200;
+
+	io_printf(IO_BUF, "[PROFILER] Initializing idle-Timer with period = %d\n", p);
+
+	spin1_set_timer_tick(p);
+	spin1_callback_on(TIMER_TICK, idle, PRIORITY_FIQ);	// put to FIQ
+	/*
+	tc[T2_CONTROL] = 0xe2;			// Set up count-down mode
+	tc[T2_LOAD] = _freq * IDLE_UPDATE_PERIOD;		// Load time in microsecs
+	sark_vic_set (IDLE_VIC_SLOT, TIMER2_INT, 1, hT2);	// Set VIC slot IDLE_VIC_SLOT
+	*/
+}
+
+void stop_Timer_for_idle_proc()
+{
+	io_printf(IO_BUF, "[PROFILER] Stopping Timer interrupt...\n");
+	//tc[T2_CONTROL] = 0x62;
+	spin1_callback_off(TIMER_TICK);
 }
 
 /*----------------------------------------------------------------------*/
@@ -65,14 +106,12 @@ uint initProfiler()
 
 	// move system AHB and router to PLL-2
 	// PLL-1 will be exclusively used for CPU's clock
+	io_printf(IO_BUF, "[PROFILER] Switch PLL so that all cores use the same source from PLL-1!\n");
 	changePLL(1);
 
 	// read the current spiNNaker frequency
 	_freq = readSpinFreqVal();
-#if (DEBUG_LEVEL>1)
-	io_printf(IO_STD, "Switch PLL so that all cores use the same source from PLL-1!\n");
-	io_printf(IO_STD, "Current frequency = %d-MHz!\n", currentFreq);
-#endif
+	io_printf(IO_BUF, "[PROFILER] Current frequency = %d-MHz!\n", _freq);
 
 	// initialize idle process counter and stuffs
 	for(uint _idleCntr=0; _idleCntr<18; _idleCntr++)
@@ -82,15 +121,16 @@ uint initProfiler()
 
 
 	// setup timer-2 to handle the idle process
-	idle_collect_cntr = 0;
-	setup_T2_for_idle_proc();
+	// Due to spin1_start() and cpu_sleep() problem, we use Timer-1
+	setup_Timer_for_idle_proc();
 
 	return _freq;
 }
 
 void terminateProfiler(uint freq)
 {
-	stop_T2_for_idle_proc();
+	io_printf(IO_BUF, "[PROFILER] Terminating profiler...\n");
+	stop_Timer_for_idle_proc();
 
 	// put freq into _freq so that it affect changePLL(0)
 	_freq = freq;
@@ -268,6 +308,127 @@ void changePLL(uint flag)
 	}
 }
 
+
+REAL getFreq(uchar sel, uchar dv, uchar MS1, uchar NS1, uchar MS2, uchar NS2)
+{
+	REAL fSrc, num, denum, _dv_, val;
+	_dv_ = dv;
+	switch(sel) {
+	case 0: num = REAL_CONST(1.0); denum = REAL_CONST(1.0); break; // 10 MHz clk_in
+	case 1: num = NS1; denum = MS1; break;
+	case 2: num = NS2; denum = MS2; break;
+	case 3: num = REAL_CONST(1.0); denum = REAL_CONST(4.0); break;
+	}
+	fSrc = REAL_CONST(10.0);
+	val = (fSrc * num) / (denum * _dv_);
+	return val;
+}
+
+char *selName(uchar s)
+{
+	char *name;
+	switch(s) {
+	case 0: name = "clk_in"; break;
+	case 1: name = "pll1_clk"; break;
+	case 2: name = "pll2_clk"; break;
+	case 3: name = "clk_in_div_4"; break;
+	}
+	return name;
+}
+
+char *get_FR_str(uchar fr)
+{
+	char *str;
+	switch(fr) {
+	case 0: str = "25-50 MHz"; break;
+	case 1: str = "50-100 MHz"; break;
+	case 2: str = "100-200 MHz"; break;
+	case 3: str = "200-400 MHz"; break;
+	}
+	return str;
+}
+
+
+void readPLL(uint chip_addr, uint null)
+{
+	char *stream;
+	if(chip_addr==0) stream = IO_STD; else stream = IO_BUF;
+
+	uint r20 = sc[SC_PLL1];
+	uint r21 = sc[SC_PLL2];
+	uint r24 = sc[SC_CLKMUX];
+
+	uchar FR1, MS1, NS1, FR2, MS2, NS2;
+	uchar Sdiv, Sys_sel, Rdiv, Rtr_sel, Mdiv, Mem_sel, Bdiv, Pb, Adiv, Pa;
+
+	FR1 = (r20 >> 16) & 3;
+	MS1 = (r20 >> 8) & 0x3F;
+	NS1 = r20 & 0x3F;
+	FR2 = (r21 >> 16) & 3;
+	MS2 = (r21 >> 8) & 0x3F;
+	NS2 = r21 & 0x3F;
+
+	Sdiv = ((r24 >> 22) & 3) + 1;
+	Sys_sel = (r24 >> 20) & 3;
+	Rdiv = ((r24 >> 17) & 3) + 1;
+	Rtr_sel = (r24 >> 15) & 3;
+	Mdiv = ((r24 >> 12) & 3) + 1;
+	Mem_sel = (r24 >> 10) & 3;
+	Bdiv = ((r24 >> 7) & 3) + 1;
+	Pb = (r24 >> 5) & 3;
+	Adiv = ((r24 >> 2) & 3) + 1;
+	Pa = r24 & 3;
+
+	REAL Sfreq, Rfreq, Mfreq, Bfreq, Afreq;
+	Sfreq = getFreq(Sys_sel, Sdiv, MS1, NS1, MS2, NS2);
+	Rfreq = getFreq(Rtr_sel, Rdiv, MS1, NS1, MS2, NS2);
+	Mfreq = getFreq(Mem_sel, Mdiv, MS1, NS1, MS2, NS2);
+	Bfreq = getFreq(Pb, Bdiv, MS1, NS1, MS2, NS2);
+	Afreq = getFreq(Pa, Adiv, MS1, NS1, MS2, NS2);
+
+
+	// TODO: pindah ke profiler, karena DTCM ndak cukup untuk tulisan-tulisan di bawah ini:
+
+	io_printf(stream, "\n\n************* CLOCK INFORMATION **************\n");
+	io_printf(stream, "Reading sark library...\n");
+	io_printf(stream, "Clock divisors for system & router bus: %u\n", sv->clk_div);
+	io_printf(stream, "CPU clock in MHz   : %u\n", sv->cpu_clk);
+	//io_printf(IO_STD, "CPU clock in MHz   : %u\n", sark.cpu_clk); sark_delay_us(1000);
+	io_printf(stream, "SDRAM clock in MHz : %u\n\n", sv->mem_clk);
+
+	io_printf(stream, "Reading registers directly...\n");
+	io_printf(stream, "PLL-1\n"); sark_delay_us(1000);
+	io_printf(stream, "----------------------------\n");
+	io_printf(stream, "Frequency range      : %s\n", get_FR_str(FR1));
+	io_printf(stream, "Output clk divider   : %u\n", MS1);
+	io_printf(stream, "Input clk multiplier : %u\n\n", NS1);
+
+	io_printf(stream, "PLL-2\n");
+	io_printf(stream, "----------------------------\n");
+	io_printf(stream, "Frequency range      : %s\n", get_FR_str(FR2));
+	io_printf(stream, "Output clk divider   : %u\n", MS2);
+	io_printf(stream, "Input clk multiplier : %u\n\n", NS2);
+
+	io_printf(stream, "Multiplerxer\n"); sark_delay_us(1000);
+	io_printf(stream, "----------------------------\n");
+	io_printf(stream, "System AHB clk divisor  : %u\n", Sdiv);
+	io_printf(stream, "System AHB clk selector : %u (%s)\n", Sys_sel, selName(Sys_sel));
+	io_printf(stream, "System AHB clk freq     : %k MHz\n", Sfreq);
+	io_printf(stream, "Router clk divisor      : %u\n", Rdiv);
+	io_printf(stream, "Router clk selector     : %u (%s)\n", Rtr_sel, selName(Rtr_sel));
+	io_printf(stream, "Router clk freq         : %k MHz\n", Rfreq);
+	io_printf(stream, "SDRAM clk divisor       : %u\n", Mdiv);
+	io_printf(stream, "SDRAM clk selector      : %u (%s)\n", Mem_sel, selName(Mem_sel));
+	io_printf(stream, "SDRAM clk freq          : %k MHz\n", Mfreq);
+	io_printf(stream, "CPU-B clk divisor       : %u\n", Bdiv);
+	io_printf(stream, "CPU-B clk selector      : %u (%s)\n", Pb, selName(Pb));
+	io_printf(stream, "CPU-B clk freq          : %k MHz\n", Bfreq);
+	io_printf(stream, "CPU-A clk divisor       : %u\n", Adiv);
+	io_printf(stream, "CPU-A clk selector      : %u (%s)\n", Pa, selName(Pa));
+	io_printf(stream, "CPU-A clk freq          : %k MHz\n", Afreq);
+	io_printf(stream, "**********************************************\n\n\n");
+}
+
 /*_____________________________________ Frequency/PLL-related stuffs ___*/
 
 
@@ -388,10 +549,33 @@ void enableCPU(uint virtCoreID, uint none)
 /*__________________________________________________ Other Utilities ____*/
 
 
+void setFreq(uint f, uint null)
+{
+	// if f is set to 0, then we play the adaptive strategy with initial freq 200MHz
+	if(f==0) {
+		//_freq = 200;	// use whatever current freq on SpiNNaker (read during init)
+		adaptiveFreq = TRUE;
+		io_printf(IO_BUF, "[PROFILER] Will use the current SpiNN freq!\n");
+	} else {
+		_freq = f;
+		adaptiveFreq = FALSE;
+		changeFreq(_freq);
+		io_printf(IO_BUF, "[PROFILER] Set freq to %d\n", f);
+	}
+}
+
+
 
 // Handler for the MCPL packets sent to the profiler.
 // NOTE: the routing table must be defined in initRouter()
 void hMCPL_profiler(uint key, uint payload)
 {
-
+	uint pl = payload & 0xFFFF;
+	uint arg = payload >> 16;
+	if(pl == PROF_MSG_PLL_INFO) {
+		readPLL(sv->p2p_addr, 0);
+	}
+	else if(pl == PROF_MSG_SET_FREQ) {
+		setFreq(arg, NULL);
+	}
 }

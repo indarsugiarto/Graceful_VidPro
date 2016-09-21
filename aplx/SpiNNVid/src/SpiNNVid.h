@@ -14,7 +14,6 @@
 #include <spin1_api.h>
 #include <stdfix.h>
 #include "defSpiNNVid.h"        // all definitions go here
-#include "profiler.h"
 
 /*------------- From timer2 code from Steve Temple -------------*/
 // Use "timer2" to measure elapsed time.
@@ -285,9 +284,6 @@ meas_t perf;
 
 uchar nCoresForPixelPreProc;
 
-// are we going to run adaptively
-uint freq;
-uchar adaptiveFreq;
 
 /*------------------------- Forward declarations ----------------------------*/
 

@@ -88,6 +88,7 @@ void allocateImgBuf()
 	if(blkInfo->imgOut3==NULL)
 		terminate_SpiNNVid(IO_DBG, "[FATAL] Cannot allocate imgOut3\n", RTE_ABORT);
 	// Remember: clean these if video ends!!!
+
 }
 
 
@@ -102,6 +103,7 @@ void initRouter()
 	uint leader = (1 << (myCoreID+6));	// only for leadAp
 	uint workers = allRoute & ~leader;	// for other workers in the chip
 	workers &= (~profiler);				// exclude profiler
+	allRoute &= (~profiler);				// exclude profiler
 	uint dest;
 	ushort x, y, d;
 
@@ -260,6 +262,40 @@ void initRouter()
 		rtr_mc_set(e, MCPL_BCAST_REPORT_HIST, MCPL_BCAST_REPORT_HIST_MASK, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_HIST_RESULT, MCPL_BCAST_HIST_RESULT_MASK, dest); e++;
 	}
+
+	/*----------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------*/
+	/*----------------------- other keys with special routing --------------------*/
+
+	// communication with the profiler:
+	dest = profiler;
+#if(USING_SPIN==5)
+	if(x==y) {
+		if(x<7)
+			dest += 1 + (1 << 1) + (1 << 2);
+	}
+	else if(x>y) {
+		d = x - y;
+		if(x<7 && d<4)
+			dest += 1;
+	}
+	else if(x<y) {
+		d = y - x;
+		if(d<3 && y<7)
+			dest += (1 << 2);
+	}
+#elif(USING_SPIN==3)
+	if(sv->p2p_addr==0)
+		dest += 1 + (1 << 1) + (1 << 2);
+#endif
+	e = rtr_alloc(1);
+	if(e==0)
+	{
+		terminate_SpiNNVid(IO_STD, "initRouter err for other keys!\n", RTE_ABORT);
+	} else {
+		rtr_mc_set(e, MCPL_TO_PROFILER,	0xFFFFFFFF, dest); e++;
+	}
+
 }
 
 void initSDP()

@@ -54,7 +54,7 @@ cSpiNNcomm::cSpiNNcomm(QObject *parent): QObject(parent),
 	hdrg = hdrr; // hdrg.dest_port = (SDP_PORT_G_IMG_DATA << 5) + leadAp;
 	hdrb = hdrr; // hdrb.dest_port = (SDP_PORT_B_IMG_DATA << 5) + leadAp;
 	hdre = hdrr; // hdre.dest_port = (SDP_PORT_FRAME_END  << 5) + leadAp;
-	hdrc = hdrr; // hdrc.dest_port = (SDP_PORT_CONFIG     << 5) + leadAp;
+	hdrc = hdrr; hdrc.dest_port = (SDP_PORT_CONFIG     << 5) + leadAp;
 }
 
 cSpiNNcomm::~cSpiNNcomm()
@@ -141,16 +141,6 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
                             quint8 edgeOperator, quint8 withFiltering,
 							quint8 withSharping, quint8 freq, quint8 nCorePreProc)
 {
-    // collect the parameters
-    if(SpinIdx==SPIN3) {
-        ha = QHostAddress(QString(SPIN3_IP));
-        qDebug() << QString("Will use SpiN-3 with %1 nodes").arg(N_nodes);
-    }
-    else {
-        ha = QHostAddress(QString(SPIN5_IP));
-        qDebug() << QString("Will use SpiN-5 with %1 nodes").arg(N_nodes);
-    }
-
 	/*
 	// first, send notification to reset the network to spinnaker
 
@@ -171,6 +161,16 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
 	wHistEq = withSharping;			// with Histogram Equalization?
 	nCore4PxProc = nCorePreProc;	// will be used in frameIn()
 
+	// collect the parameters
+	if(SpinIdx==SPIN3) {
+		ha = QHostAddress(QString(SPIN3_IP));
+		qDebug() << QString("Will use SpiN-3 with %1 nodes").arg(N_nodes);
+	}
+	else {
+		ha = QHostAddress(QString(SPIN5_IP));
+		qDebug() << QString("Will use SpiN-5 with %1 nodes").arg(N_nodes);
+	}
+
 	qDebug() << QString("opType = %1, wFilter = %2, wHistEq = %3, freq = %4")
 				.arg(opType).arg(wFilter).arg(wHistEq).arg(freq);
 
@@ -186,6 +186,7 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
 
     // send to spinnaker
 	hdrc.srce_port = freq;
+	cmd_hdr_t c;
 	c.cmd_rc = SDP_CMD_CONFIG_NETWORK;
     c.seq = (opType << 8) | (wFilter << 4) | wHistEq;
 
@@ -432,14 +433,6 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 
 void cSpiNNcomm::sendTest(int testID)
 {
-    sdp_hdr_t h;
-    h.flags = 7;
-    h.tag = 0;
-    h.srce_addr = 0;
-    h.srce_port = 255;
-    h.dest_addr = 0;
-    h.dest_port = (SDP_PORT_CONFIG << 5) | 1;
-
     // Current possible test:
     // 0 - Workers ID
     // 1 - Network Configuration
@@ -459,8 +452,9 @@ void cSpiNNcomm::sendTest(int testID)
     case 4: c.seq = DEBUG_REPORT_FRAMEINFO; break;
     case 5: c.seq = DEBUG_REPORT_PERF; break;
     case 6: c.seq = DEBUG_REPORT_PLL_INFO; break;
+	case 7: c.seq = DEBUG_REPORT_IMGBUFS; break;
     }
-    sendSDP(h, scp(c));
+	sendSDP(hdrc, scp(c));
 }
 
 /*---------------------------------------------------------------------------*/

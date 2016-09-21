@@ -5,52 +5,33 @@
 /*------------------------------------------------------------------------------*/
 /*------------------- Sub functions called by main handler ---------------------*/
 
-void setFreq(uint f, uint null)
-{
-	// if f is set to 0, then we play the adaptive strategy with initial freq 200MHz
-	if(f==0) {
-		freq = 200;
-		adaptiveFreq = TRUE;
-	} else {
-		freq = f;
-		adaptiveFreq = FALSE;
-	}
-	changeFreq(freq);
-
-#if (DEBUG_LEVEL>0)
-		if(sv->p2p_addr==0)	io_printf(IO_STD, "Set freq to %d\n", f);
-#endif
-}
-
 void configure_network(uint mBox)
 {
-#if (DEBUG_LEVEL>2)
-	io_printf(IO_STD, "Receiving configuration...\n");
-#endif
+	io_printf(IO_STD, "[CONFIG] Receiving configuration...\n");
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
 	if(msg->cmd_rc == SDP_CMD_CONFIG_NETWORK) {
+		// NOTE: encoding strategy:
+		//		 seq = (opType << 8) | (wFilter << 4) | wHistEq;
 
 		// for safety, reset the network:
 		spin1_send_mc_packet(MCPL_BCAST_RESET_NET, 0, WITH_PAYLOAD);
 
-		uint payload;   // for broadcasting
-		// encoding strategy:
-		// seq = (opType << 8) | (wFilter << 4) | wHistEq;
+		uint payload;   // also for broadcasting
+
+		// then apply frequency requirement
+		// if the freq is 0, then use adaptive mechanism:
+		// initially, it runs at 200MHz, but change to 250 during processing
+		// setFreq(msg->srce_port, NULL); --> obsolete!
+		payload = (msg->srce_port << 16) | PROF_MSG_SET_FREQ;
+		spin1_send_mc_packet(MCPL_TO_PROFILER, payload, WITH_PAYLOAD);
+
+		// then tell the other nodes about this op-freq info
 
 		blkInfo->opType = msg->seq >> 8;
 		blkInfo->opFilter = (msg->seq >> 4) & 0xF;
 		blkInfo->opSharpen = msg->seq & 0xF;
 
 		payload = msg->seq;
-		// add frequency information
-		payload |= ((uint)msg->srce_port << 16);
-
-		// then apply frequency requirement
-		// if the freq is 0, then use adaptive mechanism:
-		// initially, it runs at 200MHz, but change to 250 during processing
-		setFreq(msg->srce_port, NULL);
-
-		// then tell the other nodes about this op-freq info
 		spin1_send_mc_packet(MCPL_BCAST_OP_INFO, payload, WITH_PAYLOAD);
 
 		// broadcasting for nodes configuration
@@ -229,54 +210,72 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	// outside root node: make it core-to-core communication
 	// the following 5 else-if are used to transmit a chunk (272 pixels)
 	else if(key_hdr == MCPL_FWD_PIXEL_INFO && key_arg == myCoreID) {
-		pxBuffer.pxLen = payload >> 16;
-		pxBuffer.pxSeq = payload & 0xFFFF;
-		pxBuffer.pxCntr[0] = 0;
-		pxBuffer.pxCntr[1] = 0;
-		pxBuffer.pxCntr[2] = 0;
-		pxBuffer.pxCntr[3] = 0;
-		/*
-		if(sv->p2p_addr==1)
-			io_printf(IO_STD, "Got MCPL_FWD_PIXEL_INFO\n");
-		else
-			io_printf(IO_BUF, "Got MCPL_FWD_PIXEL_INFO\n");
-			*/
+		// for forwarding, exclude root-node!!!!
+		if(sv->p2p_addr != 0) {
+			pxBuffer.pxLen = payload >> 16;
+			pxBuffer.pxSeq = payload & 0xFFFF;
+			pxBuffer.pxCntr[0] = 0;
+			pxBuffer.pxCntr[1] = 0;
+			pxBuffer.pxCntr[2] = 0;
+			pxBuffer.pxCntr[3] = 0;
+			/*
+			if(sv->p2p_addr==1)
+				io_printf(IO_STD, "Got MCPL_FWD_PIXEL_INFO\n");
+			else
+				io_printf(IO_BUF, "Got MCPL_FWD_PIXEL_INFO\n");
+				*/
+		}
 	}
 	else if(key_hdr == MCPL_FWD_PIXEL_RDATA && key_arg == myCoreID) {
-		//sark_mem_cpy((void *)pxBuffer.rpxbuf + pxBuffer.pxCntr[0]*sizeof(uint),
-		//			 (void *)&payload, sizeof(uint));
-		sark_mem_cpy((void *)rpxbuf + pxBuffer.pxCntr[0]*sizeof(uint),
-					 (void *)&payload, sizeof(uint));
-		pxBuffer.pxCntr[0]++;
+		// for forwarding, exclude root-node!!!!
+		if(sv->p2p_addr != 0) {
+			//sark_mem_cpy((void *)pxBuffer.rpxbuf + pxBuffer.pxCntr[0]*sizeof(uint),
+			//			 (void *)&payload, sizeof(uint));
+			sark_mem_cpy((void *)rpxbuf + pxBuffer.pxCntr[0]*sizeof(uint),
+						 (void *)&payload, sizeof(uint));
+			pxBuffer.pxCntr[0]++;
+		}
 	}
 	else if(key_hdr == MCPL_FWD_PIXEL_GDATA && key_arg == myCoreID) {
-		//sark_mem_cpy((void *)pxBuffer.gpxbuf + pxBuffer.pxCntr[1]*sizeof(uint),
-		//			 (void *)&payload, sizeof(uint));
-		sark_mem_cpy((void *)gpxbuf + pxBuffer.pxCntr[1]*sizeof(uint),
-					 (void *)&payload, sizeof(uint));
-		pxBuffer.pxCntr[1]++;
+		// for forwarding, exclude root-node!!!!
+		if(sv->p2p_addr != 0) {
+			//sark_mem_cpy((void *)pxBuffer.gpxbuf + pxBuffer.pxCntr[1]*sizeof(uint),
+			//			 (void *)&payload, sizeof(uint));
+			sark_mem_cpy((void *)gpxbuf + pxBuffer.pxCntr[1]*sizeof(uint),
+					(void *)&payload, sizeof(uint));
+			pxBuffer.pxCntr[1]++;
+		}
 	}
 	else if(key_hdr == MCPL_FWD_PIXEL_BDATA && key_arg == myCoreID) {
-		//sark_mem_cpy((void *)pxBuffer.bpxbuf + pxBuffer.pxCntr[2]*sizeof(uint),
-		//			 (void *)&payload, sizeof(uint));
-		sark_mem_cpy((void *)bpxbuf + pxBuffer.pxCntr[2]*sizeof(uint),
-					 (void *)&payload, sizeof(uint));
-		pxBuffer.pxCntr[2]++;
+		// for forwarding, exclude root-node!!!!
+		if(sv->p2p_addr != 0) {
+			//sark_mem_cpy((void *)pxBuffer.bpxbuf + pxBuffer.pxCntr[2]*sizeof(uint),
+			//			 (void *)&payload, sizeof(uint));
+			sark_mem_cpy((void *)bpxbuf + pxBuffer.pxCntr[2]*sizeof(uint),
+					(void *)&payload, sizeof(uint));
+			pxBuffer.pxCntr[2]++;
+		}
 	}
 	else if(key_hdr == MCPL_FWD_PIXEL_YDATA && key_arg == myCoreID) {
-		//sark_mem_cpy((void *)pxBuffer.bpxbuf + pxBuffer.pxCntr[2]*sizeof(uint),
-		//			 (void *)&payload, sizeof(uint));
-		sark_mem_cpy((void *)ypxbuf + pxBuffer.pxCntr[3]*sizeof(uint),
-					 (void *)&payload, sizeof(uint));
-		pxBuffer.pxCntr[3]++;
+		// for forwarding, exclude root-node!!!!
+		if(sv->p2p_addr != 0) {
+			//sark_mem_cpy((void *)pxBuffer.bpxbuf + pxBuffer.pxCntr[2]*sizeof(uint),
+			//			 (void *)&payload, sizeof(uint));
+			sark_mem_cpy((void *)ypxbuf + pxBuffer.pxCntr[3]*sizeof(uint),
+					(void *)&payload, sizeof(uint));
+			pxBuffer.pxCntr[3]++;
+		}
 	}
 	else if(key_hdr == MCPL_FWD_PIXEL_EOF && key_arg == myCoreID) {
-		// debug 29.07.2016: since we only broadcast gray, no need to process it
+		// for forwarding, exclude root-node!!!!
+		if(sv->p2p_addr != 0) {
+			// debug 29.07.2016: since we only broadcast gray, no need to process it
 #if (FWD_FULL_COLOR==TRUE)
-		spin1_schedule_callback(processGrayScaling, 0, 0, PRIORITY_PROCESSING);
+			spin1_schedule_callback(processGrayScaling, 0, 0, PRIORITY_PROCESSING);
 #else
-		spin1_schedule_callback(collectGrayPixels, 0, 0, PRIORITY_PROCESSING);
+			spin1_schedule_callback(collectGrayPixels, 0, 0, PRIORITY_PROCESSING);
 #endif
+		}
 	}
 
 	/*---------------- Old processing mechanism for forwarded packet ------------------
@@ -313,7 +312,8 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		blkInfo->opType = payload >> 8;
 		blkInfo->opFilter = (payload >> 4) & 0xF;
 		blkInfo->opSharpen = payload & 0xF;
-		spin1_schedule_callback(setFreq, (payload >> 16), NULL, PRIORITY_PROCESSING);
+		//we remove setFreq, because now profiler runs on its own:
+		//spin1_schedule_callback(setFreq, (payload >> 16), NULL, PRIORITY_PROCESSING);
 	}
 	else if(key==MCPL_BCAST_NODES_INFO) {
 		// how to disable default node-ID to prevent a chip accidently active due to its
@@ -452,10 +452,12 @@ void hSDP(uint mBox, uint port)
 	// Note: the variable msg might be released somewhere else,
 	//       especially when delivering frame's channel
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
-	/*
+
+#if (DEBUG_LEVEL>2)
 	io_printf(IO_STD, "got sdp tag = 0x%x, srce_port = 0x%x, srce_addr = 0x%x, dest_port = 0x%x\n",
 			  msg->tag, msg->srce_port, msg->srce_addr, msg->dest_port);
-	*/
+#endif
+
 	if(port==SDP_PORT_CONFIG) {
 		if(msg->cmd_rc == SDP_CMD_CONFIG_NETWORK) {
 			// will send: maxBlock, nodeID, op-type
@@ -540,7 +542,7 @@ void hSDP(uint mBox, uint port)
 		sark_mem_cpy(rpxbuf, &msg->cmd_rc, pxBuffer.pxLen);	
 
 
-		///io_printf(IO_STD, "pxSeq = %d\n", pxBuffer.pxSeq);
+		io_printf(IO_BUF, "Got rpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
 
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
 		// spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
@@ -566,7 +568,7 @@ void hSDP(uint mBox, uint port)
 		pxBuffer.pxLen = msg->length - 8;
 		sark_mem_cpy(gpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
 
-		//io_printf(IO_STD, "pxSeq = %d\n", pxBuffer.pxSeq);
+		io_printf(IO_BUF, "Got gpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
 
 
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
@@ -600,7 +602,7 @@ void hSDP(uint mBox, uint port)
 		sark_mem_cpy(bpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
 
 
-		//io_printf(IO_STD, "pxSeq = %d\n", pxBuffer.pxSeq);
+		io_printf(IO_BUF, "Got bpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
 
 
 		// process gray scalling

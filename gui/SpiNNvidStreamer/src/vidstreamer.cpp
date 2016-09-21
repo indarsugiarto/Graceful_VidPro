@@ -62,7 +62,7 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	spinn->configSpin(1, 350, 350);
 	*/
 
-	experiment = 10;
+	experiment = 0;
 
 	if(experiment > 0) {
 		ui->rbLaplace->setChecked(true);
@@ -131,9 +131,8 @@ void vidStreamer::pbConfigureClicked()
     if(ui->rbFilterOn->isChecked()) wFilter = 1;
     quint8 wHist = 0;
     if(ui->rbSharpOn->isChecked()) wHist = 1;
-    quint8 freq = 200;
-    if(ui->cbFreq->currentIndex()==1)
-        freq = 250;
+	quint8 freq;
+	freq = ui->cbFreq->currentText().toInt();
 	quint8 nCorePreProc = ui->sbPixelWorkers->value();
 	spinn->configSpin(spinIdx, nNodes, opType, wFilter, wHist, freq, nCorePreProc);
 

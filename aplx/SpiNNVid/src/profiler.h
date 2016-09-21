@@ -13,8 +13,8 @@
  * NOTE: the profiler core doesn't use MCPL but FR
  */
 #include <spin1_api.h>
-#include "defSpiNNVid.h"
 #include <stdfix.h>
+#include "defSpiNNVid.h"
 
 #ifndef REAL
 #define REAL						accum
@@ -24,11 +24,9 @@
 //#define REPORT_TIMER_TICK_PERIOD_US	1000000	// to get 1s resolution in FREQ_REF_200MHZ
 #define FREQ_REF_200MHZ				200
 
-#define IDLE_UPDATE_PERIOD      100     // in microsecs, assuming 200MHz
-#define IDLE_SAMPLE_PERIOD      1000    // the ratio value to IDLE_UPDATE_PERIOD
-                                        // so, if IDLE_UPDATE_PERIOD is 100 and
-                                        // IDLE_SAMPLE_PERIOD is 1000, then
-                                        // the idle counter is sampled every 100ms
+#define IDLE_COLLECT_PERIOD     100     // how many samples are needed?
+#define IDLE_SAMPLE_PERIOD      1000    // the idle counter is sampled every 1000us
+
 #define IDLE_RAW_FORMAT         0       // in raw format
 #define IDLE_REAL_FORMAT        1       // in relative (percentage) REAL format
 #define IDLE_FLOAT_FORMAT       2       // in relative (percentage) FLOAT format
@@ -153,9 +151,11 @@ void getFreqParams(uint f, uint *ms, uint *ns);
 void changeFreq(uint f);					// we use uchar to limit the frequency to 255
 void changePLL(uint flag);
 uint readSpinFreqVal();
+void readPLL(uint chip_addr, uint null);
+
 
 // cpu-utilisation related
-extern void idle();							// it is moved/defined in isr.c
+void idle(uint arg0, uint arg1);
 void disableCPU(uint virtCoreID, uint none);
 void enableCPU(uint virtCoreID, uint none);
 // void computeAvgCPUidle();				// deprecated, replaced with getProcUtil()
@@ -165,6 +165,36 @@ void getProcUtil(uint idleCntr[18], uchar format);
 // the current (real?) frequency -> can be used for reporting/debugging
 uint initProfiler();		// mainly for changing PLL-2
 void terminateProfiler(uint cpuFreq);	// and for restoring PLL-2
+
+
+/*----------------------------------------------------------------*/
+/*----------------------------------------------------------------*/
+/*---------------------------- variables -------------------------*/
+
+/* global variables */
+uchar myPhyCore;
+
+// are we going to run adaptively ?
+uchar adaptiveFreq;
+
+// reading temperature sensors
+uint tempVal[3];							// there are 3 sensors in each chip
+uint cpuIdleCntr[18];						// for all cpus
+
+// static uint idle_collect_cntr;              // if defined static, cannot be recognized by isr.c !!!
+uint idle_collect_cntr;              // this is for IDLE_COLLECT_PERIOD
+REAL maxIdleCntr;
+REAL normIdleCntr;
+uint T2Ticks;
+
+uint avgCPUidle;							// TODO: how to measure it?
+float avgCPUload;							// average CPU load / utilization
+
+// PLL and frequency related (for internal purpose):
+uint _r20, _r21, _r24;						// the original value of r20, r21, and r24
+uint r20, r21, r24, r25;					// the current value of r20, r21 and r24 during *this* experiment
+uint _freq;									// ref/original frequency
+
 
 #endif // PROFILER_H
 
