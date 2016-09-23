@@ -12,20 +12,20 @@ void SpiNNVid_greetings()
 // deprecated: if using fix number of nodes
 #ifdef USE_FIX_NODES
 #if (FWD_FULL_COLOR==TRUE)
-	io_printf(stream, "[FIX_NODES:FWD_RGB] SpiNNVid-v%d.%d for Spin%d\n",
+	io_printf(stream, "[SpiNNVid-v%d.%d] for Spin%d with CONFIGURABLE_NODES and FWD_RGB\n",
 				  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
 #else
-	io_printf(stream, "[FIX_NODES:FWD_GRY] SpiNNVid-v%d.%d for Spin%d\n",
+	io_printf(stream, "[SpiNNVid-v%d.%d] for Spin%d with CONFIGURABLE_NODES and FWD_GRAY\n",
 				  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
 #endif
 
 #else
 // recent version: using configurable nodes
 #if (FWD_FULL_COLOR==TRUE)
-	io_printf(stream, "[CONFIGURABLE_NODES] SpiNNVid-v%d.%d for Spin%d with FWD_RGB\n",
+	io_printf(stream, "[SpiNNVid-v%d.%d] for Spin%d with CONFIGURABLE_NODES and FWD_RGB\n",
 				  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
 #else
-	io_printf(stream, "[CONFIGURABLE_NODES] SpiNNVid-v%d.%d for Spin%d with FWD_GRAY\n",
+	io_printf(stream, "[SpiNNVid-v%d.%d] for Spin%d with CONFIGURABLE_NODES and FWD_GRAY\n",
 				  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
 #endif
 #endif

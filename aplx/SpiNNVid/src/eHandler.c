@@ -5,9 +5,33 @@
 /*------------------------------------------------------------------------------*/
 /*------------------- Sub functions called by main handler ---------------------*/
 
+void build_task_list()
+{
+	uchar n = 0;
+	if(blkInfo->opFilter==1) {
+		taskList.tasks[n] = PROC_FILTERING;
+		n++;
+	}
+	if(blkInfo->opSharpen==1) {
+		taskList.tasks[n] = PROC_SHARPENING;
+		n++;
+	}
+	if(blkInfo->opType > 0) {
+		taskList.tasks[n] = PROC_EDGING_DVS;
+		n++;
+	}
+	// finally, send the result: it's mandatory!
+	taskList.tasks[n] = PROC_SEND_RESULT;
+	n++;
+
+	taskList.nTasks = n;
+	taskList.cTaskPtr = 0;
+	taskList.cTask = taskList.tasks[0];
+}
+
 void configure_network(uint mBox)
 {
-	io_printf(IO_STD, "[CONFIG] Receiving configuration...\n");
+	io_printf(IO_STD, "[CONFIG] Got configuration...\n");
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
 	if(msg->cmd_rc == SDP_CMD_CONFIG_NETWORK) {
 		// NOTE: encoding strategy:
@@ -23,7 +47,7 @@ void configure_network(uint mBox)
 		// initially, it runs at 200MHz, but change to 250 during processing
 		// setFreq(msg->srce_port, NULL); --> obsolete!
 		payload = (msg->srce_port << 16) | PROF_MSG_SET_FREQ;
-		spin1_send_mc_packet(MCPL_TO_PROFILER, payload, WITH_PAYLOAD);
+		spin1_send_mc_packet(MCPL_TO_ALL_PROFILER, payload, WITH_PAYLOAD);
 
 		// then tell the other nodes about this op-freq info
 
@@ -77,6 +101,11 @@ void configure_network(uint mBox)
 		}
 	}
 
+	/* Regarding task list.
+	 **/
+	// first, build a task list:
+	build_task_list();
+
 	// debugging:
 	// give_report(DEBUG_REPORT_BLKINFO, 0);
 }
@@ -129,11 +158,13 @@ void leaderUpdateHist(uint arg0, uint arg1)
 					spin1_send_mc_packet(MCPL_BCAST_HIST_RESULT+i, hist[i], WITH_PAYLOAD);
 				}
 				// then measure time
+				/*
 				perf.tHistProp = READ_TIMER();
 #if (DEBUG_LEVEL > 0)
 				io_printf(IO_STD, "Histogram propagation clock period = %u\n",
 						  perf.tHistProp);
 #endif
+				*/
 			}
 		}
 	}
@@ -308,6 +339,10 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 			spin1_schedule_callback(bcastWID, 0, 0, PRIORITY_PROCESSING);
 		}
 	}
+
+
+	/*---------------------------------------------------------------------------*/
+	/*------------------ Regarding network and task configuration ---------------*/
 	else if(key==MCPL_BCAST_OP_INFO) {
 		blkInfo->opType = payload >> 8;
 		blkInfo->opFilter = (payload >> 4) & 0xF;
@@ -344,6 +379,10 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		blkInfo->maxBlock = 0;
 		blkInfo->nodeBlockID = 0xFF;
 	}
+	/*------------------ End of network and task configuration ----------------*/
+	/*-------------------------------------------------------------------------*/
+
+
 
 	// got frame info from root node, then broadcast to workers
 	else if(key==MCPL_BCAST_FRAME_INFO) {
@@ -357,49 +396,51 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		spin1_send_mc_packet(MCPL_BCAST_GET_WLOAD, 0, WITH_PAYLOAD);
 	}
 
-	// MCPL_EDGE_DONE is sent by every core to leadAp
+	// MCPL_EDGE_DONE is sent by every core to leadAp within a node
 	else if(key==MCPL_EDGE_DONE) {
 		// the payload carries information about timing
-		nEdgeJobDone++;
-		perf.tEdgeNode += payload;
+		//nEdgeJobDone++; --> deprecated!!!
+		nWorkerDone++;
+		perf.tNode += payload;
 
 		// I think we have a problem with comparing to tAvailable,
 		// because not all cores might be used (eg. the frame is small)
-		if(nEdgeJobDone==workers.tRunning) {
-			perf.tEdgeNode /= nEdgeJobDone;
+		if(nWorkerDone==workers.tRunning) {
+			perf.tNode /= nWorkerDone;
 			// collect measurement
-			// Note: this also includes time for filtering, since filtering also trigger edging
-			toc = sv->clock_ms;
-			elapse = toc-tic;	// in milliseconds
+			//toc = sv->clock_ms;
+			//elapse = toc-tic;	// in milliseconds
 
-			// what next? trigger the chain for sending from root-node
-			spin1_schedule_callback(afterProcessingDone, 0, 0, PRIORITY_PROCESSING);
+			// send notification to <0,0,LEAD_CORE> with ID and performance measurement
+			uint key = MCPL_BLOCK_DONE_TEDGE | blkInfo->nodeBlockID;
+			spin1_send_mc_packet(key, perf.tNode, WITH_PAYLOAD);
+
+			// and tell profiler that processing is done for a node
+			spin1_send_mc_packet(MCPL_TO_OWN_PROFILER, PROF_MSG_PROC_END, WITH_PAYLOAD);
 		}
 	}
 
-	// MCPL_BLOCK_DONE will be sent by leadAp in each node (including the leadAp in the root-node)
-	// to core <0,0,leadAp>
-	else if(key==MCPL_BLOCK_DONE) {
+	// MCPL_BLOCK_DONE_TEDGE is sent by each node to <0,0,LEAD_CORE>,
+	// which contains node-ID and perf
+	else if(key_hdr == MCPL_BLOCK_DONE_TEDGE) {
 		nBlockDone++;
-		/*
-		io_printf(IO_STD, "Receive MCPL_BLOCK_DONE from node-%d\n", payload);
-		io_printf(IO_STD, "Total nBlockDone now is %d\n", nBlockDone);
-		io_printf(IO_STD, "Next block should be %d\n", payload+1);
-		*/
-		if(nBlockDone==blkInfo->maxBlock) {
-			spin1_schedule_callback(notifyDestDone, 0, 0, PRIORITY_PROCESSING);
+
+		// collect measurement for each processing
+		perf.tTotal += payload;
+
+		// check if all blocks have finished
+		if(nBlockDone == blkInfo->maxBlock) {
+
+			// collect total measurement
+			perf.tTotal /= blkInfo->maxBlock;
+			taskList.tPerf[taskList.cTaskPtr] = perf.tTotal;
+
+			// then prepare for taskProcessingLoop again
+			uchar ct = taskList.cTaskPtr + 1;
+			taskList.cTask = taskList.tasks[ct];
+			taskList.cTaskPtr = ct;
+			spin1_schedule_callback(taskProcessingLoop, 0, 0, PRIORITY_PROCESSING);
 		}
-		// if I'm block-0, continue the chain by broadcasting to other nodes
-		// with the next node-ID (++payload)
-		// MCPL_BCAST_SEND_RESULT is destined to other external nodes from root-node
-		else if(blkInfo->nodeBlockID==0) {
-			spin1_send_mc_packet(MCPL_BCAST_SEND_RESULT, payload+1, WITH_PAYLOAD);
-			//spin1_send_mc_packet(MCPL_BCAST_SEND_RESULT, ++payload, WITH_PAYLOAD);
-		}
-	}
-	// id addition to MCPL_BLOCK_DONE, a node might send its performance measure
-	else if(key==MCPL_BLOCK_DONE_TEDGE) {
-		perf.tEdgeTotal += payload;
 	}
 
 	else if(key==MCPL_BCAST_SEND_RESULT) {
@@ -437,8 +478,10 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
 	/*-------------------------- All cores processing ----------------------------*/
+	// key MCPL_BCAST_START_PROC will be broadcasted by leadAp in root-node if
+	// it receives the sdp message "End-of-Frame" via port SDP_PORT_FRAME_END.
 	else if(key==MCPL_BCAST_START_PROC) {
-		spin1_schedule_callback(triggerProcessing, key, payload, PRIORITY_PROCESSING);
+		spin1_schedule_callback(triggerProcessing, payload, NULL, PRIORITY_PROCESSING);
 	}
 	else if(key==MCPL_BCAST_ALL_REPORT) {
 		// MCPL_BCAST_ALL_REPORT will be broadcasted to all cores in the system
@@ -479,7 +522,7 @@ void hSDP(uint mBox, uint port)
 #endif
 		}
 		else if(msg->cmd_rc == SDP_CMD_FRAME_INFO) {
-			//io_printf(IO_STD, "Got frame info...\n");
+			io_printf(IO_STD, "[CONFIG] Got frame info...\n");
 			// will only send wImg (in arg1.high) and hImg (in arg1.low)
 			blkInfo->wImg = msg->arg1 >> 16;
 			blkInfo->hImg = msg->arg1 & 0xFFFF;
@@ -524,111 +567,43 @@ void hSDP(uint mBox, uint port)
 	 * */
 
 	else if(port==SDP_PORT_R_IMG_DATA) {
-		// chCntr++;
-		// then tell core-2 to proceed
-
-		//ushort pxLen = msg->length - sizeof(sdp_hdr_t);
-		//io_printf(IO_BUF, "hSDP: got mBox at-0x%x with pxLen=%d\n", msg, pxLen);
-		//spin1_send_mc_packet(MCPL_PROCEED_R_IMG_DATA, mBox, WITH_PAYLOAD);
-		//return;	// exit from here, because msg should be freed by core-2
-
-		//pxBuffer.pxSeq = msg->cmd_rc;		// this is in version 0.1
-		//pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
-		//sark_mem_cpy(pxBuffer.rpxbuf, &msg->seq, pxBuffer.pxLen);
-		//sark_mem_cpy(rpxbuf, &msg->seq, pxBuffer.pxLen);
-
 		pxBuffer.pxSeq = (msg->tag << 8) | msg->srce_port;
 		pxBuffer.pxLen = msg->length - 8;
 		sark_mem_cpy(rpxbuf, &msg->cmd_rc, pxBuffer.pxLen);	
 
-
-		io_printf(IO_BUF, "Got rpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
+		// Debugging 28.07.2016: how many pxSeq?
+		//io_printf(IO_BUF, "Got rpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
 
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
-		// spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
-
-		// Debugging 28.07.2016: how many pxSeq?
-		//io_printf(IO_STD, "Got pxSeq-%d with msg->length %d\n", msg->cmd_rc, msg->length);
 	}
 	else if(port==SDP_PORT_G_IMG_DATA) {
-		// chCntr++;
-		// then tell core-3 to proceed
-
-		//ushort pxLen = msg->length - sizeof(sdp_hdr_t);
-		//io_printf(IO_BUF, "hSDP: got mBox at-0x%x with pxLen=%d\n", msg, pxLen);
-		//spin1_send_mc_packet(MCPL_PROCEED_G_IMG_DATA, mBox, WITH_PAYLOAD);
-		//return;	// exit from here, because msg should be freed by core-3
-
-		//pxBuffer.pxSeq = msg->cmd_rc;		// not important, if there's packet lost...
-		//pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
-		//sark_mem_cpy(pxBuffer.gpxbuf, &msg->seq, pxBuffer.pxLen);
-		//sark_mem_cpy(gpxbuf, &msg->seq, pxBuffer.pxLen);
-
 		pxBuffer.pxSeq = (msg->tag << 8) | msg->srce_port;
 		pxBuffer.pxLen = msg->length - 8;
 		sark_mem_cpy(gpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
 
-		io_printf(IO_BUF, "Got gpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
-
-
+		//io_printf(IO_BUF, "Got gpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
-		// spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
-		// TODO: Think about packet lost...
-		//       Note, pxBuffer.pxSeq and/or pxBuffer.pxLen may be different by now
 	}
 	else if(port==SDP_PORT_B_IMG_DATA) {
-		// chCntr++;
-		// then tell core-4 to proceed
-
-		//ushort pxLen = msg->length - sizeof(sdp_hdr_t);
-		//io_printf(IO_BUF, "hSDP: got mBox at-0x%x with pxLen=%d\n", msg, pxLen);
-		//spin1_send_mc_packet(MCPL_PROCEED_B_IMG_DATA, mBox, WITH_PAYLOAD);
-		/*
-		// then send reply: NO, IT IS TOO SLOW VIA SDP HANDSHAKING
-		if(chCntr==3) {	// all channels have been received
-			chCntr = 0;
-			spin1_send_sdp_msg(&replyMsg, DEF_SDP_TIMEOUT);
-		}
-		*/
-		//return;	// exit from here, because msg should be freed by core-4
-		//pxBuffer.pxSeq = msg->cmd_rc;		// So, if there's packet lost before, it won't be processed!!
-		//pxBuffer.pxLen = msg->length - 10;	// msg->length - sizeof(sdp_hdr_t) - sizeof(ushort)
-		//sark_mem_cpy(pxBuffer.bpxbuf, &msg->seq, pxBuffer.pxLen);
-		//sark_mem_cpy(bpxbuf, &msg->seq, pxBuffer.pxLen);
-
-		//pxBuffer.pxSeq = msg->srce_addr;
 		pxBuffer.pxSeq = (msg->tag << 8) | msg->srce_port;
 		pxBuffer.pxLen = msg->length - 8;
 		sark_mem_cpy(bpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
 
+		//io_printf(IO_BUF, "Got bpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
 
-		io_printf(IO_BUF, "Got bpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
-
-
-		// process gray scalling
+		// process gray scalling and forward afterwards
 		spin1_schedule_callback(processGrayScaling, 0, 0, PRIORITY_PROCESSING);
-
-		// forward and notify to do grayscaling:
-		// spin1_schedule_callback(fwdImgData, 0, 0, PRIORITY_PROCESSING);
-		// TODO: Note: how to handle missing packet?
 	}
 
 	/*--------------------------------------------------------------------------------------*/
 	/*--------------------------------------------------------------------------------------*/
 	/*-------------- Host will send an empty message at port SDP_PORT_FRAME_END ------------*/
 	/*-------------- to trigger spiNNaker to do the processing                  ------------*/
-	/*-------------- This command should be sent to core<0,0,1>                 ------------*/
+	/*-------------- This command should be sent to core<0,0,LEAD_CORE>         ------------*/
 	else if(port==SDP_PORT_FRAME_END) {
-
-		// Karena srce_addr tidak bisa dipakai untuk pxSeq, kita buat pxSeq secara
-		// sekuensial:
-		// pxBuffer.pxSeq = 0;	// dan juga harus di-reset di bagian SDP_PORT_FRAME_INFO
-
-#if (DEBUG_LEVEL > 0)
-		//debugging:
-		io_printf(IO_STD, "Processing begin...\n");
-#endif
-		spin1_send_mc_packet(MCPL_BCAST_START_PROC, 0, WITH_PAYLOAD);
+		// at this point, the task list has already been built in the root-leadAp
+		// then go to event-loop for task processing
+		spin1_schedule_callback(taskProcessingLoop,0,0,PRIORITY_PROCESSING);
 	}
 
 	else if(port==SDP_PORT_FPGA_OUT) {

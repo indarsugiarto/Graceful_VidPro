@@ -51,6 +51,7 @@ inline void initImgBufs()
 void releaseImgBuf()
 {
 	if(blkInfo->imgRIn != NULL) {
+		io_printf(IO_BUF, "[IMGBUF] Releasing SDRAM heap...\n");
 		sark_free(blkInfo->imgRIn);
 		sark_free(blkInfo->imgGIn);
 		sark_free(blkInfo->imgOut1);
@@ -182,13 +183,13 @@ void initRouter()
 	else if(x>0 && y==0)	dest = (1 << 3);	// west
 	else if(x==0 && y>0)	dest = (1 << 5);	// south
 	else					dest = leader;
-	e = rtr_alloc(2);
+	e = rtr_alloc(1);
 	if(e==0)
 	{
 		terminate_SpiNNVid(IO_STD, "initRouter err for special keys!\n", RTE_ABORT);
 	} else {
-		rtr_mc_set(e, MCPL_BLOCK_DONE, 0xFFFFFFFF, dest); e++;
-		rtr_mc_set(e, MCPL_BLOCK_DONE_TEDGE, 0xFFFFFFFF, dest); e++;
+		//rtr_mc_set(e, MCPL_BLOCK_DONE, 0xFFFFFFFF, dest); e++;
+		rtr_mc_set(e, MCPL_BLOCK_DONE_TEDGE, 0xFFFF0000, dest); e++;
 	}
 
 
@@ -268,6 +269,8 @@ void initRouter()
 	/*----------------------- other keys with special routing --------------------*/
 
 	// communication with the profiler:
+	// 1. all profilers:
+	// 2. internal profiler:
 	dest = profiler;
 #if(USING_SPIN==5)
 	if(x==y) {
@@ -288,14 +291,14 @@ void initRouter()
 	if(sv->p2p_addr==0)
 		dest += 1 + (1 << 1) + (1 << 2);
 #endif
-	e = rtr_alloc(1);
+	e = rtr_alloc(2);
 	if(e==0)
 	{
 		terminate_SpiNNVid(IO_STD, "initRouter err for other keys!\n", RTE_ABORT);
 	} else {
-		rtr_mc_set(e, MCPL_TO_PROFILER,	0xFFFFFFFF, dest); e++;
+		rtr_mc_set(e, MCPL_TO_ALL_PROFILER,	0xFFFFFFFF, dest); e++;
+		rtr_mc_set(e, MCPL_TO_OWN_PROFILER, 0xFFFFFFFF, profiler); e++;
 	}
-
 }
 
 void initSDP()

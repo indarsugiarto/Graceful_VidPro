@@ -43,23 +43,41 @@ void give_report(uint reportType, uint target)
 			io_printf(dest, "-----------------------------\n");
 		}
 		else if(reportType==DEBUG_REPORT_PLL_INFO) {
-			//readPLL(sv->p2p_addr, NULL);
 			// send MCPL to all profilers
-			spin1_send_mc_packet(MCPL_TO_PROFILER, PROF_MSG_PLL_INFO, WITH_PAYLOAD);
+			if(sv->p2p_addr==0)
+				spin1_send_mc_packet(MCPL_TO_ALL_PROFILER, PROF_MSG_PLL_INFO, WITH_PAYLOAD);
 		}
 		else if(reportType==DEBUG_REPORT_IMGBUFS) {
-			io_printf(IO_BUF, "\nSDRAM Image Buffer allocation:\n--------------------------------\n");
-			io_printf(IO_BUF, "imgRin = 0x%x\n", blkInfo->imgRIn);
-			io_printf(IO_BUF, "imgGin = 0x%x\n", blkInfo->imgGIn);
-			io_printf(IO_BUF, "imgBin = 0x%x\n", blkInfo->imgBIn);
-			io_printf(IO_BUF, "imgOut1 = 0x%x\n", blkInfo->imgOut1);
-			io_printf(IO_BUF, "imgOut2 = 0x%x\n", blkInfo->imgOut2);
-			io_printf(IO_BUF, "imgOut3 = 0x%x\n", blkInfo->imgOut3);
-			io_printf(IO_BUF, "--------------------------------\n");
-			io_printf(IO_BUF, "DTCM Image Buffer allocation:\n-------------------------------\n");
-			io_printf(IO_BUF, "dtcmImgBuf = 0x%x\n", dtcmImgBuf);
-			io_printf(IO_BUF, "resImgBuf  = 0x%x\n", resImgBuf);
-			io_printf(IO_BUF, "-------------------------------\n\n");
+			if(workers.active==TRUE) {
+				/*
+				io_printf(IO_BUF, "\nSDRAM Image Buffer allocation:\n--------------------------------\n");
+				io_printf(IO_BUF, "imgRin = 0x%x\n", blkInfo->imgRIn);
+				io_printf(IO_BUF, "imgGin = 0x%x\n", blkInfo->imgGIn);
+				io_printf(IO_BUF, "imgBin = 0x%x\n", blkInfo->imgBIn);
+				io_printf(IO_BUF, "imgOut1 = 0x%x\n", blkInfo->imgOut1);
+				io_printf(IO_BUF, "imgOut2 = 0x%x\n", blkInfo->imgOut2);
+				io_printf(IO_BUF, "imgOut3 = 0x%x\n", blkInfo->imgOut3);
+				io_printf(IO_BUF, "--------------------------------\n");
+				*/
+				io_printf(IO_BUF, "DTCM Image Buffer allocation:\n---------------------------------\n");
+				io_printf(IO_BUF, "dtcmImgBuf = 0x%x\n", dtcmImgBuf);
+				io_printf(IO_BUF, "resImgBuf  = 0x%x\n", resImgBuf);
+				io_printf(IO_BUF, "---------------------------------\n\n");
+				debugMsg.cmd_rc = DEBUG_REPORT_IMGBUF_IN;
+				debugMsg.seq = blkInfo->nodeBlockID;
+				debugMsg.arg1 = (uint)blkInfo->imgRIn;
+				debugMsg.arg2 = (uint)blkInfo->imgGIn;
+				debugMsg.arg3 = (uint)blkInfo->imgBIn;
+				spin1_send_sdp_msg(&debugMsg, 10);
+				spin1_delay_us(10);
+				debugMsg.cmd_rc = DEBUG_REPORT_IMGBUF_OUT;
+				debugMsg.seq = blkInfo->nodeBlockID;
+				debugMsg.arg1 = (uint)blkInfo->imgOut1;
+				debugMsg.arg2 = (uint)blkInfo->imgOut2;
+				debugMsg.arg3 = (uint)blkInfo->imgOut3;
+				spin1_send_sdp_msg(&debugMsg, 10);
+				spin1_delay_us(blkInfo->nodeBlockID*1000);
+			}
 		}
 	}
 	// for all cores
@@ -68,7 +86,7 @@ void give_report(uint reportType, uint target)
 	}
 	else if(reportType==DEBUG_REPORT_PERF){
 		io_printf(dest, "[wID-%d] perf.tEdge = %u\n",
-				  workers.subBlockID, perf.tEdge);
+				  workers.subBlockID, perf.tCore);
 	}
 	else if(reportType==DEBUG_REPORT_BLKINFO) {
 		if(workers.active==TRUE) {
@@ -109,14 +127,6 @@ void give_report(uint reportType, uint target)
 			io_printf(dest, "[wID-%d] blkID-%d, sp = %d, ep = %d\n",
 					  workers.subBlockID, blkInfo->nodeBlockID, workers.startLine,
 					  workers.endLine);
-			/*
-			debugMsg.cmd_rc = (blkInfo->maxBlock << 8) + blkInfo->nodeBlockID;
-			// seq: how many workers in the block and what's current worker ID
-			debugMsg.seq = (blkInfo->Nworkers << 8) + workers.subBlockID;
-			debugMsg.arg1 = (workers.startLine << 16) + workers.endLine;
-			debugMsg.arg2 = (uint)workers.imgRIn;	// not important, just for check
-			debugMsg.arg3 = (uint)workers.imgOut1;	// not important
-			*/
 			debugMsg.cmd_rc = DEBUG_REPORT_WLOAD;
 			debugMsg.arg1 = (blkInfo->maxBlock << 8) + blkInfo->nodeBlockID;
 			// seq: how many workers in the block and what's current worker ID
@@ -143,7 +153,7 @@ void give_report(uint reportType, uint target)
 
 	}
 	else if(reportType==DEBUG_REPORT_HISTPROP) {
-		io_printf(dest, "Histogram propagation clock period = %u\n", perf.tHistProp);
+		io_printf(dest, "Histogram propagation clock period = %u\n", perf.tCore);
 	}
 #endif
 }

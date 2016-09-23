@@ -62,7 +62,7 @@ typedef struct block_info {
 	ushort wImg;
 	ushort hImg;
 	//ushort isGrey;			// 0==color, 1==gray
-	uchar opType;			// 0==sobel, 1==laplace
+	uchar opType;			// 0==no operation, 1==sobel, 2==laplace, 3==dvs
 	uchar opFilter;			// 0==no filtering, 1==with filtering
 	uchar opSharpen;		// 0==no sharpening, 1==with sharpening
 	uchar nodeBlockID;		// will be send by host
@@ -109,7 +109,7 @@ typedef struct w_info {
 	// helper pointers
 	ushort wImg;		// just a copy of block_info_t.wImg
 	ushort hImg;		// just a copy of block_info_t.hImg
-	uchar opType;			// 0==sobel, 1==laplace
+	uchar opType;			// 0==no op, 1==sobel, 2==laplace, 3==dvs
 	uchar opFilter;			// 0==no filtering, 1==with filtering
 	uchar opSharpen;		// 0==no sharpening, 1==with sharpening
 
@@ -117,8 +117,8 @@ typedef struct w_info {
 	uchar *imgGIn;		// idem
 	uchar *imgBIn;		// idem
 	uchar *imgOut1;		// idem
-	uchar *imgOut2;		// idem
-	uchar *imgOut3;		// idem
+	//uchar *imgOut2;		// idem
+	//uchar *imgOut3;		// idem
 
 	// NOTE: only leadAp needs the following variables (for sending result to host)
 	uchar tRunning;			// the actual number of currently involved workers
@@ -126,8 +126,13 @@ typedef struct w_info {
 	uchar *blkImgGIn;	// will be used when sending report to host-PC
 	uchar *blkImgBIn;	// hence, only leadAp needs it
 	uchar *blkImgOut1;	// idem
-	uchar *blkImgOut2;	// idem
-	uchar *blkImgOut3;	// idem
+	//uchar *blkImgOut2;	// idem
+	//uchar *blkImgOut3;	// idem
+
+	// since there are different operation, it is better if we track the image address
+	uchar currentTask;
+	uchar *sdramImgIn;		// sdramImgIn and sdramImgOut might be interchanged
+	uchar *sdramImgOut;		// during process switching
 } w_info_t;
 
 typedef struct chain {
@@ -144,7 +149,6 @@ typedef struct fwdPkt {
 } fwdPkt_t;
 
 fwdPkt_t fwdPktBuffer[3];	// for each channel
-
 
 
 // Coba cara baru, multiple cores receive frames consecutively. This way, each core
@@ -205,15 +209,14 @@ volatile uchar dmaImgFromSDRAMdone;
 enum proc_type_e
 {
   PROC_FILTERING,		// Filtering a.k.a. smoothing
-  PROC_HISTEQ,		 	// Histogram equalization a.k.a. sharpening
-  PROC_EDGING		 	// Edge detection
+  PROC_SHARPENING,		// using Histogram equalization
+  PROC_EDGING_DVS,	 	// Edge detection or DVS emulation
+  PROC_SEND_RESULT
 };
 
 typedef enum proc_type_e proc_t;	//!< Typedef for enum spin_lock_e
 
 proc_t proc;
-
-
 
 
 typedef struct btree {
@@ -226,6 +229,26 @@ typedef struct btree {
   uchar maxHistSDPItem;     // should equal num_of_childre*4
   uchar SDPItemCntr;
 } btree_t;
+
+// for performance measurement
+typedef struct meas {
+	uint tCore;                 // measuring edge detection for each core
+	uint tNode;				// measuring edge detection for a node
+	uint tTotal;
+} meas_t;
+volatile uint64 tic, toc;
+volatile ushort elapse;
+meas_t perf;
+
+// regarding task list
+typedef struct task_list {
+	proc_t tasks[5];			// maximum number of tasks is 5
+	uint tPerf[5];				// time measurement of the above tasks[]
+	uchar nTasks;
+	proc_t cTask;				// current task
+	uchar cTaskPtr;				// current task pointer
+} task_list_t;
+task_list_t taskList;
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
@@ -260,8 +283,10 @@ uchar needSendDebug;
 uint myCoreID;
 uint dmaTID;
 
-volatile uchar nFiltJobDone;				// will be used to count how many workers have
-volatile uchar nEdgeJobDone;				// finished their job in either filtering or edge detection
+// nFiltJobDone and nEdgeJobDone are deprecated!!!
+//volatile uchar nFiltJobDone;				// will be used to count how many workers have
+//volatile uchar nEdgeJobDone;				// finished their job in either filtering or edge detection
+volatile uchar nWorkerDone;
 volatile uchar nBlockDone;
 
 // to speed up, let's allocate these two buffers in computeWLoad()
@@ -269,17 +294,6 @@ uchar *dtcmImgBuf;
 uchar *resImgBuf;
 ushort pixelCntr;				// how many pixel has been processed?
 
-// for performance measurement
-typedef struct meas {
-    uint tEdge;                 // measuring edge detection for each core
-    uint tEdgeNode;
-    uint tEdgeTotal;
-    uint tHistProp;                 // measuring histogram propagation
-    uint tHist;                     // histogram computation in each core
-} meas_t;
-volatile uint64 tic, toc;
-volatile ushort elapse;
-meas_t perf;
 
 
 uchar nCoresForPixelPreProc;
@@ -310,6 +324,7 @@ uchar get_block_id();			// get the block id, given the number of chips available
 void getChipXYfromID(ushort id, ushort *X, ushort *Y);
 
 // processing: worker discovery
+void taskProcessingLoop(uint arg0, uint arg1);
 void initIDcollection(uint withBlkInfo, uint Unused);
 void bcastWID(uint Unused, uint null);
 
@@ -326,11 +341,11 @@ void collectGrayPixels(uint arg0, uint arg1);
 
 void computeHist(uint arg0, uint arg1);     // will use ypxbuf to compute the histogram
 
-void triggerProcessing(uint arg0, uint arg1);
+void triggerProcessing(uint taskID, uint arg1);
+void triggerSendResultChain(uint arg0, uint arg1);
 void imgFiltering(uint arg0, uint arg1);
 void imgSharpening(uint arg0, uint arg1);
 void imgDetection(uint arg0, uint arg1);
-void afterProcessingDone(uint arg0, uint arg1);
 void sendDetectionResult2Host(uint nodeID, uint arg1);
 void sendDetectionResult2FPGA(uint nodeID, uint arg1);
 void notifyDestDone(uint arg0, uint arg1);          // this is notifyHostDone() in previous version

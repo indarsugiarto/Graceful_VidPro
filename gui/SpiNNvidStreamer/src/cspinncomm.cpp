@@ -5,8 +5,24 @@
 #include <QColor>
 #include <time.h>
 
-//for debugging
+/*------------ for debugging ----------------*/
 #include <QFileDialog>
+
+typedef struct mem_info {
+	quint8 x;
+	quint8 y;
+	quint32 r;
+	quint32 g;
+	quint32 b;
+	quint32 a;
+	quint32 z;
+	bool ready;
+} t_mem_info;
+
+t_mem_info imgBufAddr[48];	// max 48 nodes
+int imgBufAddrCntr;
+
+/*-------------------------------------------*/
 
 // TODO: the following X_CHIPS and Y_CHIPS should be configurable
 // but now, let's make it convenient
@@ -53,7 +69,7 @@ cSpiNNcomm::cSpiNNcomm(QObject *parent): QObject(parent),
 
 	hdrg = hdrr; // hdrg.dest_port = (SDP_PORT_G_IMG_DATA << 5) + leadAp;
 	hdrb = hdrr; // hdrb.dest_port = (SDP_PORT_B_IMG_DATA << 5) + leadAp;
-	hdre = hdrr; // hdre.dest_port = (SDP_PORT_FRAME_END  << 5) + leadAp;
+	hdre = hdrr; hdre.dest_port = (SDP_PORT_FRAME_END  << 5) + leadAp;
 	hdrc = hdrr; hdrc.dest_port = (SDP_PORT_CONFIG     << 5) + leadAp;
 }
 
@@ -153,7 +169,7 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
 	*/
 
 	// send the new configuraiton
-	quint8 N_nodes, opType, wFilter, wHistEq;
+	quint8 opType, wFilter, wHistEq;
 
 	N_nodes = nodesNum;				// by default it uses 4 nodes (spin3)
 	opType = edgeOperator;			// operator typ: SOBEL, LAPLACE
@@ -248,14 +264,6 @@ void cSpiNNcomm::readDebug()
 		   >> h.dest_addr >> h.srce_addr
 		   >> c.cmd_rc >> c.seq >> c.arg1 >> c.arg2 >> c.arg3;
 	if(c.cmd_rc==DEBUG_REPORT_WLOAD){
-		/*
-		quint16 mxBlk = c.cmd_rc >> 8;
-		quint16 blkID = c.cmd_rc & 0xFF;
-		quint16 numWorker = c.seq >> 8;
-		quint16 wID = c.seq & 0xFF;
-		quint16 sLine = c.arg1 >> 16;
-		quint16 eLine = c.arg1 & 0xFFFF;
-		*/
 		quint16 mxBlk = c.arg1 >> 8;
 		quint16 blkID = c.arg1 & 0xFF;
 		quint16 numWorker = c.arg2 >> 8;
@@ -265,6 +273,50 @@ void cSpiNNcomm::readDebug()
 		qDebug() << QString("Chip<%5,%6>\tblkID-%1\twID-%2\tsLine-%3\teLine-%4")
 					.arg(blkID).arg(wID).arg(sLine).arg(eLine)
 					.arg(h.srce_addr >> 8).arg(h.srce_addr & 0xFF);
+	}
+	else if(c.cmd_rc==DEBUG_REPORT_IMGBUF_IN) {
+		quint8 node = c.seq;
+		quint8 x = h.srce_addr >> 8;
+		quint8 y = h.srce_addr & 0xFF;
+//		qDebug() << QString("sp %1 %2").arg(x).arg(y);
+//		qDebug() << QString("sdump red.%1%2 %3 %4").arg(x).arg(y).arg(c.arg1, 0, 16).arg(szImg, 0, 16);
+//		qDebug() << QString("sdump green.%1%2 %3 %4").arg(x).arg(y).arg(c.arg2, 0, 16).arg(szImg, 0, 16);
+//		qDebug() << QString("sdump blue.%1%2 %3 %4").arg(x).arg(y).arg(c.arg3, 0, 16).arg(szImg, 0, 16);
+		imgBufAddr[node].x = x;
+		imgBufAddr[node].y = y;
+		imgBufAddr[node].r = c.arg1;
+		imgBufAddr[node].g = c.arg2;
+		imgBufAddr[node].b = c.arg3;
+	}
+	else if(c.cmd_rc==DEBUG_REPORT_IMGBUF_OUT) {
+		quint8 node = c.seq;
+//		quint8 x = h.srce_addr >> 8;
+//		quint8 y = h.srce_addr & 0xFF;
+//		qDebug() << QString("sdump gray.%1%2 %3 %4").arg(x).arg(y).arg(c.arg1, 0, 16).arg(szImg, 0, 16);
+//		qDebug() << QString("sdump res.%1%2 %3 %4").arg(x).arg(y).arg(c.arg2, 0, 16).arg(szImg, 0, 16);
+//		//qDebug() << QString("sdump blue.%1%2 %3 %4").arg(x).arg(y).arg(c.arg3, 0, 16).arg(szImg, 0, 16);
+		imgBufAddr[node].a = c.arg1;
+		imgBufAddr[node].z = c.arg2;
+		imgBufAddr[node].ready = TRUE;
+		imgBufAddrCntr++;
+		if(imgBufAddrCntr==N_nodes) {
+			for(int i=0; i<N_nodes; i++) {
+				qDebug() << QString("sp %1 %2").arg(imgBufAddr[i].x).arg(imgBufAddr[i].y);
+				qDebug() << QString("sdump red.%1%2 %3 %4").arg(imgBufAddr[i].x).arg(imgBufAddr[i].y)
+							.arg(imgBufAddr[i].r, 0, 16).arg(szImg, 0, 16);
+				qDebug() << QString("sdump green.%1%2 %3 %4").arg(imgBufAddr[i].x).arg(imgBufAddr[i].y)
+							.arg(imgBufAddr[i].g, 0, 16).arg(szImg, 0, 16);
+				qDebug() << QString("sdump blue.%1%2 %3 %4").arg(imgBufAddr[i].x).arg(imgBufAddr[i].y)
+							.arg(imgBufAddr[i].b, 0, 16).arg(szImg, 0, 16);
+				qDebug() << QString("sdump gray.%1%2 %3 %4").arg(imgBufAddr[i].x).arg(imgBufAddr[i].y)
+							.arg(imgBufAddr[i].a, 0, 16).arg(szImg, 0, 16);
+				qDebug() << QString("sdump res.%1%2 %3 %4").arg(imgBufAddr[i].x).arg(imgBufAddr[i].y)
+							.arg(imgBufAddr[i].z, 0, 16).arg(szImg, 0, 16);
+				qDebug() << "sleep 1";
+			}
+			qDebug() << "sp root";
+			imgBufAddrCntr = 0;
+		}
 	}
 }
 
@@ -404,8 +456,8 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 		hdrb.tag = tag; hdrb.srce_port = srce_port; sendImgLine(hdrb, bPtr, sz);
 
 		// then give sufficient delay
-		giveDelay(DEF_QT_WAIT_VAL*5000);	// ini biasanya yang aku pakai
-		//giveDelay(DEF_QT_WAIT_VAL*3000);	// rusak, tapi masih bisa dilihat
+		//giveDelay(DEF_QT_WAIT_VAL*5000);	// ini biasanya yang aku pakai
+		giveDelay(DEF_QT_WAIT_VAL*500);	// perfect, no SWC error
 		// then adjust array position
 		rPtr += sz;
 		gPtr += sz;
@@ -452,7 +504,10 @@ void cSpiNNcomm::sendTest(int testID)
     case 4: c.seq = DEBUG_REPORT_FRAMEINFO; break;
     case 5: c.seq = DEBUG_REPORT_PERF; break;
     case 6: c.seq = DEBUG_REPORT_PLL_INFO; break;
-	case 7: c.seq = DEBUG_REPORT_IMGBUFS; break;
+	case 7: c.seq = DEBUG_REPORT_IMGBUFS;
+		for(int i=0; i<48; i++) imgBufAddr[i].ready = FALSE;
+		imgBufAddrCntr = 0;
+		break;
     }
 	sendSDP(hdrc, scp(c));
 }

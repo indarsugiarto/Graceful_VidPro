@@ -125,15 +125,23 @@ void vidStreamer::pbConfigureClicked()
     // then send information to spinn
     quint8 spinIdx = ui->cbSpiNN->currentIndex();
     quint8 nNodes = ui->sbNchips->value();
-    quint8 opType = 0;
-    if(ui->rbLaplace->isChecked()) opType = 1;
+
+	quint8 opType = 0;
+	if(ui->rbSobel->isChecked()) opType = 1;
+	else if(ui->rbLaplace->isChecked()) opType = 2;
+	else if(ui->rbDVS->isChecked()) opType = 3;
+
     quint8 wFilter = 0;
     if(ui->rbFilterOn->isChecked()) wFilter = 1;
-    quint8 wHist = 0;
+
+	quint8 wHist = 0;
     if(ui->rbSharpOn->isChecked()) wHist = 1;
+
 	quint8 freq;
 	freq = ui->cbFreq->currentText().toInt();
+
 	quint8 nCorePreProc = ui->sbPixelWorkers->value();
+
 	spinn->configSpin(spinIdx, nNodes, opType, wFilter, wHist, freq, nCorePreProc);
 
     // just for the experiment: it's boring...

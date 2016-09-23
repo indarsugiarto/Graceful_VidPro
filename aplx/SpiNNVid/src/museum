@@ -1,3 +1,181 @@
+
+
+/*--------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------*/
+/*-------------------- MUSEUM: from previously failed algorithm ------------------------*/
+/*                                                                                      */
+/* Note: we cannot broadcast the sdp address because IT IS LOCAL DTCM !!!               */
+/*                                                                                      */
+/*--------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------*/
+
+/*
+// TODO: when do you put the chunk data into sdram?
+
+// storeFrame: call dma for dtcmImgBuf and reset its counter
+void storeDtcmImgBuf(uint ch, uint Unused)
+{
+	uchar *dest;
+	switch(ch) {
+	case 0:
+		dest = blkInfo->imgRIn; blkInfo->imgRIn += pixelCntr; break;
+	case 1:
+		dest = blkInfo->imgGIn; blkInfo->imgGIn += pixelCntr; break;
+	case 2:
+		dest = blkInfo->imgBIn; blkInfo->imgBIn += pixelCntr; break;
+	}
+
+	spin1_dma_transfer(DMA_TAG_STORE_FRAME, dest, dtcmImgBuf, DMA_WRITE, pixelCntr);
+
+	// then adjust/correct the pointer and the counter
+	pixelCntr = 0;
+}
+
+/*--------------------------------------------------------------------------------------*
+/*-------------------- leadAp forward sdp buffer to core 2,3 and 4 ---------------------*
+/*                                                                                      *
+/* processImgData() is executed by core-2,3 and 4 only in root node as a response to
+ * MCPL with keys MCPL_PROCEED_?_IMG_DATA triggered by leadAp after receiving sdp for
+ * frames (through specif frame's port
+ * *
+void processImgData(uint mBox, uint ch) {
+    io_printf(IO_STD, "processImgData with ch-%d is triggered\n", ch);
+
+	sdp_msg_t *msg = (sdp_msg_t *)mBox;
+	ushort pxLen = msg->length - sizeof(sdp_hdr_t);
+
+	io_printf(IO_BUF, "in process: got mBox at-0x%x with pxLen=%d\n", msg, pxLen);
+
+	return;
+
+	// step-1: copy the content of mBox to local buffer
+	uchar pxInfo[272];
+	sark_mem_cpy((void *)pxInfo, (void *)&msg->cmd_rc, pxLen);
+	io_printf(IO_BUF, "sdp data is copied...\n");
+
+
+
+	// step-2: then release mBox
+	spin1_msg_free(msg);
+	io_printf(IO_BUF, "sdp is release...\n");
+
+
+
+	// step-3: copy to dtcmImgBuf and if necessary trigger dma
+	sark_mem_cpy((void *)dtcmImgBuf+pixelCntr, pxInfo, pxLen);
+	io_printf(IO_BUF, "copied to dtcmImgBuf...\n");
+	pixelCntr += pxLen;
+	if(pixelCntr==workers.wImg) {
+		spin1_schedule_callback(storeDtcmImgBuf, ch, 0, PRIORITY_PROCESSING);
+	}
+	// then forward to other nodes
+	uchar i, cntr;
+	uint payload, base_key, key;
+
+	cntr = (pxLen % 4) == 0 ? pxLen / 4 : (pxLen / 4) + 1;
+
+	switch(ch) {
+	case 0: base_key = MCPL_FWD_R_IMG_DATA; break;
+	case 1: base_key = MCPL_FWD_G_IMG_DATA; break;
+	case 2: base_key = MCPL_FWD_B_IMG_DATA; break;
+	}
+
+	ushort szpx, remaining = pxLen;
+	for(i=0; i<cntr; i++) {
+		if(remaining > sizeof(uint))
+			szpx = sizeof(uint);
+		else
+			szpx = remaining;
+		sark_mem_cpy((void *)&payload, (void *)pxInfo + i*4, szpx);
+
+		//key = base_key | (cntr << 8) | i; // we have problem with this scheme
+											// because we also need to put the pxLen, but where?
+											// solution: assuming MCPL never race!!!
+
+		// the key will contains which channel (base_key), total length of current packet (pxLen)
+		// and current length of the chunk (szpx)
+		key = base_key | (pxLen << 4) | szpx;
+		spin1_send_mc_packet(key, payload, WITH_PAYLOAD);
+
+		remaining -= szpx;
+
+		// for debugging, remove in release mode:
+		io_printf(IO_BUF, "key-0x%x load-0x%x has been sent!\n", key, payload);
+		sark_delay_us(1000);
+	}
+
+	// TODO: decompress data
+	// decompress(ch);
+	// then reset buffer for next delivery
+}
+
+
+
+/*--------------------------------------------------------------------------------------*
+/*------- core 2,3 and 4 in other nodes (out of root node) receive fwd-ed packets ------*
+/*                                                                                      *
+/* recvFwdImgData() is executed by core-2,3 and 4 in nodes other than root. It processes
+ * forwarded packets from core-2,3 and 4 in root node *
+void recvFwdImgData(uint pxData, uint pxLenCh)
+{
+	io_printf(IO_BUF, "recvFwdImgData is triggered\n");
+	uchar  ch = pxLenCh >> 16;
+	ushort pxLen = (pxLenCh & 0xFFFF) >> 4;
+	uchar  szpx = pxLenCh & 0xF;
+
+	sark_mem_cpy((void *)fwdPktBuffer[ch].pxInfo+fwdPktBuffer[ch].pxLen, (void *)&pxData, szpx);
+
+	fwdPktBuffer[ch].pxLen += szpx;
+
+	// all chunks are collected?
+	if(fwdPktBuffer[ch].pxLen == pxLen) {
+
+		// for debugging:
+		io_printf(IO_BUF, "Core-%d has received the chunk!\n", myCoreID);
+
+		// put to dtcmImgBuf
+		sark_mem_cpy((void *)dtcmImgBuf+pixelCntr, (void *)fwdPktBuffer[ch].pxInfo, pxLen);
+
+		pixelCntr += pxLen;
+
+		if(pixelCntr==workers.wImg)
+			spin1_schedule_callback(storeDtcmImgBuf, ch, 0, PRIORITY_PROCESSING);
+
+		// TODO: decompress data
+		// decompress(ch);
+		// reset the counter for next delivery
+		fwdPktBuffer[ch].pxLen = 0;
+	}
+}
+
+
+
+void decompress(uchar ch)
+{
+
+}
+
+*/
+
+/*--------------------------------------------------------------------------------------*/
+/*-------------------- MUSEUM: from previously failed algorithm ------------------------*/
+/*--------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------*/
+
+
+
+
+___________________________________________________________________________________________
+
+
+
+
+
+
+
+
 void imgDetection(uint arg0, uint arg1)
 {
 	// debugging:
@@ -271,3 +449,116 @@ void imgDetection(uint arg0, uint arg1)
     // io_printf(IO_BUF, "Done! send MCPL_EDGE_DONE!\n");
     spin1_send_mc_packet(MCPL_EDGE_DONE, 0, WITH_PAYLOAD);
 }
+
+___________________________________________________________________________________________
+
+
+
+void triggerProcessing(uint taskID, uint arg1)
+{
+	// prepare measurement
+	tic = sv->clock_ms;
+
+	// how many workers/blocks have finished the process?
+	nEdgeJobDone = 0;
+	perf.tEdgeNode = 0;
+	perf.tEdgeTotal = 0;
+	nBlockDone = 0;
+
+	/*
+	if(blkInfo->opSharpen==1) {
+		proc = PROC_HISTEQ;
+		// only if root-node and leadAp, trigger the histogram equalisation chain
+		if(sv->p2p_addr==0 && leadAp)
+
+			// start timer to measure time
+			START_TIMER();
+
+			spin1_send_mc_packet(MCPL_BCAST_REPORT_HIST, 0, WITH_PAYLOAD);
+			// MCPL_BCAST_REPORT_HIST will be broadcasted to all cores in all chips
+			// only core-1 to core-4 in all chips will response to this call, because
+			// for sending 256 item of uint, we require 4 active "thread". Hence, we assign
+			// 4 cores to do this.
+	}
+	else if(blkInfo->opFilter==1) {
+		proc = PROC_FILTERING;
+		imgFiltering(0,0);	// inside imgFiltering, it will then call imgDetection
+	}
+	else {
+		proc = PROC_EDGING;
+#if (adaptiveFreq==TRUE)
+		//changeFreq(250);
+		imgDetection(0,0);	// go edge detection directly
+		//changeFreq(200);
+#else
+		imgDetection(0,0);	// go edge detection directly
+#endif
+	}
+
+	*/
+	proc = PROC_EDGING;
+#if (adaptiveFreq==TRUE)
+		//changeFreq(250);
+		imgDetection(0,0);	// go edge detection directly
+		//changeFreq(200);
+#else
+		imgDetection(0,0);	// go edge detection directly
+#endif
+
+	// then reset newImageFlag so that the next frame can be detected properly
+	newImageFlag = TRUE;
+}
+
+
+
+
+
+___________________________________________________________________________________________
+
+	// MCPL_BLOCK_DONE is deprecated
+	else if(key==MCPL_BLOCK_DONE) {
+		nBlockDone++;
+		/*
+		io_printf(IO_STD, "Receive MCPL_BLOCK_DONE from node-%d\n", payload);
+		io_printf(IO_STD, "Total nBlockDone now is %d\n", nBlockDone);
+		io_printf(IO_STD, "Next block should be %d\n", payload+1);
+		*/
+		if(nBlockDone==blkInfo->maxBlock) {
+			spin1_schedule_callback(notifyDestDone, 0, 0, PRIORITY_PROCESSING);
+		}
+		// if I'm block-0, continue the chain by broadcasting to other nodes
+		// with the next node-ID (++payload)
+		// MCPL_BCAST_SEND_RESULT is destined to other external nodes from root-node
+		else if(blkInfo->nodeBlockID==0) {
+			spin1_send_mc_packet(MCPL_BCAST_SEND_RESULT, payload+1, WITH_PAYLOAD);
+			//spin1_send_mc_packet(MCPL_BCAST_SEND_RESULT, ++payload, WITH_PAYLOAD);
+		}
+	}
+
+___________________________________________________________________________________________
+
+
+
+// AfterProcessingDone() is managed by the leadAp in each node.
+// But in root-node, afterProcessingDone() will trigger sending the result.
+void afterProcessingDone(uint arg0, uint arg1)
+{
+    if(proc==PROC_EDGING) {
+#if (DEBUG_LEVEL > 0)
+        // optional, won't be used in video streaming:
+        io_printf(IO_BUF, "Node-%d is done edging in %d-ms!\n", blkInfo->nodeBlockID, elapse);
+#endif
+        // if root-node, trigger to send the result
+        if(sv->p2p_addr==0) {
+#if (DESTINATION==DEST_HOST)
+            spin1_schedule_callback(sendDetectionResult2Host, 0, 0, PRIORITY_PROCESSING);
+#elif (DESTINATION==DEST_FPGA)
+            spin1_schedule_callback(sendDetectionResult2FPGA, 0, 0, PRIORITY_PROCESSING);
+#endif
+        }
+    }
+}
+
+___________________________________________________________________________________________
+
+

@@ -16,7 +16,7 @@ void initIDcollection(uint withBlkInfo, uint Unused)
 
 
 #if(DEBUG_LEVEL > 0)
-	io_printf(IO_BUF, "initIDcollection...\n");
+	io_printf(IO_BUF, "[SpiNNVid] initIDcollection...\n");
 #endif
 	spin1_send_mc_packet(MCPL_BCAST_INFO_KEY, 0, WITH_PAYLOAD);
 
@@ -156,8 +156,8 @@ void computeWLoad(uint withReport, uint arg1)
 	workers.imgGIn = blkInfo->imgGIn + w*workers.startLine;
 	workers.imgBIn = blkInfo->imgBIn + w*workers.startLine;
 	workers.imgOut1 = blkInfo->imgOut1 + w*workers.startLine;
-	workers.imgOut2 = blkInfo->imgOut2 + w*workers.startLine;
-	workers.imgOut3 = blkInfo->imgOut3 + w*workers.startLine;
+	//workers.imgOut2 = blkInfo->imgOut2 + w*workers.startLine;
+	//workers.imgOut3 = blkInfo->imgOut3 + w*workers.startLine;
 	// so, each work has different value of those workers.img*
 
 	// leadAp needs to know, the address of image block
@@ -169,8 +169,8 @@ void computeWLoad(uint withReport, uint arg1)
 		workers.blkImgGIn = blkInfo->imgGIn + offset;
 		workers.blkImgBIn = blkInfo->imgBIn + offset;
 		workers.blkImgOut1 = blkInfo->imgOut1 + offset;
-		workers.blkImgOut2 = blkInfo->imgOut2 + offset;
-		workers.blkImgOut3 = blkInfo->imgOut3 + offset;
+		//workers.blkImgOut2 = blkInfo->imgOut2 + offset;
+		//workers.blkImgOut3 = blkInfo->imgOut3 + offset;
 	}
 
 	// other locally copied data (in DTCM, rather than in SysRam)
@@ -184,6 +184,7 @@ void computeWLoad(uint withReport, uint arg1)
 
 	// when first called, dtcmImgBuf should be NULL. It is initialized in SpiNNVid_main()
 	if(dtcmImgBuf != NULL) {
+		io_printf(IO_BUF, "[IMGBUF] Releasing DTCM heap...\n");
 		sark_free(dtcmImgBuf);
 		sark_free(resImgBuf);
 	}
@@ -265,10 +266,10 @@ void processGrayScaling(uint arg0, uint arg1)
 
 
 	//io_printf(IO_BUF, "Storing pixels via DMA...\n");
-	io_printf(IO_BUF, "dmaToken_pxStore = %d\n", blkInfo->dmaToken_pxStore);
+	//io_printf(IO_BUF, "dmaToken_pxStore = %d\n", blkInfo->dmaToken_pxStore);
 	while(blkInfo->dmaToken_pxStore != myCoreID) {
 	}
-	io_printf(IO_BUF, "dmaToken_pxStore = %d\n", blkInfo->dmaToken_pxStore);
+	//io_printf(IO_BUF, "dmaToken_pxStore = %d\n", blkInfo->dmaToken_pxStore);
 
 	// the combination of dma and direct memory copying
 	uint dmaDone, tg;
@@ -279,10 +280,10 @@ void processGrayScaling(uint arg0, uint arg1)
 	} while(dmaDone==0);
 	// wait until dma is complete
 
-	io_printf(IO_BUF, "dmaDone_rpxStore = %d\n", blkInfo->dmaDone_rpxStore);
+	//io_printf(IO_BUF, "dmaDone_rpxStore = %d\n", blkInfo->dmaDone_rpxStore);
 	while(blkInfo->dmaDone_rpxStore != myCoreID) {
 	}
-	io_printf(IO_BUF, "dmaDone_rpxStore = %d\n", blkInfo->dmaDone_rpxStore);
+	//io_printf(IO_BUF, "dmaDone_rpxStore = %d\n", blkInfo->dmaDone_rpxStore);
 
 	blkInfo->dmaDone_rpxStore = 0;	// reset to avoid ambiguity
 	do {
@@ -292,10 +293,10 @@ void processGrayScaling(uint arg0, uint arg1)
 	} while(dmaDone==0);
 	// wait until dma is complete
 
-	io_printf(IO_BUF, "dmaDone_gpxStore = %d\n", blkInfo->dmaDone_gpxStore);
+	//io_printf(IO_BUF, "dmaDone_gpxStore = %d\n", blkInfo->dmaDone_gpxStore);
 	while(blkInfo->dmaDone_gpxStore != myCoreID) {
 	}
-	io_printf(IO_BUF, "dmaDone_gpxStore = %d\n", blkInfo->dmaDone_gpxStore);
+	//io_printf(IO_BUF, "dmaDone_gpxStore = %d\n", blkInfo->dmaDone_gpxStore);
 
 	blkInfo->dmaDone_gpxStore = 0;	// reset to avoid ambiguity
 	do {
@@ -306,10 +307,10 @@ void processGrayScaling(uint arg0, uint arg1)
 	} while(dmaDone==0);
 
 	// wait until dma is complete
-	io_printf(IO_BUF, "dmaDone_bpxStore = %d\n", blkInfo->dmaDone_bpxStore);
+	//io_printf(IO_BUF, "dmaDone_bpxStore = %d\n", blkInfo->dmaDone_bpxStore);
 	while(blkInfo->dmaDone_bpxStore != myCoreID) {
 	}
-	io_printf(IO_BUF, "dmaDone_bpxStore = %d\n", blkInfo->dmaDone_bpxStore);
+	//io_printf(IO_BUF, "dmaDone_bpxStore = %d\n", blkInfo->dmaDone_bpxStore);
 
 	blkInfo->dmaDone_bpxStore = 0;	// reset to avoid ambiguity
 	do {
@@ -325,7 +326,7 @@ void processGrayScaling(uint arg0, uint arg1)
 	else
 		blkInfo->dmaToken_pxStore++;
 
-	io_printf(IO_BUF, "dmaToken_pxStore = %d\n", blkInfo->dmaToken_pxStore);
+	//io_printf(IO_BUF, "dmaToken_pxStore = %d\n", blkInfo->dmaToken_pxStore);
 
 	/*------------------------ debugging --------------------------*/
 	// debugging: to see if original pixels chunks and forwarded are the same
@@ -420,7 +421,7 @@ void fwdImgData(uint arg0, uint arg1)
 	/*-------------- gray pixels forwarding ----------------*/
 
 
-	io_printf(IO_BUF, "Forwarding gray pixels...\n");
+	// io_printf(IO_BUF, "Forwarding gray pixels...\n");
 
 
 	remaining = pxBuffer.pxLen;
@@ -445,7 +446,7 @@ void fwdImgData(uint arg0, uint arg1)
 void collectGrayPixels(uint arg0, uint arg1)
 {
 
-	io_printf(IO_BUF, "Collecting gray pixels...\n");
+	// io_printf(IO_BUF, "Collecting gray pixels...\n");
 
 	uint offset = pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK;
 	uint dmaDone;
@@ -485,18 +486,63 @@ void collectGrayPixels(uint arg0, uint arg1)
 /*------------------------------------------------------------------------------------------*/
 /*----------------------------- IMAGE PROCESSING CORE MECHANISMS ---------------------------*/
 /*-----------------------------                                  ---------------------------*/
-void triggerProcessing(uint arg0, uint arg1)
+
+// taskProcessingLoop() is scheduled when leadAp-root receives "End-of-Frame" via
+// SDP_PORT_FRAME_END. It will be re-scheduled over time.
+void taskProcessingLoop(uint arg0, uint arg1)
 {
-	// debugging:
-	// io_printf(IO_BUF, "triggerProcessing()\n");
+
+	// NOTE: task increment is done directly in eHandler.c
+
+	if(taskList.cTaskPtr < taskList.nTasks-1){
+#if (DEBUG_LEVEL > 0)
+	io_printf(IO_STD, "[SpiNNVid] Processing taskID-%d begin...\n", (uint)taskList.cTask);
+#endif
+		// broadcast the current task to all cores...
+		spin1_send_mc_packet(MCPL_BCAST_START_PROC, (uint)taskList.cTask, WITH_PAYLOAD);
+	}
+}
+
+
+/*  LeadAp in root-node will broadcast MCPL_BCAST_START_PROC to all cores that triggers
+	triggerProcessing(). The "taskID" is the processing mode that is used for synchronization.
+	LeadAp in the root-node manage a task list and use it to synchronize tasks in the net.
+	During this triggerProcessing:
+	- identify what processing is required
+
+	See also triggerProcessing() in the museum
+*/
+void triggerProcessing(uint taskID, uint arg1)
+{
 	// prepare measurement
-	tic = sv->clock_ms;
+	// tic = sv->clock_ms;
+	perf.tCore = 0;
+	perf.tNode = 0;
+	perf.tTotal = 0;
 
 	// how many workers/blocks have finished the process?
-	nEdgeJobDone = 0;
-	perf.tEdgeNode = 0;
-	perf.tEdgeTotal = 0;
+	nWorkerDone = 0;
 	nBlockDone = 0;
+
+	switch((proc_t)taskID){
+	case PROC_FILTERING:
+		break;
+	case PROC_SHARPENING:
+		break;
+	case PROC_EDGING_DVS:
+		spin1_schedule_callback(imgDetection, 0, 0, PRIORITY_PROCESSING);
+		break;
+	case PROC_SEND_RESULT:
+		if(sv->p2p_addr == 0)
+
+		break;
+	}
+
+
+	if(myCoreID==LEAD_CORE) {
+		// inform profiler that the processing is started (for adaptive freq?)
+		spin1_send_mc_packet(MCPL_TO_OWN_PROFILER, PROF_MSG_PROC_START, WITH_PAYLOAD);
+	}
 
 	/*
 	if(blkInfo->opSharpen==1) {
@@ -529,17 +575,74 @@ void triggerProcessing(uint arg0, uint arg1)
 	}
 
 	*/
-	proc = PROC_EDGING;
-#if (adaptiveFreq==TRUE)
-		//changeFreq(250);
-		imgDetection(0,0);	// go edge detection directly
-		//changeFreq(200);
-#else
-		imgDetection(0,0);	// go edge detection directly
-#endif
 
 	// then reset newImageFlag so that the next frame can be detected properly
 	newImageFlag = TRUE;
+}
+
+// getSdramImgAddr() determines sdramImgIn and sdramImgOut based on the given
+// processing mode "proc"
+void getSdramImgAddr(proc_t proc)
+{
+	/* The logic:
+	 * - gray scaling output is in Y-buf (imgbuf3)
+	 * - filtering output is always in R-buf (imgbuf0)
+	 * - sharpening output is always in G-buf (imgbuf1)
+	 * - edging output is always in B-buf (imgbuf2)
+	 * + for filtering, the input in always Y-buf (imgbuf3)
+	 * + for sharpening, if filtering is ON then input is R-buf (imgbuf0), otherwise
+	 *   the input is Y-buf (imgbuf3)
+	 * + for edging, if sharpening is ON then the input is always G-buf (imgbuf1), otherwise
+	 *   if filtering is ON, then the input is R-buf (imgbuf0), BUT if filtering is off
+	 *   then the input is Y-buf (imgbuf3)
+	*/
+	switch(proc){
+	case PROC_FILTERING:
+		workers.sdramImgIn = workers.imgOut1;
+		workers.sdramImgOut = workers.imgRIn;
+		break;
+	case PROC_SHARPENING:
+		workers.sdramImgOut = workers.imgGIn;
+		if(workers.opFilter==1)
+			workers.sdramImgIn = workers.imgRIn;
+		else
+			workers.sdramImgIn = workers.imgOut1;
+		break;
+	case PROC_EDGING_DVS:
+		workers.sdramImgOut = workers.imgBIn;
+		if(workers.opSharpen==1) {
+			workers.sdramImgIn = workers.imgGIn;
+		} else {
+			if(workers.opFilter==1)
+				workers.sdramImgIn = workers.imgRIn;
+			else
+				workers.sdramImgIn = workers.imgOut1;
+		}
+	}
+}
+
+// getSdramResultAddr() determines the address of final output by reading taskList
+// it is intended only for leadAp in each node (not all worker cores)
+// it is similar to getSdramImgAddr(), but processed differently
+void getSdramResultAddr(uchar *imgAddr)
+{
+	// by default, it might send gray scale image
+	imgAddr = blkInfo->imgOut1;
+
+	// Now iterate: if opType>0, then the output is imgBIn
+	if(blkInfo->opType > 0) {
+		imgAddr = blkInfo->imgBIn;
+	}
+	// if not, it depends on opSharpen and opFilter
+	else {
+		if(blkInfo->opSharpen==1) {
+			imgAddr = blkInfo->imgGIn;
+		} else {
+			if(blkInfo->opFilter==1) {
+				imgAddr = blkInfo->imgRIn;
+			}
+		}
+	}
 }
 
 void imgSharpening(uint arg0, uint arg1)
@@ -561,6 +664,7 @@ void imgFiltering(uint arg0, uint arg1)
 	// step-2: call imgDetection
 }
 
+// NOTE: in imgDetection(), we have mode==SOBEL(1), LAPLACE(2)
 void imgDetection(uint arg0, uint arg1)
 {
 	if(workers.active==FALSE) {
@@ -574,10 +678,7 @@ void imgDetection(uint arg0, uint arg1)
 	ushort offset = workers.opType == IMG_SOBEL ? 1:2;
 	offset *= workers.wImg;
 
-	// io_printf(IO_BUF, "offset = %d, szDtcmImgBuf = %d\n", offset, workers.szDtcmImgBuf);
-
 	short l,c,n,i,j;
-	uchar *sdramImgIn, *sdramImgOut;
 	uchar *dtcmLine;	//point to the current image line in the DTCM (not in SDRAM!)
 	//uchar *debugging;
 	int sumX, sumY, sumXY;
@@ -588,21 +689,15 @@ void imgDetection(uint arg0, uint arg1)
 	n = workers.endLine - workers.startLine + 1;
 
 	// prepare the correct line address in sdram
-	if(workers.opFilter==IMG_WITHOUT_FILTER) {
-		sdramImgIn = workers.imgOut1;
-		sdramImgOut = workers.imgOut2;
-	} else {
-		sdramImgIn = workers.imgOut2;
-		sdramImgOut = workers.imgOut3;
-	}
+	getSdramImgAddr(PROC_EDGING_DVS);
 
-	// scan for all lines in the working block
+	// scan for all lines in the worker's working block
 	for(l=0; l<n; l++) {
 
 		dmaImgFromSDRAMdone = 0;
 		dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
 		do {
-			dmaTID = spin1_dma_transfer(dmatag, (void *)sdramImgIn - offset,
+			dmaTID = spin1_dma_transfer(dmatag, (void *)workers.sdramImgIn - offset,
 										(void *)dtcmImgBuf, DMA_READ, workers.szDtcmImgBuf);
 			if(dmaTID==0)
 				io_printf(IO_BUF, "[Edging] DMA full for tag-0x%x! Retry...\n", dmatag);
@@ -680,7 +775,7 @@ void imgDetection(uint arg0, uint arg1)
 
 		dmatag = (myCoreID << 16) | DMA_STORE_IMG_TAG;
 		do {
-			dmaTID = spin1_dma_transfer(dmatag, (void *)sdramImgOut,
+			dmaTID = spin1_dma_transfer(dmatag, (void *)workers.sdramImgOut,
 						   (void *)resImgBuf, DMA_WRITE, workers.wImg);
 			if(dmaTID==0)
 				io_printf(IO_BUF, "[Edging] DMA full for tag-0x%x! Retry...\n", dmatag);
@@ -688,40 +783,33 @@ void imgDetection(uint arg0, uint arg1)
 
 
 		// move to the next line
-		sdramImgIn += workers.wImg;
-		sdramImgOut += workers.wImg;
+		workers.sdramImgIn += workers.wImg;
+		workers.sdramImgOut += workers.wImg;
 
 	} // end for l-loop
 
-	perf.tEdge = READ_TIMER();
+	perf.tCore = READ_TIMER();
 
-	// at the end, send MCPL_EDGE_DONE
+	// at the end, send MCPL_EDGE_DONE to local leadAp (including the leadAp itself)
 #if (DEBUG_LEVEL > 0)
-	io_printf(IO_BUF, "Done! send MCPL_EDGE_DONE!\n");
+	io_printf(IO_BUF, "[Edging] Done! send MCPL_EDGE_DONE!\n");
 #endif
-	spin1_send_mc_packet(MCPL_EDGE_DONE, perf.tEdge, WITH_PAYLOAD);
+	spin1_send_mc_packet(MCPL_EDGE_DONE, perf.tCore, WITH_PAYLOAD);
 
 }
 
 
-// AfterProcessingDone() is managed by the leadAp in each node.
-// But in root-node, afterProcessingDone() will trigger sending the result.
-void afterProcessingDone(uint arg0, uint arg1)
+// triggerSendResultChain() will be executed by leadAp-root only!
+// during the process, it triggers sendResult() in other nodes
+void triggerSendResultChain(uint arg0, uint arg1)
 {
-    if(proc==PROC_EDGING) {
-#if (DEBUG_LEVEL > 0)
-        // optional, won't be used in video streaming:
-        io_printf(IO_BUF, "Node-%d is done edging in %d-ms!\n", blkInfo->nodeBlockID, elapse);
-#endif
-        // if root-node, trigger to send the result
-        if(sv->p2p_addr==0) {
-#if (DESTINATION==DEST_HOST)
-            spin1_schedule_callback(sendDetectionResult2Host, 0, 0, PRIORITY_PROCESSING);
-#elif (DESTINATION==DEST_FPGA)
-            spin1_schedule_callback(sendDetectionResult2FPGA, 0, 0, PRIORITY_PROCESSING);
-#endif
-        }
-    }
+
+}
+
+// sendResult() will be executed by leadAp in each core
+void sendResult(uint arg0, uint arg1)
+{
+
 }
 
 // check: sendResult() will be executed only by leadAp
@@ -742,7 +830,7 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 
 #if (DEBUG_LEVEL > 0)
 	io_printf(IO_STD, "Block-%d is sending with perf = %u\n",
-			  blkInfo->nodeBlockID, perf.tEdgeNode);
+			  blkInfo->nodeBlockID, perf.tNode);
 #endif
 
 	// format sdp (scp_segment + data_segment):
@@ -758,10 +846,20 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 	// For fetching only one line, use resImgBuf instead
 
 	//l = 0;	// for the imgXOut pointer
+
+
+
+	/* yang berikut ini aku disable dulu karena masih restrukturisasi program:
+
 	if(workers.opFilter==IMG_WITHOUT_FILTER)
 		imgOut = workers.blkImgOut2;
 	else
 		imgOut = workers.blkImgOut3;
+
+	*/
+
+
+
 
 	/*
 	IDEA: revisi untuk:
@@ -822,8 +920,8 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 	//io_printf(IO_BUF, "[Sending] pixels [%d,%d,%d] done!\n", total[0], total[1], total[2]);
 
 	// then send notification to chip<0,0> that my part is complete
-	spin1_send_mc_packet(MCPL_BLOCK_DONE, blkInfo->nodeBlockID, WITH_PAYLOAD);
-	spin1_send_mc_packet(MCPL_BLOCK_DONE_TEDGE, perf.tEdgeNode, WITH_PAYLOAD);
+	//spin1_send_mc_packet(MCPL_BLOCK_DONE, blkInfo->nodeBlockID, WITH_PAYLOAD);
+	//spin1_send_mc_packet(MCPL_BLOCK_DONE_TEDGE, perf.tEdgeNode, WITH_PAYLOAD);
 }
 
 void sendDetectionResult2FPGA(uint nodeID, uint arg1)
@@ -837,10 +935,10 @@ void sendDetectionResult2FPGA(uint nodeID, uint arg1)
 // notifyDestDone() is executed by <0,0,leadAp> only
 void notifyDestDone(uint arg0, uint arg1)
 {
-	perf.tEdgeTotal /= blkInfo->maxBlock;
+	perf.tTotal /= blkInfo->maxBlock;
 #if (DEBUG_LEVEL > 0)
 	io_printf(IO_STD, "Processing with %d-nodes is done. Elapse %d-ms, tclk = %u\n",
-			  blkInfo->maxBlock, elapse, perf.tEdgeTotal);
+			  blkInfo->maxBlock, elapse, perf.tTotal);
 #endif
 #if (DESTINATION==DEST_HOST)
 	resultMsg.srce_addr = elapse;
@@ -866,194 +964,3 @@ void computeHist(uint arg0, uint arg1)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*--------------------------------------------------------------------------------------*/
-/*--------------------------------------------------------------------------------------*/
-/*--------------------------------------------------------------------------------------*/
-/*-------------------- MUSEUM: from previously failed algorithm ------------------------*/
-/*                                                                                      */
-/* Note: we cannot broadcast the sdp address because IT IS LOCAL DTCM !!!               */
-/*                                                                                      */
-/*--------------------------------------------------------------------------------------*/
-/*--------------------------------------------------------------------------------------*/
-/*--------------------------------------------------------------------------------------*/
-
-/*
-// TODO: when do you put the chunk data into sdram?
-
-// storeFrame: call dma for dtcmImgBuf and reset its counter
-void storeDtcmImgBuf(uint ch, uint Unused)
-{
-	uchar *dest;
-	switch(ch) {
-	case 0:
-		dest = blkInfo->imgRIn; blkInfo->imgRIn += pixelCntr; break;
-	case 1:
-		dest = blkInfo->imgGIn; blkInfo->imgGIn += pixelCntr; break;
-	case 2:
-		dest = blkInfo->imgBIn; blkInfo->imgBIn += pixelCntr; break;
-	}
-
-	spin1_dma_transfer(DMA_TAG_STORE_FRAME, dest, dtcmImgBuf, DMA_WRITE, pixelCntr);
-
-	// then adjust/correct the pointer and the counter
-	pixelCntr = 0;
-}
-
-/*--------------------------------------------------------------------------------------*
-/*-------------------- leadAp forward sdp buffer to core 2,3 and 4 ---------------------*
-/*                                                                                      *
-/* processImgData() is executed by core-2,3 and 4 only in root node as a response to
- * MCPL with keys MCPL_PROCEED_?_IMG_DATA triggered by leadAp after receiving sdp for
- * frames (through specif frame's port
- * *
-void processImgData(uint mBox, uint ch) {
-    io_printf(IO_STD, "processImgData with ch-%d is triggered\n", ch);
-
-	sdp_msg_t *msg = (sdp_msg_t *)mBox;
-	ushort pxLen = msg->length - sizeof(sdp_hdr_t);
-
-	io_printf(IO_BUF, "in process: got mBox at-0x%x with pxLen=%d\n", msg, pxLen);
-
-	return;
-
-	// step-1: copy the content of mBox to local buffer
-	uchar pxInfo[272];
-	sark_mem_cpy((void *)pxInfo, (void *)&msg->cmd_rc, pxLen);
-	io_printf(IO_BUF, "sdp data is copied...\n");
-
-
-
-	// step-2: then release mBox
-	spin1_msg_free(msg);
-	io_printf(IO_BUF, "sdp is release...\n");
-
-
-
-	// step-3: copy to dtcmImgBuf and if necessary trigger dma
-	sark_mem_cpy((void *)dtcmImgBuf+pixelCntr, pxInfo, pxLen);
-	io_printf(IO_BUF, "copied to dtcmImgBuf...\n");
-	pixelCntr += pxLen;
-	if(pixelCntr==workers.wImg) {
-		spin1_schedule_callback(storeDtcmImgBuf, ch, 0, PRIORITY_PROCESSING);
-	}
-	// then forward to other nodes
-	uchar i, cntr;
-	uint payload, base_key, key;
-
-	cntr = (pxLen % 4) == 0 ? pxLen / 4 : (pxLen / 4) + 1;
-
-	switch(ch) {
-	case 0: base_key = MCPL_FWD_R_IMG_DATA; break;
-	case 1: base_key = MCPL_FWD_G_IMG_DATA; break;
-	case 2: base_key = MCPL_FWD_B_IMG_DATA; break;
-	}
-
-	ushort szpx, remaining = pxLen;
-	for(i=0; i<cntr; i++) {
-		if(remaining > sizeof(uint))
-			szpx = sizeof(uint);
-		else
-			szpx = remaining;
-		sark_mem_cpy((void *)&payload, (void *)pxInfo + i*4, szpx);
-
-		//key = base_key | (cntr << 8) | i; // we have problem with this scheme
-											// because we also need to put the pxLen, but where?
-											// solution: assuming MCPL never race!!!
-
-		// the key will contains which channel (base_key), total length of current packet (pxLen)
-		// and current length of the chunk (szpx)
-		key = base_key | (pxLen << 4) | szpx;
-		spin1_send_mc_packet(key, payload, WITH_PAYLOAD);
-
-		remaining -= szpx;
-
-		// for debugging, remove in release mode:
-		io_printf(IO_BUF, "key-0x%x load-0x%x has been sent!\n", key, payload);
-		sark_delay_us(1000);
-	}
-
-	// TODO: decompress data
-	// decompress(ch);
-	// then reset buffer for next delivery
-}
-
-
-
-/*--------------------------------------------------------------------------------------*
-/*------- core 2,3 and 4 in other nodes (out of root node) receive fwd-ed packets ------*
-/*                                                                                      *
-/* recvFwdImgData() is executed by core-2,3 and 4 in nodes other than root. It processes
- * forwarded packets from core-2,3 and 4 in root node *
-void recvFwdImgData(uint pxData, uint pxLenCh)
-{
-	io_printf(IO_BUF, "recvFwdImgData is triggered\n");
-	uchar  ch = pxLenCh >> 16;
-	ushort pxLen = (pxLenCh & 0xFFFF) >> 4;
-	uchar  szpx = pxLenCh & 0xF;
-
-	sark_mem_cpy((void *)fwdPktBuffer[ch].pxInfo+fwdPktBuffer[ch].pxLen, (void *)&pxData, szpx);
-
-	fwdPktBuffer[ch].pxLen += szpx;
-
-	// all chunks are collected?
-	if(fwdPktBuffer[ch].pxLen == pxLen) {
-
-		// for debugging:
-		io_printf(IO_BUF, "Core-%d has received the chunk!\n", myCoreID);
-
-		// put to dtcmImgBuf
-		sark_mem_cpy((void *)dtcmImgBuf+pixelCntr, (void *)fwdPktBuffer[ch].pxInfo, pxLen);
-
-		pixelCntr += pxLen;
-
-		if(pixelCntr==workers.wImg)
-			spin1_schedule_callback(storeDtcmImgBuf, ch, 0, PRIORITY_PROCESSING);
-
-		// TODO: decompress data
-		// decompress(ch);
-		// reset the counter for next delivery
-		fwdPktBuffer[ch].pxLen = 0;
-	}
-}
-
-
-
-void decompress(uchar ch)
-{
-
-}
-
-*/
-
-/*--------------------------------------------------------------------------------------*/
-/*-------------------- MUSEUM: from previously failed algorithm ------------------------*/
-/*--------------------------------------------------------------------------------------*/
-/*--------------------------------------------------------------------------------------*/

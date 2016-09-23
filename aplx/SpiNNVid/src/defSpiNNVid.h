@@ -13,6 +13,7 @@
 // 0.1 Sending frame to SpiNNaker at 10MBps
 // 0.2 Do the edge detection and smoothing
 // 0.3 Do histogram equalization
+// 1.0 Implement task scheduling and DVS emulation
 
 
 #define ADAPTIVE_FREQ               FALSE
@@ -84,6 +85,9 @@
 #define DEBUG_REPORT_PLL_INFO       9       // only leadAp (in all nodes)
 #define DEBUG_REPORT_HISTPROP       10      // only leadAp [in root-node]
 #define DEBUG_REPORT_IMGBUFS		11		// only leadAp (in all nodes)
+#define DEBUG_REPORT_IMGBUF_IN		12		// for host, only leadAp (in all nodes)
+#define DEBUG_REPORT_IMGBUF_OUT		13		// for host, only leadAp (in all nodes)
+
 
 // We use timer to do some debugging facilities
 #define TIMER_TICK_PERIOD_US        1000000
@@ -195,11 +199,13 @@
 #define MCPL_EDGE_DONE				0x1ead0003
 
 // special key (with values)
-#define MCPL_BLOCK_DONE			0x1ead1ead	// should be sent to <0,0,1>
-#define MCPL_BLOCK_DONE_TEDGE   0x1eaddea1 // should be sent to <0,0,1>
+//#define MCPL_BLOCK_DONE			0x1ead1ead	// should be sent to <0,0,1>
+//#define MCPL_BLOCK_DONE_TEDGE   0x1eaddea1 // should be sent to <0,0,1>
+#define MCPL_BLOCK_DONE_TEDGE		0xdea10000	// for sending block done with info nodeID + perf
 
 // special key for communication with the profiler
-#define MCPL_TO_PROFILER		0x11111111	// profiler is in the 1st core of each node
+#define MCPL_TO_ALL_PROFILER		0x11111111	// profiler in all nodes
+#define MCPL_TO_OWN_PROFILER		0x22222222	// profiler in its own node
 
 // mechanism for forwarding pixel packets
 // important: MCPL_FWD_PIXEL_INFO must preceed all chunk pixels!!!
@@ -254,8 +260,10 @@
 
 
 // Profiler message
-#define PROF_MSG_PLL_INFO			1
-#define PROF_MSG_SET_FREQ			2
+#define PROF_MSG_PLL_INFO			1	// report about PLL
+#define PROF_MSG_SET_FREQ			2	// set frequency
+#define PROF_MSG_PROC_START			3	// inform that the processing is triggered
+#define PROF_MSG_PROC_END			4	// inform that the processing is finish
 
 #endif // DEFSPINNVID_H
 

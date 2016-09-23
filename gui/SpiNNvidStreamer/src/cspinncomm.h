@@ -106,6 +106,7 @@ private:
     sdp_hdr_t get_hdr(QByteArray const &ba);
 
 	quint32 wImg, hImg, szImg;
+	quint8 N_nodes;					// how many nodes are used in the network?
 	quint8 nCore4PxProc;	// number of cores in root-node that handle pixel transmission
 
 	quint16 spinElapse;

@@ -578,4 +578,7 @@ void hMCPL_profiler(uint key, uint payload)
 	else if(pl == PROF_MSG_SET_FREQ) {
 		setFreq(arg, NULL);
 	}
+	else if(key == MCPL_TO_OWN_PROFILER) {
+		// TODO: if adaptive frequency
+	}
 }
