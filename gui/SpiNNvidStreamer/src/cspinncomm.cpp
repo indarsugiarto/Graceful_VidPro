@@ -348,6 +348,13 @@ void cSpiNNcomm::readResult()
 		pxBuff.append(ba);
 	}
 	// Note: we receive a result notification (only gray result!)
+	/* Regarding srce_port for debugging:
+	 * 	1. for sending pixel, use srce_port as chunk index
+			hence, the maximum chunk = 253, which reflect the maximum 253*272=68816 pixels
+			in one line (thus, we can expect the maximum image size is 68816*whatever).
+		2. for notifying host, use srce_port 0xFE
+		   we cannot use 0xFF, because 0xFF is special for ETH
+	*/
 	else {
 		spinElapse = h.srce_addr;
 		// copy to frResult

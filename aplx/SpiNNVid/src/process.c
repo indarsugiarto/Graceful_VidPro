@@ -494,11 +494,12 @@ void taskProcessingLoop(uint arg0, uint arg1)
 
 	// NOTE: task increment is done directly in eHandler.c
 
-	if(taskList.cTaskPtr < taskList.nTasks-1){
+	if(taskList.cTaskPtr < taskList.nTasks){
 #if (DEBUG_LEVEL > 0)
-	io_printf(IO_STD, "[SpiNNVid] Processing taskID-%d begin...\n", (uint)taskList.cTask);
+		io_printf(IO_STD, "[SpiNNVid] Processing taskID-%d begin...\n", (uint)taskList.cTask);
 #endif
 		// broadcast the current task to all cores...
+		// the MCPL_BCAST_START_PROC will trigger triggerProcessing(taskID)
 		spin1_send_mc_packet(MCPL_BCAST_START_PROC, (uint)taskList.cTask, WITH_PAYLOAD);
 	}
 }
@@ -506,6 +507,10 @@ void taskProcessingLoop(uint arg0, uint arg1)
 
 /*  LeadAp in root-node will broadcast MCPL_BCAST_START_PROC to all cores that triggers
 	triggerProcessing(). The "taskID" is the processing mode that is used for synchronization.
+
+	This way, triggerProcessing() is a kind of centralized starting point for
+	different processing steps, which is activated as event-based (via MCPL event).
+
 	LeadAp in the root-node manage a task list and use it to synchronize tasks in the net.
 	During this triggerProcessing:
 	- identify what processing is required
@@ -533,13 +538,18 @@ void triggerProcessing(uint taskID, uint arg1)
 		spin1_schedule_callback(imgDetection, 0, 0, PRIORITY_PROCESSING);
 		break;
 	case PROC_SEND_RESULT:
-		if(sv->p2p_addr == 0)
-
+		// if I'm the root-node, send the result right away
+		if(sv->p2p_addr == 0) {
+			// start the chain by triggering MCPL_BCAST_SEND_RESULT with payload "0"
+			sendResult(0,0);
+			//spin1_send_mc_packet(MCPL_BCAST_SEND_RESULT, blkInfo->nodeBlockID, WITH_PAYLOAD);
+		}
+		// otherwise, wait for signal from the root-node
 		break;
 	}
 
 
-	if(myCoreID==LEAD_CORE) {
+	if(myCoreID==LEAD_CORE && (proc_t)taskID!=PROC_SEND_RESULT) {
 		// inform profiler that the processing is started (for adaptive freq?)
 		spin1_send_mc_packet(MCPL_TO_OWN_PROFILER, PROF_MSG_PROC_START, WITH_PAYLOAD);
 	}
@@ -578,10 +588,14 @@ void triggerProcessing(uint taskID, uint arg1)
 
 	// then reset newImageFlag so that the next frame can be detected properly
 	newImageFlag = TRUE;
+
+	// QUESTION: when do we go to taskProcessingLoop()???
+	// TODO: make sure that it goes back to taskProcessingLoop() after each process
 }
 
 // getSdramImgAddr() determines sdramImgIn and sdramImgOut based on the given
-// processing mode "proc"
+// processing mode "proc" that will be accessed by the working cores!!!
+// Hence, we need workers.img??? and not workers.blkImg???
 void getSdramImgAddr(proc_t proc)
 {
 	/* The logic:
@@ -623,26 +637,29 @@ void getSdramImgAddr(proc_t proc)
 
 // getSdramResultAddr() determines the address of final output by reading taskList
 // it is intended only for leadAp in each node (not all worker cores)
-// it is similar to getSdramImgAddr(), but processed differently
-void getSdramResultAddr(uchar *imgAddr)
+// it is similar to getSdramImgAddr(), but processed differently: it uses
+// workers.blkImg??? instead of workers.img???
+uint getSdramResultAddr()
 {
+	uint imgAddr;
 	// by default, it might send gray scale image
-	imgAddr = blkInfo->imgOut1;
+	imgAddr = (uint)workers.blkImgOut1;
 
 	// Now iterate: if opType>0, then the output is imgBIn
 	if(blkInfo->opType > 0) {
-		imgAddr = blkInfo->imgBIn;
+		imgAddr = (uint)workers.blkImgBIn;
 	}
 	// if not, it depends on opSharpen and opFilter
 	else {
 		if(blkInfo->opSharpen==1) {
-			imgAddr = blkInfo->imgGIn;
+			imgAddr = (uint)workers.blkImgGIn;
 		} else {
 			if(blkInfo->opFilter==1) {
-				imgAddr = blkInfo->imgRIn;
+				imgAddr = (uint)workers.blkImgRIn;
 			}
 		}
 	}
+	return imgAddr;
 }
 
 void imgSharpening(uint arg0, uint arg1)
@@ -799,75 +816,53 @@ void imgDetection(uint arg0, uint arg1)
 }
 
 
-// triggerSendResultChain() will be executed by leadAp-root only!
-// during the process, it triggers sendResult() in other nodes
-void triggerSendResultChain(uint arg0, uint arg1)
-{
 
-}
 
-// sendResult() will be executed by leadAp in each core
-void sendResult(uint arg0, uint arg1)
-{
 
-}
 
-// check: sendResult() will be executed only by leadAp
+
+
+
+
+/*-------------------------------------------------------------------------------------*/
+/*-------------------------------------------------------------------------------------*/
+/*---------------------------- About Sending Result -----------------------------------*/
+/*------------------------ main function: sendResult() --------------------------------*/
+
 // we cannot use workers.imgROut, because workers.imgROut differs from core to core
 // use workers.blkImgROut instead!
 // nodeID is the next node that is supposed to send the result
 // NOTE: in this version, we'll send the gray image. Refer to pA for rgb version!
 // The parameter arg1 is used for delay when sending the output to FPGA.
 // Hence, in normal operation (send the result to host-PC), arg1 should be 0.
-void sendDetectionResult2Host(uint nodeID, uint arg1)
+#if(DESTINATION==DEST_HOST)
+void sendResultToTargetFromRoot()
 {
-
-	// if I'm not include in the list, skip this
-	if(blkInfo->maxBlock==0) return;
-
-	//io_printf(IO_STD, "Expecting processing by node-%d\n", arg0);
-	if(nodeID != blkInfo->nodeBlockID) return;
 
 #if (DEBUG_LEVEL > 0)
 	io_printf(IO_STD, "Block-%d is sending with perf = %u\n",
 			  blkInfo->nodeBlockID, perf.tNode);
 #endif
 
-	// format sdp (scp_segment + data_segment):
-	// srce_addr = line number
-	// so, it relies on udp reliability (packet might be dropped)
-	// the host will assemble the line based on srce_addr, so if the packet
-	// is dropped, and the next line is sent, then it produces "defect"
-	uchar *imgOut;
-	ushort rem, sz;
-	//ushort l,c;
-
-	// Note: dtcmImgBuf has been allocated in computeWLoad(), but it can be 3 or 5 times the image width.
-	// For fetching only one line, use resImgBuf instead
-
-	//l = 0;	// for the imgXOut pointer
-
-
-
-	/* yang berikut ini aku disable dulu karena masih restrukturisasi program:
-
-	if(workers.opFilter==IMG_WITHOUT_FILTER)
-		imgOut = workers.blkImgOut2;
-	else
-		imgOut = workers.blkImgOut3;
-
-	*/
-
-
-
-
 	/*
-	IDEA: revisi untuk:
+	Synopsis:
 	1. for sending pixel, use srce_port as chunk index
 			hence, the maximum chunk = 253, which reflect the maximum 253*272=68816 pixels
-	   for notifying host, use srce_port 0xFE
+			in one line (thus, we can expect the maximum image size is 68816*whatever).
+	2. for notifying host, use srce_port 0xFE
 	   we cannot use 0xFF, because 0xFF is special for ETH
+
+	// Note: dtcmImgBuf has been allocated in computeWLoad(),
+	// but it can be 3 or 5 times the image width.
+	// For fetching only one line, use resImgBuf instead
 	*/
+
+	uchar *imgOut;
+	imgOut  = (uchar *)getSdramResultAddr();
+
+	// use full sdp (scp_segment + data_segment) for pixel values
+	ushort rem, sz;
+
 	uint dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
 	for(ushort lines=workers.blkStart; lines<=workers.blkEnd; lines++) {
 		// get the line from sdram
@@ -877,60 +872,203 @@ void sendDetectionResult2Host(uint nodeID, uint arg1)
 		do {
 			dmaTID = spin1_dma_transfer(dmatag, (void *)imgOut,
 										(void *)resImgBuf, DMA_READ, workers.wImg);
-			if(dmaTID==0)
-				io_printf(IO_BUF, "[Sending] DMA full! Retry!\n");
-
 		} while(dmaTID==0);
+
 		// wait until dma is completed
 		while(dmaImgFromSDRAMdone==0) {
 		}
-		// then sequentially copy & send via sdp
-		uchar c = 0;
+
+		// then sequentially copy & send via sdp. We use srce_addr and srce_port as well:
+		// scre_addr contains line number
+		// srce_port contains pixel chunk number in the current line
+		uchar chunkID = 0;
 		rem = workers.wImg;
 		resultMsg.srce_addr = lines;	// is it useful??? for debugging!!!
 		uchar *resPtr = resImgBuf;
 		do {
-			resultMsg.srce_port = c;	// is it useful???
+			resultMsg.srce_port = chunkID;	// is it useful???
 			sz = rem > 272 ? 272 : rem;
-			//spin1_memcpy((void *)&resultMsg.cmd_rc, (void *)(resImgBuf + c*272), sz);
 			spin1_memcpy((void *)&resultMsg.cmd_rc, resPtr, sz);
 
 			resultMsg.length = sizeof(sdp_hdr_t) + sz;
 			spin1_send_sdp_msg(&resultMsg, 10);
-			//giveDelay(DEF_DEL_VAL);
-			sark_delay_us(100);
+			giveDelay(DEF_DEL_VAL);	// this should produce 5.7MBps in 200MHz
 
-			c++;		// for the resImgBuf pointer
+			chunkID++;		// for the resImgBuf pointer
 			resPtr += sz;
 			rem -= sz;
-#if (DESTINATION==DEST_FPGA)
-			// use arg1 as delay
-			// NOTE: Think this: if we introduce delay, then it is not efficient anymore!
-			sark_delay_us(arg1);
-#endif
 		} while(rem > 0);
 
 		// move to the next address
 		imgOut += workers.wImg;
 
-		// l++;
 	}
 
-	//io_printf(IO_STD, "Block-%d done!\n", blkInfo->nodeBlockID);
-	//io_printf(IO_BUF, "[Sending] pixels [%d,%d,%d] done!\n", total[0], total[1], total[2]);
-
-	// then send notification to chip<0,0> that my part is complete
-	//spin1_send_mc_packet(MCPL_BLOCK_DONE, blkInfo->nodeBlockID, WITH_PAYLOAD);
-	//spin1_send_mc_packet(MCPL_BLOCK_DONE_TEDGE, perf.tEdgeNode, WITH_PAYLOAD);
 }
+#endif
 
-void sendDetectionResult2FPGA(uint nodeID, uint arg1)
+#if(DESTINATION==DEST_FPGA)
+// will use fixed-route packet
+void sendResultToTargetFromRoot()
 {
-	// Since the SpiNN-link is connected to chip<0,0> we don't need
-	// different routing, but just using SDP to chip<0,0>
-	uint delayTime_us = 100;
-	sendDetectionResult2Host(nodeID, delayTime_us);
+	// Note: the SpiNN-link is connected to chip<0,0>
+	uchar *imgOut;
+	imgOut  = (uchar *)getSdramResultAddr();
+
+	// prepare FR packet:
+	TODO... lihat kode dari Gengting
+
+	uint dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
+	for(ushort lines=workers.blkStart; lines<=workers.blkEnd; lines++) {
+		// get the line from sdram
+		//imgOut += l*workers.wImg;
+
+		dmaImgFromSDRAMdone = 0;	// will be altered in hDMA
+		do {
+			dmaTID = spin1_dma_transfer(dmatag, (void *)imgOut,
+										(void *)resImgBuf, DMA_READ, workers.wImg);
+		} while(dmaTID==0);
+
+		// wait until dma is completed
+		while(dmaImgFromSDRAMdone==0) {
+		}
+
+		// then sequentially copy & send via fr
+		uint frBuf;
+		for(ushort px=0; px<workers.wImg; px++) {
+			// TODO: lihat kode yang di Gengting....
+		}
+
+		// move to the next address
+		imgOut += workers.wImg;
+
+	}
+
 }
+#endif
+
+
+
+
+/*----------------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------------*/
+//             The following is for processing data from other nodes:
+#if(DESTINATION==DEST_HOST)
+void sendResultToTarget(uint line, uint null)
+{
+
+}
+#endif
+
+#if(DESTINATION==DEST_FPGA)
+void sendResultToTarget(uint line, uint null)
+{
+
+}
+#endif
+/*----------------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------------*/
+
+/* SYNOPSIS:
+ * sendResult() will ONLY be executed by leadAp in the root-node.
+ *
+ * It is called by triggerProcessing() with payload "0".
+ *
+ * In this version, the root-node will collect the pixel from other nodes, assemble
+ * the sdp, and send to the target (host-pc or fpga).
+ *
+ * It is a chain mechanism, where at the bottom end of it will send again
+ * MCPL_BCAST_SEND_RESULT with next blkId as the payload. Hence, which node is
+ * supposed to send the result is indicated by this blkID.
+ * */
+void sendResult(uint blkID, uint arg1)
+{	
+	// as the root, we have the first chance to send the result
+	sendResultToTargetFromRoot();
+
+	// then the rest
+	uchar cont;
+	for(uint l=workers.endLine+1; l<workers.hImg; l++) {
+		cont = 0;
+		spin1_send_mc_packet(MCPL_SEND_PIXELS_CMD, l, WITH_PAYLOAD);
+		// wait until
+		while(cont==0){
+		}
+	}
+
+	/*
+	// if I'm not include in the list, skip this
+	if(blkInfo->maxBlock==0) return;
+
+	// special case: if I'm the root and the blkID==maxBlock, then
+	// notify host that the sending result process is complete
+	if(blkID==blkInfo->maxBlock && blkInfo->nodeBlockID==0) {
+		notifyDestDone(0,0);
+	} else {
+		// check if this is our turn
+		if(blkID != blkInfo->nodeBlockID) return;
+
+#if (DESTINATION==DEST_HOST)
+		sendResult2Host();
+#elif (DESTINATION==DEST_FPGA)
+		sendResult2FPGA();
+#endif
+
+		// finally, trigger MCPL_BCAST_SEND_RESULT with the next blkID
+		spin1_send_mc_packet(MCPL_BCAST_SEND_RESULT, blkInfo->nodeBlockID+1, WITH_PAYLOAD);
+	}
+	*/
+}
+
+
+// sendResultProcessCmd() will be called when we receive MCPL_SEND_PIXELS_CMD
+// from root-node
+void sendResultProcessCmd(uint line, uint null)
+{
+	// first, check if the line is within our block
+	if(line>=workers.blkStart && line<=workers.blkEnd) {
+
+		// fetch from sdram
+		uchar *imgOut;
+		imgOut  = (uchar *)getSdramResultAddr();
+		// shift to the current line
+		imgOut += (line-workers.blkStart)*workers.wImg;
+
+		uint dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
+		dmaImgFromSDRAMdone = 0;	// will be altered in hDMA
+		do {
+			dmaTID = spin1_dma_transfer(dmatag, (void *)imgOut,
+										(void *)resImgBuf, DMA_READ, workers.wImg);
+		} while(dmaTID==0);
+
+		// wait until dma is completed
+		while(dmaImgFromSDRAMdone==0) {
+		}
+
+		// split and send as MCPL packets
+		int rem;	// it might be negative
+		uint mcplBuf;
+		rem = workers.wImg;
+		uchar *resPtr = resImgBuf;
+		do {
+			spin1_memcpy((void *)&mcplBuf, resPtr, 4);
+			spin1_send_mc_packet(MCPL_SEND_PIXELS_DATA, mcplBuf, WITH_PAYLOAD);
+
+			resPtr += 4;
+			rem -= 4;
+		} while(rem > 0);
+	}
+}
+
+void sendResultAssembleLine(uint line, uint null)
+{
+
+}
+
+/*-------------------------------------------------------------------------------------*/
+/*-------------------------------------------------------------------------------------*/
+
+
 
 // notifyDestDone() is executed by <0,0,leadAp> only
 void notifyDestDone(uint arg0, uint arg1)
@@ -949,6 +1087,15 @@ void notifyDestDone(uint arg0, uint arg1)
 
 #endif
 }
+
+
+
+
+
+
+
+
+
 
 
 // computeHist() will use data in the ypxbuf

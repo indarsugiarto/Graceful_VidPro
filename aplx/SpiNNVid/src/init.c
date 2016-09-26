@@ -94,6 +94,9 @@ void allocateImgBuf()
 
 
 
+
+
+
 /* initRouter() initialize MCPL routing table by leadCore. Normally, there are two keys:
  * MCPL_BCAST_KEY and MCPL_TO_LEADER
  * */
@@ -107,6 +110,9 @@ void initRouter()
 	allRoute &= (~profiler);				// exclude profiler
 	uint dest;
 	ushort x, y, d;
+
+
+
 
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
@@ -134,6 +140,9 @@ void initRouter()
 		rtr_mc_set(e, MCPL_EDGE_DONE,		0xFFFFFFFF, leader);	e++;
 		rtr_mc_set(e, MCPL_REPORT_HIST2LEAD, MCPL_REPORT_HIST2LEAD_MASK, leader); e++;
 	}
+
+
+
 
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
@@ -193,6 +202,8 @@ void initRouter()
 	}
 
 
+
+
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
 	/*------------------------ keys for forwarding pixels ------------------------*/
@@ -229,6 +240,9 @@ void initRouter()
 		rtr_mc_set(e, MCPL_FWD_PIXEL_EOF,	MCPL_FWD_PIXEL_MASK, dest); e++;
 	}
 
+
+
+
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
 	/*------------------------- keys for all routing -----------------------------*/
@@ -263,6 +277,48 @@ void initRouter()
 		rtr_mc_set(e, MCPL_BCAST_REPORT_HIST, MCPL_BCAST_REPORT_HIST_MASK, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_HIST_RESULT, MCPL_BCAST_HIST_RESULT_MASK, dest); e++;
 	}
+
+
+
+
+	/*----------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------*/
+	/*------------------------ keys for sending result ---------------------------*/
+	// key type-1: from the root to other nodes
+	e = rtr_alloc(2);
+	dest = leader;
+#if(USING_SPIN==5)
+	if(x==y) {
+		if(x==0)
+			dest = 1 + (1 << 1) + (1 << 2);
+		else if(x<7)
+			dest += 1 + (1 << 1) + (1 << 2);
+	}
+	else if(x>y) {
+		d = x - y;
+		if(x<7 && d<4)
+			dest += 1;
+	}
+	else if(x<y) {
+		d = y - x;
+		if(d<3 && y<7)
+			dest += (1 << 2);
+	}
+#elif(USING_SPIN==3)
+	if(sv->p2p_addr==0)
+		dest = 1 + (1<<1) + (1<<2);
+#endif
+	rtr_mc_set(e, MCPL_SEND_PIXELS_CMD, 0xFFFFFFFF, dest); e++;
+
+	// key type-2: from other nodes to the root
+	if (x>0 && y>0)			dest = (1 << 4);	// south-west
+	else if(x>0 && y==0)	dest = (1 << 3);	// west
+	else if(x==0 && y>0)	dest = (1 << 5);	// south
+	else					dest = leader;
+	rtr_mc_set(e, MCPL_SEND_PIXELS_DATA, 0xFFFFFFFF, dest); e++;
+
+
+
 
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
@@ -318,15 +374,15 @@ void initSDP()
 	// what if:
 	// - srce_addr contains image line number + rgb info
 	// - srce_port contains the data sequence
-	//resultMsg.srce_port = myCoreID;		// during sending, this must be modified
-	//resultMsg.srce_addr = sv->p2p_addr;
+	//resultMsg.srce_port = 		// during sending, this must be modified
+	//resultMsg.srce_addr =
 #if (DESTINATION==DEST_HOST)
 	resultMsg.tag = SDP_TAG_RESULT;
 	resultMsg.dest_port = PORT_ETH;
 	resultMsg.dest_addr = sv->eth_addr;
 #elif (DESTINATION==DEST_FPGA)
 	resultMsg.tag = 0;
-	resultMsg.dest_port = (SDP_PORT_FPGA_OUT << 5) + 1;
+	resultMsg.dest_port = (SDP_PORT_FPGA_OUT << 5) + LEAD_CORE;
 	resultMsg.dest_addr = 0;
 #endif
 	//resultMsg.length = ??? --> need to be modified later

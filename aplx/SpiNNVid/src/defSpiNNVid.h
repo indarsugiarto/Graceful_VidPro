@@ -220,6 +220,17 @@
 #define MCPL_FWD_PIXEL_MASK			0xFFFF0000	// lower word is used for core-ID
 
 
+
+// we found that using sdp, the max. throughput for other-than-root-node is 1.1MBps
+// but the root node has throughput 5.7MBps
+// Hence, we create a new mechanism for sending result via MCPL to root, and then
+// convert it into sdp
+#define MCPL_SEND_PIXELS_CMD		0x12345678	// root broadcast this first
+#define MCPL_SEND_PIXELS_DATA		0x87654321	// node reply with this
+// The lower part of the key is the line that is expected to be sent. The node which has
+// that line will then respond by sending the pixels.
+
+
 /* 1. The root node will broadcast MCPL_BCAST_REPORT_HIST to all chips
  * 2. Each node then check if it is a leaf node
  *    A leaf node is a node which doesn't have any children.

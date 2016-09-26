@@ -99,11 +99,13 @@ typedef struct w_info {
 	uchar wID[17];			// coreID of all workers (max is 17), hold by leadAp
 	uchar subBlockID;		// this will be hold individually by each worker
 	uchar tAvailable;		// total available workers, should be initialized to 1
-	ushort blkStart;
-	ushort blkEnd;
+	// per-block info:
+	ushort blkStart;		// this is per block (it differs from startLine)
+	ushort blkEnd;			// (it differs from endLine)
 	ushort nLinesPerBlock;
-	ushort startLine;
-	ushort endLine;
+	// per-core info:
+	ushort startLine;		// this is per core (it differs from blkStart)
+	ushort endLine;			// it differs from blkStart
 	uint szDtcmImgBuf;			// how many pixels will be fetch by dtcmImgBuf?
 	uchar active;			// if nLinesPerBlock > tAvailable, this will be on,
 	// helper pointers
@@ -298,6 +300,7 @@ ushort pixelCntr;				// how many pixel has been processed?
 
 uchar nCoresForPixelPreProc;
 
+uchar oTarget = DESTINATION;					// output target
 
 /*------------------------- Forward declarations ----------------------------*/
 
@@ -342,13 +345,12 @@ void collectGrayPixels(uint arg0, uint arg1);
 void computeHist(uint arg0, uint arg1);     // will use ypxbuf to compute the histogram
 
 void triggerProcessing(uint taskID, uint arg1);
-void triggerSendResultChain(uint arg0, uint arg1);
+void sendResult(uint blkID, uint arg1);		// blkID is the expected node to send
+void sendResultProcessCmd(uint line, uint null);
+void sendResultAssembleLine(uint line, uint null);
 void imgFiltering(uint arg0, uint arg1);
 void imgSharpening(uint arg0, uint arg1);
 void imgDetection(uint arg0, uint arg1);
-void sendDetectionResult2Host(uint nodeID, uint arg1);
-void sendDetectionResult2FPGA(uint nodeID, uint arg1);
-void notifyDestDone(uint arg0, uint arg1);          // this is notifyHostDone() in previous version
 
 // debugging and reporting
 void give_report(uint reportType, uint target);

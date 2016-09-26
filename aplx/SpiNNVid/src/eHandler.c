@@ -443,12 +443,11 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		}
 	}
 
+	// the following MCPL_BCAST_SEND_RESULT will trigger a chain in it:
 	else if(key==MCPL_BCAST_SEND_RESULT) {
-#if (DESTINATION==DEST_HOST)
-		spin1_schedule_callback(sendDetectionResult2Host, payload, 0, PRIORITY_PROCESSING);
-#elif (DESTINATION==DEST_FPGA)
-		spin1_schedule_callback(sendDetectionResult2FPGA, payload, 0, PRIORITY_PROCESSING);
-#endif
+		// if my block is enable, then proceed:
+		if(blkInfo->maxBlock!=0)
+			spin1_schedule_callback(sendResult, payload, NULL, PRIORITY_PROCESSING);
 	}
 
 	/*----------------------------------------------------------------------------*/
@@ -475,6 +474,7 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		}
 	}
 
+
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
 	/*-------------------------- All cores processing ----------------------------*/
@@ -488,6 +488,17 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		// and the requesting info will be provided in the payload
 		spin1_schedule_callback(give_report, payload, 0, PRIORITY_PROCESSING);
 	}
+
+	/*----------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------*/
+	/*----------------------- new Send result mechanism --------------------------*/
+	else if(key==MCPL_SEND_PIXELS_CMD) {
+		spin1_schedule_callback(sendResultProcessCmd, payload, NULL, PRIORITY_PROCESSING);
+	}
+	else if(key==MCPL_SEND_PIXELS_DATA) {
+		TERAKHIR (26 Sep jam 18:07) sampai disini...
+	}
+
 }
 
 void hSDP(uint mBox, uint port)
@@ -532,6 +543,7 @@ void hSDP(uint mBox, uint port)
 
 			// send frame info to other nodes
 			spin1_send_mc_packet(MCPL_BCAST_FRAME_INFO, msg->arg1, WITH_PAYLOAD);
+
 			// then broadcast to all workers (including leadAp) to compute their workload
 			spin1_send_mc_packet(MCPL_BCAST_GET_WLOAD, 0, WITH_PAYLOAD);
 
