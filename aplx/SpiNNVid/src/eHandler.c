@@ -224,20 +224,6 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		spin1_schedule_callback(computeWLoad, 0, 0, PRIORITY_PROCESSING);
 	}
 
-	/*------------------------------ Di museum kan ------------------------------
-	/*----- special for core 2,3 and 4 -----*
-	// within root node
-	else if(key==MCPL_PROCEED_R_IMG_DATA) {
-		spin1_schedule_callback(processImgData, payload, 0, PRIORITY_PROCESSING);
-	}
-	else if(key==MCPL_PROCEED_G_IMG_DATA) {
-		spin1_schedule_callback(processImgData, payload, 1, PRIORITY_PROCESSING);
-	}
-	else if(key==MCPL_PROCEED_B_IMG_DATA) {
-		spin1_schedule_callback(processImgData, payload, 2, PRIORITY_PROCESSING);
-	}
-	*/
-
 	// outside root node: make it core-to-core communication
 	// the following 5 else-if are used to transmit a chunk (272 pixels)
 	else if(key_hdr == MCPL_FWD_PIXEL_INFO && key_arg == myCoreID) {
@@ -308,21 +294,6 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 #endif
 		}
 	}
-
-	/*---------------- Old processing mechanism for forwarded packet ------------------
-	else if((key & 0xFFFF0000) == MCPL_FWD_R_IMG_DATA) {
-		uint pxLenCh = 0x00000000 | (key & 0xFFFF);
-		spin1_schedule_callback(recvFwdImgData, payload, pxLenCh, PRIORITY_PROCESSING);
-	}
-	else if((key & 0xFFFF0000) == MCPL_FWD_G_IMG_DATA) {
-		uint pxLenCh = 0x00010000 | (key & 0xFFFF);
-		spin1_schedule_callback(recvFwdImgData, payload, pxLenCh, PRIORITY_PROCESSING);
-	}
-	else if((key & 0xFFFF0000) == MCPL_FWD_B_IMG_DATA) {
-		uint pxLenCh = 0x00020000 | (key & 0xFFFF);
-		spin1_schedule_callback(recvFwdImgData, payload, pxLenCh, PRIORITY_PROCESSING);
-	}
-	*/
 
 
 	/*----------------------------------------------------------------------------*/
@@ -493,12 +464,22 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	/*----------------------------------------------------------------------------*/
 	/*----------------------- new Send result mechanism --------------------------*/
 	else if(key==MCPL_SEND_PIXELS_CMD) {
+		// the payload contains the line number of the resulting image
 		spin1_schedule_callback(sendResultProcessCmd, payload, NULL, PRIORITY_PROCESSING);
 	}
 	else if(key==MCPL_SEND_PIXELS_DATA) {
-		TERAKHIR (26 Sep jam 18:07) sampai disini...
+		// put the pixels in a buffer
+		sark_mem_cpy(sendResultInfo.pxBufPtr, &payload, 4);
+		sendResultInfo.pxBufPtr +=4;
+		sendResultInfo.nReceived_MCPL_SEND_PIXELS++;
+		// check if nReceived==nExpected
+		if(sendResultInfo.nReceived_MCPL_SEND_PIXELS==sendResultInfo.nExpected_MCPL_SEND_PIXELS) {
+			//io_printf(IO_STD, "Root-node got enough data!\n"); sark_delay_us(1000);
+			//sendResultToTarget(sendResultInfo.lineToSend, 0);
+			spin1_schedule_callback(sendResultToTarget, sendResultInfo.lineToSend,
+									NULL, PRIORITY_PROCESSING);
+		}
 	}
-
 }
 
 void hSDP(uint mBox, uint port)
@@ -584,16 +565,18 @@ void hSDP(uint mBox, uint port)
 		sark_mem_cpy(rpxbuf, &msg->cmd_rc, pxBuffer.pxLen);	
 
 		// Debugging 28.07.2016: how many pxSeq?
-		//io_printf(IO_BUF, "Got rpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
-
+#if(DEBUG_LEVEL>1)
+		io_printf(IO_BUF, "Got rpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
+#endif
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
 	}
 	else if(port==SDP_PORT_G_IMG_DATA) {
 		pxBuffer.pxSeq = (msg->tag << 8) | msg->srce_port;
 		pxBuffer.pxLen = msg->length - 8;
 		sark_mem_cpy(gpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
-
-		//io_printf(IO_BUF, "Got gpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
+#if(DEBUG_LEVEL>1)
+		io_printf(IO_BUF, "Got gpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
+#endif
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
 	}
 	else if(port==SDP_PORT_B_IMG_DATA) {
@@ -601,8 +584,9 @@ void hSDP(uint mBox, uint port)
 		pxBuffer.pxLen = msg->length - 8;
 		sark_mem_cpy(bpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
 
-		//io_printf(IO_BUF, "Got bpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
-
+#if(DEBUG_LEVEL>1)
+		io_printf(IO_BUF, "Got bpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
+#endif
 		// process gray scalling and forward afterwards
 		spin1_schedule_callback(processGrayScaling, 0, 0, PRIORITY_PROCESSING);
 	}
@@ -615,6 +599,9 @@ void hSDP(uint mBox, uint port)
 	else if(port==SDP_PORT_FRAME_END) {
 		// at this point, the task list has already been built in the root-leadAp
 		// then go to event-loop for task processing
+#if(DEBUG_LEVEL>0)
+		io_printf(IO_STD, "[EOF_CMD] Got EOF...\n");
+#endif
 		spin1_schedule_callback(taskProcessingLoop,0,0,PRIORITY_PROCESSING);
 	}
 

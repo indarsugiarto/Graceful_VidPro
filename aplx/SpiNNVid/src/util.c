@@ -49,16 +49,6 @@ void give_report(uint reportType, uint target)
 		}
 		else if(reportType==DEBUG_REPORT_IMGBUFS) {
 			if(workers.active==TRUE) {
-				/*
-				io_printf(IO_BUF, "\nSDRAM Image Buffer allocation:\n--------------------------------\n");
-				io_printf(IO_BUF, "imgRin = 0x%x\n", blkInfo->imgRIn);
-				io_printf(IO_BUF, "imgGin = 0x%x\n", blkInfo->imgGIn);
-				io_printf(IO_BUF, "imgBin = 0x%x\n", blkInfo->imgBIn);
-				io_printf(IO_BUF, "imgOut1 = 0x%x\n", blkInfo->imgOut1);
-				io_printf(IO_BUF, "imgOut2 = 0x%x\n", blkInfo->imgOut2);
-				io_printf(IO_BUF, "imgOut3 = 0x%x\n", blkInfo->imgOut3);
-				io_printf(IO_BUF, "--------------------------------\n");
-				*/
 				io_printf(IO_BUF, "DTCM Image Buffer allocation:\n---------------------------------\n");
 				io_printf(IO_BUF, "dtcmImgBuf = 0x%x\n", dtcmImgBuf);
 				io_printf(IO_BUF, "resImgBuf  = 0x%x\n", resImgBuf);
@@ -77,6 +67,26 @@ void give_report(uint reportType, uint target)
 				debugMsg.arg3 = (uint)blkInfo->imgOut3;
 				spin1_send_sdp_msg(&debugMsg, 10);
 				spin1_delay_us(blkInfo->nodeBlockID*1000);
+			}
+		}
+		else if(reportType==DEBUG_REPORT_TASKLIST) {
+			if(sv->p2p_addr==0) {
+				io_printf(IO_STD, "Task list:\n");
+				uchar taskStr[15];
+				for(uchar i=0; i<taskList.nTasks; i++) {
+					switch(taskList.tasks[i]){
+					case PROC_FILTERING:
+						io_printf(taskStr, "FILTERING"); break;
+					case PROC_SHARPENING:
+						io_printf(taskStr, "SHARPENING"); break;
+					case PROC_EDGING_DVS:
+						io_printf(taskStr, "EDGING_DVS"); break;
+					case PROC_SEND_RESULT:
+						io_printf(taskStr, "RESULTING"); break;
+					}
+
+					io_printf(IO_STD, "Task-%d : %s\n", i, taskStr);
+				}
 			}
 		}
 	}
@@ -187,23 +197,6 @@ void seePxBuffer(char *stream)
 	}
 	io_printf(stream, "\n---------------------------------\n");
 
-	/*
-	ushort i;
-	io_printf(IO_BUF, "Content of rba at pxSeq-%d:\n", pxBuffer.pxSeq);
-	for(i=0; i<pxBuffer.pxLen; i++) {
-		io_printf(IO_BUF, "%k ", (REAL)pxBuffer.rpxbuf[i]);
-	}
-
-	ushort c = pxBuffer.rpxbuf[0];
-	//c = 255;
-	REAL r = (REAL)pxBuffer.rpxbuf[0];
-	io_printf(IO_BUF, "\n---------------------------------\n");
-	io_printf(IO_BUF, "rpxBuf[0] = %u\n",pxBuffer.rpxbuf[0]);
-	io_printf(IO_BUF, "(REAL)255 = %k\n",(REAL)255);
-	io_printf(IO_BUF, "(REAL)rpxBuf[0] = %k\n",(REAL)pxBuffer.rpxbuf[0]);
-	io_printf(IO_BUF, "c = %d, (REAL)c = %k\n",c, (REAL)c);
-	io_printf(IO_BUF, "r = %k\n",r);
-	*/
 }
 
 void peekPxBufferInSDRAM(char *stream)
@@ -262,7 +255,7 @@ inline REAL roundr(REAL inVal)
 volatile uint giveDelay(uint delVal)
 {
   volatile uint dummy = delVal;
-  uint step = 0;
+  volatile uint step = 0;
   while(step < delVal) {
     dummy += (2 * step);
     step++;

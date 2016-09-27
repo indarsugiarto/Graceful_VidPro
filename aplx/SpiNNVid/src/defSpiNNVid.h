@@ -83,10 +83,11 @@
 #define DEBUG_REPORT_NET_CONFIG     7       // only leadAp (in all nodes)
 #define DEBUG_REPORT_PERF           8       // all cores
 #define DEBUG_REPORT_PLL_INFO       9       // only leadAp (in all nodes)
-#define DEBUG_REPORT_HISTPROP       10      // only leadAp [in root-node]
+#define DEBUG_REPORT_HISTPROP       10      // only leadAp <in root-node>
 #define DEBUG_REPORT_IMGBUFS		11		// only leadAp (in all nodes)
 #define DEBUG_REPORT_IMGBUF_IN		12		// for host, only leadAp (in all nodes)
 #define DEBUG_REPORT_IMGBUF_OUT		13		// for host, only leadAp (in all nodes)
+#define DEBUG_REPORT_TASKLIST		14		// only leadAp <in root-node>
 
 
 // We use timer to do some debugging facilities
@@ -99,6 +100,7 @@
 #define PRIORITY_FIQ				-1
 #define PRIORITY_MCPL               PRIORITY_FIQ
 #define PRIORITY_DMA                0
+#define PRIORITY_URGENT				0
 #define PRIORITY_SDP                1
 #define PRIORITY_PROCESSING         2
 #define PRIORITY_TIMER              3

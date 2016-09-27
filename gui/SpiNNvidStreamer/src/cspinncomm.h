@@ -80,7 +80,6 @@ public slots:
 	void frameIn(const QImage &frame);
 	void sendImgLine(sdp_hdr_t h, uchar *pixel, quint16 len);
 	// getSpinElapse() is useful if we want to read spinnaker processing time
-	quint16 getSpinElapse() {return spinElapse;}
 
 signals:
 	void sendFrameDone();
@@ -109,13 +108,11 @@ private:
 	quint8 N_nodes;					// how many nodes are used in the network?
 	quint8 nCore4PxProc;	// number of cores in root-node that handle pixel transmission
 
-	quint16 spinElapse;
-
 	// let's prepare header for image sending:
 	// rgb, end-of-frame, config
 	sdp_hdr_t hdrr, hdrg, hdrb, hdre, hdrc;
 
-	QByteArray pxBuff;
+	QByteArray pxBuff;		// for storing result image sent via sdp
 
 	uchar *rArray, *gArray, *bArray;	// line container
 

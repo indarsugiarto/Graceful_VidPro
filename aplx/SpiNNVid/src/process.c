@@ -494,6 +494,11 @@ void taskProcessingLoop(uint arg0, uint arg1)
 
 	// NOTE: task increment is done directly in eHandler.c
 
+#if (DEBUG_LEVEL > 0)
+		io_printf(IO_STD, "cTaskPtr = %d, nTasks = %d\n", taskList.cTaskPtr, taskList.nTasks);
+#endif
+
+
 	if(taskList.cTaskPtr < taskList.nTasks){
 #if (DEBUG_LEVEL > 0)
 		io_printf(IO_STD, "[SpiNNVid] Processing taskID-%d begin...\n", (uint)taskList.cTask);
@@ -501,6 +506,15 @@ void taskProcessingLoop(uint arg0, uint arg1)
 		// broadcast the current task to all cores...
 		// the MCPL_BCAST_START_PROC will trigger triggerProcessing(taskID)
 		spin1_send_mc_packet(MCPL_BCAST_START_PROC, (uint)taskList.cTask, WITH_PAYLOAD);
+	}
+	else {
+		// THINK: if all tasks have been finished, reset the taskList?
+		// YES, just reset the cTaskPtr
+#if (DEBUG_LEVEL > 0)
+		io_printf(IO_STD, "[SpiNNVid] Clearing taskList...\n");
+#endif
+		taskList.cTaskPtr = 0;
+		taskList.cTask = taskList.tasks[0];
 	}
 }
 
@@ -519,6 +533,12 @@ void taskProcessingLoop(uint arg0, uint arg1)
 */
 void triggerProcessing(uint taskID, uint arg1)
 {
+	// ignore me if I'm disabled
+	if(blkInfo->maxBlock==0 || workers.active==FALSE) {
+		io_printf(IO_BUF, "Myblock or me is disabled!\n");
+		return;
+	}
+
 	// prepare measurement
 	// tic = sv->clock_ms;
 	perf.tCore = 0;
@@ -538,11 +558,12 @@ void triggerProcessing(uint taskID, uint arg1)
 		spin1_schedule_callback(imgDetection, 0, 0, PRIORITY_PROCESSING);
 		break;
 	case PROC_SEND_RESULT:
-		// if I'm the root-node, send the result right away
-		if(sv->p2p_addr == 0) {
-			// start the chain by triggering MCPL_BCAST_SEND_RESULT with payload "0"
-			sendResult(0,0);
-			//spin1_send_mc_packet(MCPL_BCAST_SEND_RESULT, blkInfo->nodeBlockID, WITH_PAYLOAD);
+		// if I'm the root-node (and the leadAp!!!), send the result right away
+		if(sv->p2p_addr == 0 && myCoreID==LEAD_CORE) {
+			// start sending the result from root-node:
+			spin1_schedule_callback(sendResult,0,0,PRIORITY_PROCESSING);
+			//sendResult(0,0);	// NOOO..., don't blocking....!!!
+
 		}
 		// otherwise, wait for signal from the root-node
 		break;
@@ -554,37 +575,9 @@ void triggerProcessing(uint taskID, uint arg1)
 		spin1_send_mc_packet(MCPL_TO_OWN_PROFILER, PROF_MSG_PROC_START, WITH_PAYLOAD);
 	}
 
-	/*
-	if(blkInfo->opSharpen==1) {
-		proc = PROC_HISTEQ;
-		// only if root-node and leadAp, trigger the histogram equalisation chain
-		if(sv->p2p_addr==0 && leadAp)
+	// then update the taskList
+	taskList.cTaskPtr++;
 
-			// start timer to measure time
-			START_TIMER();
-
-			spin1_send_mc_packet(MCPL_BCAST_REPORT_HIST, 0, WITH_PAYLOAD);
-			// MCPL_BCAST_REPORT_HIST will be broadcasted to all cores in all chips
-			// only core-1 to core-4 in all chips will response to this call, because
-			// for sending 256 item of uint, we require 4 active "thread". Hence, we assign
-			// 4 cores to do this.
-	}
-	else if(blkInfo->opFilter==1) {
-		proc = PROC_FILTERING;
-		imgFiltering(0,0);	// inside imgFiltering, it will then call imgDetection
-	}
-	else {
-		proc = PROC_EDGING;
-#if (adaptiveFreq==TRUE)
-		//changeFreq(250);
-		imgDetection(0,0);	// go edge detection directly
-		//changeFreq(200);
-#else
-		imgDetection(0,0);	// go edge detection directly
-#endif
-	}
-
-	*/
 
 	// then reset newImageFlag so that the next frame can be detected properly
 	newImageFlag = TRUE;
@@ -829,6 +822,63 @@ void imgDetection(uint arg0, uint arg1)
 /*---------------------------- About Sending Result -----------------------------------*/
 /*------------------------ main function: sendResult() --------------------------------*/
 
+/* There are two similar subroutine sendResultToTarget and sendResultToTargetFromRoot:
+ * - sendResultToTargetFromRoot is dedicated for the root-node and is executed before:
+ * - sendResultToTarget is for other nodes
+ * Those two subroutines are modified according to the value of DESTINATION
+ * */
+
+// helper function
+
+// debugSDP() displays the sdp content and introduce long delay (1s)
+void debugSDP(ushort line, uchar chunkID, ushort nData)
+{
+	/*
+	io_printf(IO_STD, "SDP(hex): ");
+	uchar c;
+	for(ushort i=0; i<nData; i++) {
+		sark_mem_cpy(&c, addr, 1); addr += 1;
+		io_printf(IO_STD, "%x ", c);
+	}
+	io_printf(IO_STD, "\n");
+	*/
+	//io_printf(IO_STD, "Sending: %d-%d-%d:%d\n",
+	//		  blkInfo->nodeBlockID, line, chunkID, nData);
+	//sark_delay_us(10000);		// delay 1s
+	sark_delay_us(1000);
+}
+
+void sendImgChunkViaSDP(uint line, uchar * pxbuf)
+{
+	// use full sdp (scp_segment + data_segment) for pixel values
+	ushort rem, sz;
+	// then sequentially copy & send via sdp. We use srce_addr and srce_port as well:
+	// scre_addr contains line number
+	// srce_port contains pixel chunk number in the current line
+	uchar chunkID = 0;
+	rem = workers.wImg;
+	resultMsg.srce_addr = line;	// is it useful??? for debugging!!!
+	uchar *resPtr = pxbuf;
+	do {
+		resultMsg.srce_port = chunkID;	// is it useful???
+		sz = rem > 272 ? 272 : rem;
+		spin1_memcpy((void *)&resultMsg.cmd_rc, resPtr, sz);
+
+		resultMsg.length = sizeof(sdp_hdr_t) + sz;
+
+		// debugging:
+		debugSDP(line, chunkID, sz);
+
+		spin1_send_sdp_msg(&resultMsg, 10);
+		giveDelay(DEF_DEL_VAL);	// this should produce 5.7MBps in 200MHz
+
+		chunkID++;		// for the resImgBuf pointer
+		resPtr += sz;
+		rem -= sz;
+	} while(rem > 0);
+}
+
+
 // we cannot use workers.imgROut, because workers.imgROut differs from core to core
 // use workers.blkImgROut instead!
 // nodeID is the next node that is supposed to send the result
@@ -860,8 +910,8 @@ void sendResultToTargetFromRoot()
 	uchar *imgOut;
 	imgOut  = (uchar *)getSdramResultAddr();
 
-	// use full sdp (scp_segment + data_segment) for pixel values
-	ushort rem, sz;
+	// debugging: OK
+	// io_printf(IO_BUF, "imgOut = 0x%x\n", imgOut);
 
 	uint dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
 	for(ushort lines=workers.blkStart; lines<=workers.blkEnd; lines++) {
@@ -879,25 +929,7 @@ void sendResultToTargetFromRoot()
 		}
 
 		// then sequentially copy & send via sdp. We use srce_addr and srce_port as well:
-		// scre_addr contains line number
-		// srce_port contains pixel chunk number in the current line
-		uchar chunkID = 0;
-		rem = workers.wImg;
-		resultMsg.srce_addr = lines;	// is it useful??? for debugging!!!
-		uchar *resPtr = resImgBuf;
-		do {
-			resultMsg.srce_port = chunkID;	// is it useful???
-			sz = rem > 272 ? 272 : rem;
-			spin1_memcpy((void *)&resultMsg.cmd_rc, resPtr, sz);
-
-			resultMsg.length = sizeof(sdp_hdr_t) + sz;
-			spin1_send_sdp_msg(&resultMsg, 10);
-			giveDelay(DEF_DEL_VAL);	// this should produce 5.7MBps in 200MHz
-
-			chunkID++;		// for the resImgBuf pointer
-			resPtr += sz;
-			rem -= sz;
-		} while(rem > 0);
+		sendImgChunkViaSDP(lines, resImgBuf);
 
 		// move to the next address
 		imgOut += workers.wImg;
@@ -949,14 +981,24 @@ void sendResultToTargetFromRoot()
 
 
 
-
 /*----------------------------------------------------------------------------------*/
 /*----------------------------------------------------------------------------------*/
 //             The following is for processing data from other nodes:
 #if(DESTINATION==DEST_HOST)
+// sendResultToTarget() is scheduled from eHandler.c that processes
+// MCPL_SEND_PIXELS_DATA
 void sendResultToTarget(uint line, uint null)
 {
+	//io_printf(IO_STD, "Root-node got enough data. Send via sdp...\n");
 
+	Terakhir sampai sini, kenapa kalau delay lebih kecil dari 2000 terus hang....
+	sark_delay_us(2000);
+	// send to target via sdp
+	sendImgChunkViaSDP(line, sendResultInfo.pxBuf);
+
+	// then continue the chain with the next line
+	sendResultInfo.lineToSend++;
+	spin1_schedule_callback(sendResultChain, sendResultInfo.lineToSend, NULL, PRIORITY_PROCESSING);
 }
 #endif
 
@@ -969,32 +1011,70 @@ void sendResultToTarget(uint line, uint null)
 /*----------------------------------------------------------------------------------*/
 /*----------------------------------------------------------------------------------*/
 
+
+
+void sendResultChain(uint nextLine, uint unused)
+{
+	//io_printf(IO_STD, "Lanjut chain-%d\n", nextLine); sark_delay_us(1000);
+	// end of sending result? release the buffer
+	if(nextLine==workers.hImg) {
+		sark_free(sendResultInfo.pxBuf);
+		// then notify host that we've done with sending the result
+		spin1_schedule_callback(notifyDestDone,0,0,PRIORITY_PROCESSING);
+	}
+	else {
+		// prepare the buffer (reset its pointer)
+		sendResultInfo.pxBufPtr = sendResultInfo.pxBuf;
+
+		// debugging sampai 220, lihat apa ada MCPL stuck... TIDAK
+		// tapi kenapa sampai 225 ada dumped MCPL... ????
+		//if(nextLine < 230) {
+		// prepare the pixel-chunk counter:
+		sendResultInfo.nReceived_MCPL_SEND_PIXELS = 0;
+
+		//io_printf(IO_STD, "Will bcast MCPL_SEND_PIXELS_CMD\n");
+		spin1_send_mc_packet(MCPL_SEND_PIXELS_CMD, nextLine, WITH_PAYLOAD);
+		//}
+	}
+}
+
+
 /* SYNOPSIS:
  * sendResult() will ONLY be executed by leadAp in the root-node.
  *
- * It is called by triggerProcessing() with payload "0".
+ * It is scheduled by triggerProcessing() with payload "0".
  *
  * In this version, the root-node will collect the pixel from other nodes, assemble
  * the sdp, and send to the target (host-pc or fpga).
  *
- * It is a chain mechanism, where at the bottom end of it will send again
- * MCPL_BCAST_SEND_RESULT with next blkId as the payload. Hence, which node is
- * supposed to send the result is indicated by this blkID.
  * */
-void sendResult(uint blkID, uint arg1)
+void sendResult(uint unused, uint arg1)
 {	
 	// as the root, we have the first chance to send the result
+#if(DEBUG_LEVEL>0)
+	io_printf(IO_STD, "sendResultToTargetFromRoot()\n");
+#endif
 	sendResultToTargetFromRoot();
 
-	// then the rest
-	uchar cont;
-	for(uint l=workers.endLine+1; l<workers.hImg; l++) {
-		cont = 0;
-		spin1_send_mc_packet(MCPL_SEND_PIXELS_CMD, l, WITH_PAYLOAD);
-		// wait until
-		while(cont==0){
-		}
-	}
+	// then the remaining nodes should execute sendResultToTarget()
+	sendResultInfo.nRemaining_MCPL_SEND_PIXELS = blkInfo->wImg % 4;
+	if(sendResultInfo.nRemaining_MCPL_SEND_PIXELS == 0)
+		sendResultInfo.nExpected_MCPL_SEND_PIXELS = blkInfo->wImg / 4;
+	else
+		sendResultInfo.nExpected_MCPL_SEND_PIXELS = blkInfo->wImg / 4 + 1;
+
+#if(DEBUG_LEVEL>0)
+	io_printf(IO_STD, "sendResultToTarget()\n");
+#endif
+
+	// prepare the buffer
+	sendResultInfo.pxBuf = sark_alloc(sendResultInfo.nExpected_MCPL_SEND_PIXELS, 4);
+
+	// then trigger the chain
+	// NOTE: mungkin memang harus event-based, karena spin1_schedule_callback tidak
+	// berfungsi!!!
+	sendResultInfo.lineToSend = workers.blkEnd+1;
+	spin1_schedule_callback(sendResultChain, sendResultInfo.lineToSend, 0, PRIORITY_PROCESSING);
 
 	/*
 	// if I'm not include in the list, skip this
@@ -1021,12 +1101,19 @@ void sendResult(uint blkID, uint arg1)
 }
 
 
-// sendResultProcessCmd() will be called when we receive MCPL_SEND_PIXELS_CMD
-// from root-node
+/* sendResultProcessCmd() will be called when we receive MCPL_SEND_PIXELS_CMD
+ * from root-node. This sendResultProcessCmd() should be executed ONLY be nodes
+ * other than the root-node.
+ * In this sendResultProcessCmd(), the non-root-node fetch a line from sdram,
+ * split it into several MCPL and send them as MCPL_SEND_PIXELS_DATA packets.
+ */
 void sendResultProcessCmd(uint line, uint null)
 {
+	//io_printf(IO_BUF, "Got MCPL_SEND_PIXELS_CMD line-%d\n", line);
 	// first, check if the line is within our block
 	if(line>=workers.blkStart && line<=workers.blkEnd) {
+
+		//io_printf(IO_BUF, "respond to MCPL_SEND_PIXELS_CMD, will send line-%d\n", line); //sark_delay_us(1000);
 
 		// fetch from sdram
 		uchar *imgOut;
@@ -1050,6 +1137,9 @@ void sendResultProcessCmd(uint line, uint null)
 		uint mcplBuf;
 		rem = workers.wImg;
 		uchar *resPtr = resImgBuf;
+
+		//ushort debuggingCntr = 0;
+
 		do {
 			spin1_memcpy((void *)&mcplBuf, resPtr, 4);
 			spin1_send_mc_packet(MCPL_SEND_PIXELS_DATA, mcplBuf, WITH_PAYLOAD);

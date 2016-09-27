@@ -7,10 +7,6 @@
 #ifndef SPINNVID_H
 #define SPINNVID_H
 
-/*--------- For experiment ---------*/
-#define SPECIAL_CORE_TO_REPORT_T_EDGE    1
-
-
 #include <spin1_api.h>
 #include <stdfix.h>
 #include "defSpiNNVid.h"        // all definitions go here
@@ -252,6 +248,17 @@ typedef struct task_list {
 } task_list_t;
 task_list_t taskList;
 
+// regarding sending result, the root-node needs to track the current requested line number:
+typedef struct send_result_info {
+	ushort lineToSend;				// it used in sendResult()
+	ushort nReceived_MCPL_SEND_PIXELS;
+	ushort nExpected_MCPL_SEND_PIXELS;
+	ushort nRemaining_MCPL_SEND_PIXELS;
+	uchar *pxBuf;
+	uchar *pxBufPtr;
+} send_result_info_t;
+send_result_info_t sendResultInfo;
+
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
 /*-------------------------- Global/Static Variables --------------------------------*/
@@ -300,8 +307,6 @@ ushort pixelCntr;				// how many pixel has been processed?
 
 uchar nCoresForPixelPreProc;
 
-uchar oTarget = DESTINATION;					// output target
-
 /*------------------------- Forward declarations ----------------------------*/
 
 // Initialization
@@ -345,16 +350,24 @@ void collectGrayPixels(uint arg0, uint arg1);
 void computeHist(uint arg0, uint arg1);     // will use ypxbuf to compute the histogram
 
 void triggerProcessing(uint taskID, uint arg1);
-void sendResult(uint blkID, uint arg1);		// blkID is the expected node to send
-void sendResultProcessCmd(uint line, uint null);
-void sendResultAssembleLine(uint line, uint null);
+
+// core image processing:
 void imgFiltering(uint arg0, uint arg1);
 void imgSharpening(uint arg0, uint arg1);
 void imgDetection(uint arg0, uint arg1);
 
+// sending result
+void sendResult(uint blkID, uint arg1);		// blkID is the expected node to send
+void sendResultProcessCmd(uint line, uint null);
+void sendResultAssembleLine(uint line, uint null);
+void sendResultToTarget(uint line, uint null);
+void sendResultToTargetFromRoot();
+void sendResultChain(uint nextLine, uint unused);
+void notifyDestDone(uint arg0, uint arg1);
+
 // debugging and reporting
 void give_report(uint reportType, uint target);
-volatile uint giveDelay(uint delVal);
+volatile uint giveDelay(uint delVal);	// delVal is the number of clock step
 void hTimer(uint tick, uint Unused);
 void seePxBuffer(char *stream);
 void peekPxBufferInSDRAM(char *stream);

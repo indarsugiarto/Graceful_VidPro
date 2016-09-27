@@ -236,7 +236,7 @@ void cSpiNNcomm::frameInfo(int imgW, int imgH)
 	if(frResult != NULL)
 		delete frResult;
 	frResult = new QImage(wImg, hImg, QImage::Format_RGB888);
-	// and its buffer
+	// and its buffer for storing data sent via sdp
 	pxBuff.clear();
 
     // send to spinnaker
@@ -320,9 +320,34 @@ void cSpiNNcomm::readDebug()
 	}
 }
 
+// helper function to see SDP
+// NOTE: readSDP must have big delay to be seen!!!
+void readSDP(QByteArray ba)
+{
+	// coba tampilkan bytearray sebagai hex:
+	QByteArray hex = ba.toHex();
+	QString str = "SDP(hex): ";
+	for(int i=0; i<hex.count(); i++) {
+		str.append(QString("%1").arg(hex.at(i)));
+		if(i%2!=0)
+			str.append(" ");
+	}
+	qDebug() << str;
+}
+
 void cSpiNNcomm::readResult()
 {
 	// in the aplx: resultMsg.srce_addr = lines;
+
+	/* How reading the result should work:
+	 * Regarding srce_port for debugging:
+	 * 	1. for sending pixel, use srce_port as chunk index
+			hence, the maximum chunk = 253, which reflect the maximum 253*272=68816 pixels
+			in one line (thus, we can expect the maximum image size is 68816*whatever).
+		2. for notifying host, use srce_port 0xFE
+		   we cannot use 0xFF, because 0xFF is special for ETH
+	 * srce_addr contains the line number of the image (useful for debugging???)
+	*/
 
 	QByteArray ba;
 	ba.resize(sdpResult->pendingDatagramSize());
@@ -332,32 +357,9 @@ void cSpiNNcomm::readResult()
 	// first, read the header
 	sdp_hdr_t h = get_hdr(ba);
 	// spinnaker finish sending the result?
-	if(h.srce_port != SDP_SRCE_NOTIFY_PORT) {
+	if(h.srce_port == SDP_SRCE_NOTIFY_PORT) {
 
-		// for debugging:
-		int ln = (int)h.srce_addr;
-		if(ln != recvLine) {
-			recvLine = ln;
-			recvLineCntr++;
-		}
-
-		// remove header
-		ba.remove(0, 10);
-		// since the result is sent in sequential order, then no overlap
-		// but beware with packet loss though!!!
-		pxBuff.append(ba);
-	}
-	// Note: we receive a result notification (only gray result!)
-	/* Regarding srce_port for debugging:
-	 * 	1. for sending pixel, use srce_port as chunk index
-			hence, the maximum chunk = 253, which reflect the maximum 253*272=68816 pixels
-			in one line (thus, we can expect the maximum image size is 68816*whatever).
-		2. for notifying host, use srce_port 0xFE
-		   we cannot use 0xFF, because 0xFF is special for ETH
-	*/
-	else {
-		spinElapse = h.srce_addr;
-		// copy to frResult
+		// then assemble the image from pxBuff (copy to frResult)
 		int cntr = 0;
 		QRgb value;
 		for(int y=0; y<hImg; y++)
@@ -372,8 +374,29 @@ void cSpiNNcomm::readResult()
 		// and clear pixel buffers
 		pxBuff.clear();
 		// how fast?
-		qDebug() << QString("Receiving %1 lines in %2-ms")
-					.arg(recvLineCntr).arg(spinElapse);
+		qDebug() << QString("Receiving %1 lines in ...-ms")
+					.arg(recvLineCntr);
+
+	} else {
+		// for debugging:
+		int ln = (int)h.srce_addr;
+		int cID = (int)h.srce_port;
+		// counting, how many lines has been received so far
+		if(ln != recvLine) {
+			recvLine = ln;	// toggle the flag, indicating a new line has arrive
+			recvLineCntr++;
+		}
+
+
+		// remove header
+		ba.remove(0, 10);
+		// since the result is sent in sequential order, then no overlap
+		// but beware with packet loss though!!!
+		pxBuff.append(ba);
+
+		// I want to see its data:
+		qDebug() << QString("Recv: %1-%2:%3").arg(ln).arg(cID).arg(ba.count());
+		//readSDP(ba);
 	}
 }
 
@@ -486,7 +509,7 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 	free(bArray);
 
 	// debugging:
-	recvLine = -1;
+	recvLine = -1;		// to check if the current line in the SDP is the same as the previous line
 	recvLineCntr = 0;
 }
 
@@ -515,6 +538,7 @@ void cSpiNNcomm::sendTest(int testID)
 		for(int i=0; i<48; i++) imgBufAddr[i].ready = FALSE;
 		imgBufAddrCntr = 0;
 		break;
+	case 8: c.seq = DEBUG_REPORT_TASKLIST; break;
     }
 	sendSDP(hdrc, scp(c));
 }

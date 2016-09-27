@@ -294,8 +294,8 @@ void vidStreamer::pbSendImageClicked()
 
 void vidStreamer::frameReady()
 {
-    quint16 elapse = spinn->getSpinElapse();
-    qDebug() << QString("SpiNNaker processing time = %1-clk").arg(elapse);
+	//quint16 elapse = spinn->getSpinElapse();
+	//qDebug() << QString("SpiNNaker processing time = %1-clk").arg(elapse);
 }
 
 void vidStreamer::pbTestClicked()

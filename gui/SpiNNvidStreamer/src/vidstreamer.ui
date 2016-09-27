@@ -467,6 +467,11 @@
       <string>Image Buffers</string>
      </property>
     </item>
+    <item>
+     <property name="text">
+      <string>Task List</string>
+     </property>
+    </item>
    </widget>
    <widget class="QPushButton" name="pbTest">
     <property name="geometry">
