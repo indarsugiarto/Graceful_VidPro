@@ -23,6 +23,7 @@ public slots:
 	void putFrame(const QImage &frame);
 	void drawFrame();
 	void getImgSpiNN(const QByteArray &data);
+	void clear();
 private:
 	int imgW;
 	int imgH;

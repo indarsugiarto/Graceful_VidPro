@@ -40,8 +40,8 @@ inline void initImgBufs()
 	blkInfo->imgGIn = NULL;
 	blkInfo->imgBIn = NULL;
 	blkInfo->imgOut1 = NULL;
-	blkInfo->imgOut2 = NULL;
-	blkInfo->imgOut3 = NULL;
+	//blkInfo->imgOut2 = NULL;
+	//blkInfo->imgOut3 = NULL;
 	blkInfo->imageInfoRetrieved = 0;
 	blkInfo->fullRImageRetrieved = 0;
 	blkInfo->fullGImageRetrieved = 0;
@@ -54,9 +54,10 @@ void releaseImgBuf()
 		io_printf(IO_BUF, "[IMGBUF] Releasing SDRAM heap...\n");
 		sark_free(blkInfo->imgRIn);
 		sark_free(blkInfo->imgGIn);
+		sark_free(blkInfo->imgBIn);
 		sark_free(blkInfo->imgOut1);
-		sark_free(blkInfo->imgOut2);
-		sark_free(blkInfo->imgOut3);
+		//sark_free(blkInfo->imgOut2);
+		//sark_free(blkInfo->imgOut3);
 	}
 }
 
@@ -64,11 +65,21 @@ void releaseImgBuf()
 // it should be called with SDP_CMD_FRAME_INFO and MCPL_BCAST_FRAME_INFO
 void allocateImgBuf()
 {
+
 	// at this point, we just need to know the size of the image
 	uint sz = blkInfo->wImg * blkInfo->hImg;
 
 	// image buffers have been allocated already? if yes, clear them first
 	releaseImgBuf();
+
+	/* debugging, are the buffers already allocated...
+	char *stream;
+	if(sv->p2p_addr==0) stream=IO_STD; else stream=IO_BUF;
+	io_printf(stream, "imgRIn = 0x%x\n", blkInfo->imgRIn);
+	io_printf(stream, "imgGIn = 0x%x\n", blkInfo->imgGIn);
+	io_printf(stream, "imgBIn = 0x%x\n", blkInfo->imgBIn);
+	io_printf(stream, "imgOut1 = 0x%x\n", blkInfo->imgOut1);
+	*/
 
 	blkInfo->imgRIn = sark_xalloc(sv->sdram_heap, sz, XALLOC_TAG_IMGRIN, ALLOC_LOCK);
 	if(blkInfo->imgRIn==NULL)
@@ -82,12 +93,14 @@ void allocateImgBuf()
 	blkInfo->imgOut1 = sark_xalloc(sv->sdram_heap, sz, XALLOC_TAG_IMGOUT1, ALLOC_LOCK);
 	if(blkInfo->imgOut1==NULL)
 		terminate_SpiNNVid(IO_DBG, "[FATAL] Cannot allocate imgOut1\n", RTE_ABORT);
+	/*
 	blkInfo->imgOut2 = sark_xalloc(sv->sdram_heap, sz, XALLOC_TAG_IMGOUT2, ALLOC_LOCK);
 	if(blkInfo->imgOut2==NULL)
 		terminate_SpiNNVid(IO_DBG, "[FATAL] Cannot allocate imgOut2\n", RTE_ABORT);
 	blkInfo->imgOut3 = sark_xalloc(sv->sdram_heap, sz, XALLOC_TAG_IMGOUT3, ALLOC_LOCK);
 	if(blkInfo->imgOut3==NULL)
 		terminate_SpiNNVid(IO_DBG, "[FATAL] Cannot allocate imgOut3\n", RTE_ABORT);
+	*/
 	// Remember: clean these if video ends!!!
 
 }

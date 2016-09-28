@@ -125,4 +125,8 @@ private:
 	int recvLine;
 };
 
+/*---------- Helper -----------*/
+void readSDP(QByteArray ba);	// this is how to display QByteArray in hex
+
+
 #endif // CSPINNCOMM_H

@@ -88,7 +88,8 @@
 #define DEBUG_REPORT_IMGBUF_IN		12		// for host, only leadAp (in all nodes)
 #define DEBUG_REPORT_IMGBUF_OUT		13		// for host, only leadAp (in all nodes)
 #define DEBUG_REPORT_TASKLIST		14		// only leadAp <in root-node>
-
+#define DEBUG_REPORT_CLEAR_MEM		15		// only leadAp (in all nodes)
+#define DEBUG_REPORT_EDGE_DONE		16		// only leadAp (in all nodes)
 
 // We use timer to do some debugging facilities
 #define TIMER_TICK_PERIOD_US        1000000
@@ -155,7 +156,7 @@
 #define DEF_PY_WAIT_VAL				200
 // for sending chunks from spinnaker:
 #define DEF_DEL_VAL					900  // perfect, up to 5.7MBps
-
+//#define DEF_DEL_VAL					1800
 
 // dma transfer
 //#define DMA_TAG_STORE_FRAME		10
@@ -266,8 +267,10 @@
 #define IMG_O_BUFF3_BASE		0x66000000	// optional:
 */
 
-#define IMG_SOBEL					0
-#define IMG_LAPLACE					1
+#define IMG_GRAYSCALING				0
+#define IMG_SOBEL					1
+#define IMG_LAPLACE					2
+#define IMG_DVS						3
 #define IMG_WITHOUT_FILTER			0
 #define IMG_WITH_FILTER				1
 

@@ -190,6 +190,9 @@
      <property name="text">
       <string>None</string>
      </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
     </widget>
     <widget class="QRadioButton" name="rbDVS">
      <property name="geometry">
@@ -470,6 +473,16 @@
     <item>
      <property name="text">
       <string>Task List</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Release Mem (warning!!!)</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Edge Done Report</string>
      </property>
     </item>
    </widget>

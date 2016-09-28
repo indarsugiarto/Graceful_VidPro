@@ -31,6 +31,9 @@ void build_task_list()
 
 void configure_network(uint mBox)
 {
+
+	//kenapa default-nya sobel???
+
 	io_printf(IO_STD, "[CONFIG] Got configuration...\n");
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
 	if(msg->cmd_rc == SDP_CMD_CONFIG_NETWORK) {
@@ -387,7 +390,8 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 			spin1_send_mc_packet(key, perf.tNode, WITH_PAYLOAD);
 
 			// and tell profiler that processing is done for a node
-			spin1_send_mc_packet(MCPL_TO_OWN_PROFILER, PROF_MSG_PROC_END, WITH_PAYLOAD);
+			// spin1_send_mc_packet(MCPL_TO_OWN_PROFILER, PROF_MSG_PROC_END, WITH_PAYLOAD);
+			// no need, we just need to wait from root-leadAp
 		}
 	}
 
@@ -407,10 +411,7 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 			taskList.tPerf[taskList.cTaskPtr] = perf.tTotal;
 
 			// then prepare for taskProcessingLoop again
-			uchar ct = taskList.cTaskPtr + 1;
-			taskList.cTask = taskList.tasks[ct];
-			taskList.cTaskPtr = ct;
-			spin1_schedule_callback(taskProcessingLoop, 0, 0, PRIORITY_PROCESSING);
+			notifyTaskDone();
 		}
 	}
 

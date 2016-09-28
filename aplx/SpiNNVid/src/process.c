@@ -489,19 +489,42 @@ void collectGrayPixels(uint arg0, uint arg1)
 
 // taskProcessingLoop() is scheduled when leadAp-root receives "End-of-Frame" via
 // SDP_PORT_FRAME_END. It will be re-scheduled over time.
+
+void notifyTaskDone()
+{
+#if(ADAPTIVE_FREQ==TRUE)
+	if(myCoreID==LEAD_CORE && taskList.cTask!=PROC_SEND_RESULT)
+		//spin1_send_mc_packet(MCPL_TO_OWN_PROFILER, PROF_MSG_PROC_END, WITH_PAYLOAD);
+		// since notifyTaskDone is only for root-leadAp, then we need to broadcast:
+		spin1_send_mc_packet(MCPL_TO_ALL_PROFILER, PROF_MSG_PROC_END, WITH_PAYLOAD);
+#endif
+	char prevTaskStr[15];
+	char newTaskStr[15];
+	getTaskName(taskList.cTask, prevTaskStr);
+	taskList.cTaskPtr++;
+	taskList.cTask = taskList.tasks[taskList.cTaskPtr];
+	getTaskName(taskList.cTask, newTaskStr);
+
+	io_printf(IO_STD, "[SpiNNVid] Task-%s done, continue with %s\n", prevTaskStr, newTaskStr);
+
+	spin1_schedule_callback(taskProcessingLoop, 0, 0, PRIORITY_PROCESSING);
+}
+
 void taskProcessingLoop(uint arg0, uint arg1)
 {
 
 	// NOTE: task increment is done directly in eHandler.c
 
-#if (DEBUG_LEVEL > 0)
+#if (DEBUG_LEVEL > 1)
 		io_printf(IO_STD, "cTaskPtr = %d, nTasks = %d\n", taskList.cTaskPtr, taskList.nTasks);
 #endif
 
 
 	if(taskList.cTaskPtr < taskList.nTasks){
 #if (DEBUG_LEVEL > 0)
-		io_printf(IO_STD, "[SpiNNVid] Processing taskID-%d begin...\n", (uint)taskList.cTask);
+		char taskStr[15];
+		getTaskName(taskList.cTask, taskStr);
+		io_printf(IO_STD, "[SpiNNVid] Processing task-%s begin...\n", taskStr);
 #endif
 		// broadcast the current task to all cores...
 		// the MCPL_BCAST_START_PROC will trigger triggerProcessing(taskID)
@@ -563,21 +586,17 @@ void triggerProcessing(uint taskID, uint arg1)
 			// start sending the result from root-node:
 			spin1_schedule_callback(sendResult,0,0,PRIORITY_PROCESSING);
 			//sendResult(0,0);	// NOOO..., don't blocking....!!!
-
 		}
 		// otherwise, wait for signal from the root-node
 		break;
 	}
 
-
+#if(ADAPTIVE_FREQ==TRUE)
 	if(myCoreID==LEAD_CORE && (proc_t)taskID!=PROC_SEND_RESULT) {
 		// inform profiler that the processing is started (for adaptive freq?)
 		spin1_send_mc_packet(MCPL_TO_OWN_PROFILER, PROF_MSG_PROC_START, WITH_PAYLOAD);
 	}
-
-	// then update the taskList
-	taskList.cTaskPtr++;
-
+#endif
 
 	// then reset newImageFlag so that the next frame can be detected properly
 	newImageFlag = TRUE;
@@ -677,20 +696,27 @@ void imgFiltering(uint arg0, uint arg1)
 // NOTE: in imgDetection(), we have mode==SOBEL(1), LAPLACE(2)
 void imgDetection(uint arg0, uint arg1)
 {
+	/* it has been checked in the triggerProcessing()...
 	if(workers.active==FALSE) {
 		io_printf(IO_BUF, "I'm disabled!\n");
 		return;
 	}
+	*/
+
+
+	/* scrap from previous version:
+	uchar *sdramImgIn;
+	sdramImgIn = workers.imgOut1;
+	*/
 
 	// Use timer-2 to measure the performance
 	START_TIMER();
 
-	ushort offset = workers.opType == IMG_SOBEL ? 1:2;
+	uint offset = workers.opType == IMG_SOBEL ? 1:2;
 	offset *= workers.wImg;
 
 	short l,c,n,i,j;
 	uchar *dtcmLine;	//point to the current image line in the DTCM (not in SDRAM!)
-	//uchar *debugging;
 	int sumX, sumY, sumXY;
 
 	uint dmatag;
@@ -706,11 +732,15 @@ void imgDetection(uint arg0, uint arg1)
 
 		dmaImgFromSDRAMdone = 0;
 		dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
+
+		// fetch a block (3 or 5 lines) of image from sdram
 		do {
 			dmaTID = spin1_dma_transfer(dmatag, (void *)workers.sdramImgIn - offset,
 										(void *)dtcmImgBuf, DMA_READ, workers.szDtcmImgBuf);
+			/* if dma full...
 			if(dmaTID==0)
 				io_printf(IO_BUF, "[Edging] DMA full for tag-0x%x! Retry...\n", dmatag);
+			*/
 		} while (dmaTID==0);
 
 		// wait until dma above is completed
@@ -724,7 +754,7 @@ void imgDetection(uint arg0, uint arg1)
 		//dtcmLine = dtcmImgBuf;	// Aneh, ini hasilnya bagus :(
 		//dtcmLine = sdramImgIn;	// very slow, but the result is "better"
 
-		/*
+		/* just to test if the pixels are correctly fetched from sdram
 		debugging = sdramImgIn;
 		ushort _cntr = 0;
 		for(ushort chk=0; chk<workers.wImg; chk++) {
@@ -739,7 +769,8 @@ void imgDetection(uint arg0, uint arg1)
 		// scan for all column in the line
 		for(c=0; c<workers.wImg; c++) {
 			// if offset is 1, then it is for sobel, otherwise it is for laplace
-			if(offset==1) {
+			//if(offset==1) {
+			if(workers.opType == IMG_SOBEL) {
 				sumX = 0;
 				sumY = 0;
 				if(workers.startLine+l == 0 || workers.startLine+l == workers.hImg-1)
@@ -773,9 +804,10 @@ void imgDetection(uint arg0, uint arg1)
 			if(sumXY>255) sumXY = 255;
 			if(sumXY<0) sumXY = 0;
 
-			// resImgBuf is just one line and it doesn't matter, where it is!
-			//*(resImgBuf + c) = 255 - (uchar)(sumXY);
-			*(resImgBuf + c) = (uchar)(sumXY);
+			if(workers.opType==IMG_SOBEL)
+				*(resImgBuf + c) = 255 - (uchar)(sumXY);
+			else
+				*(resImgBuf + c) = (uchar)(sumXY);
 
 		} // end for c-loop
 
@@ -787,8 +819,10 @@ void imgDetection(uint arg0, uint arg1)
 		do {
 			dmaTID = spin1_dma_transfer(dmatag, (void *)workers.sdramImgOut,
 						   (void *)resImgBuf, DMA_WRITE, workers.wImg);
+			/* dma full...
 			if(dmaTID==0)
 				io_printf(IO_BUF, "[Edging] DMA full for tag-0x%x! Retry...\n", dmatag);
+			*/
 		} while(dmaTID==0);
 
 
@@ -801,7 +835,7 @@ void imgDetection(uint arg0, uint arg1)
 	perf.tCore = READ_TIMER();
 
 	// at the end, send MCPL_EDGE_DONE to local leadAp (including the leadAp itself)
-#if (DEBUG_LEVEL > 0)
+#if (DEBUG_LEVEL > 1)
 	io_printf(IO_BUF, "[Edging] Done! send MCPL_EDGE_DONE!\n");
 #endif
 	spin1_send_mc_packet(MCPL_EDGE_DONE, perf.tCore, WITH_PAYLOAD);
@@ -848,8 +882,11 @@ void debugSDP(ushort line, uchar chunkID, ushort nData)
 	sark_delay_us(1000);
 }
 
-void sendImgChunkViaSDP(uint line, uchar * pxbuf)
+// If alternativeDelay==0, then the delay is based on DEF_DEL_VAL, otherwise
+// the delay is set to alternativeDelay.
+void sendImgChunkViaSDP(uint line, uchar * pxbuf, uint alternativeDelay)
 {
+	sendResultInfo.sdpReady = FALSE;
 	// use full sdp (scp_segment + data_segment) for pixel values
 	ushort rem, sz;
 	// then sequentially copy & send via sdp. We use srce_addr and srce_port as well:
@@ -867,15 +904,19 @@ void sendImgChunkViaSDP(uint line, uchar * pxbuf)
 		resultMsg.length = sizeof(sdp_hdr_t) + sz;
 
 		// debugging:
-		debugSDP(line, chunkID, sz);
+		//debugSDP(line, chunkID, sz);
 
 		spin1_send_sdp_msg(&resultMsg, 10);
-		giveDelay(DEF_DEL_VAL);	// this should produce 5.7MBps in 200MHz
+		if(alternativeDelay==0)
+			giveDelay(DEF_DEL_VAL);	// if 900, this should produce 5.7MBps in 200MHz
+		else
+			giveDelay(alternativeDelay);
 
 		chunkID++;		// for the resImgBuf pointer
 		resPtr += sz;
 		rem -= sz;
 	} while(rem > 0);
+	sendResultInfo.sdpReady = TRUE;
 }
 
 
@@ -929,7 +970,7 @@ void sendResultToTargetFromRoot()
 		}
 
 		// then sequentially copy & send via sdp. We use srce_addr and srce_port as well:
-		sendImgChunkViaSDP(lines, resImgBuf);
+		sendImgChunkViaSDP(lines, resImgBuf, 0);
 
 		// move to the next address
 		imgOut += workers.wImg;
@@ -979,8 +1020,6 @@ void sendResultToTargetFromRoot()
 }
 #endif
 
-
-
 /*----------------------------------------------------------------------------------*/
 /*----------------------------------------------------------------------------------*/
 //             The following is for processing data from other nodes:
@@ -991,14 +1030,48 @@ void sendResultToTarget(uint line, uint null)
 {
 	//io_printf(IO_STD, "Root-node got enough data. Send via sdp...\n");
 
+	/* WHY it needs delay before sendImgChunkViaSDP() ? Because...
 	Terakhir sampai sini, kenapa kalau delay lebih kecil dari 2000 terus hang....
-	sark_delay_us(2000);
-	// send to target via sdp
-	sendImgChunkViaSDP(line, sendResultInfo.pxBuf);
+	karena waktu kirim sdp belum selesai sudah ada data baru dari MCPL
+	solusi: pakai flag sendResultInfo.sdpReady
+	*/
 
-	// then continue the chain with the next line
-	sendResultInfo.lineToSend++;
-	spin1_schedule_callback(sendResultChain, sendResultInfo.lineToSend, NULL, PRIORITY_PROCESSING);
+	// if sdp is not ready, then go to wait state (in recursion-like mechanism)
+	if(sendResultInfo.sdpReady==FALSE) {
+		/* Do we need delay? Normally NO, but...
+		sendResultInfo.delayCntr++;
+		if(sendResultInfo.delayCntr>MIN_ADAPTIVE_DELAY) {
+			io_printf(IO_STD, "Waiting sdp...\n");
+			sendResultInfo.delayCntr = 0;
+		}
+		else {
+			io_printf(IO_BUF, "Waiting sdp...\n");
+		}
+		// if still too fast, increase the delay
+		sendResultInfo.adaptiveDelay += 10;
+		sark_delay_us(sendResultInfo.adaptiveDelay);
+		*/
+		// then call again
+		spin1_schedule_callback(sendResultToTarget, line, NULL, PRIORITY_PROCESSING);
+	}
+	else {
+
+		/* try to reduce the delay adaptively...
+		if(sendResultInfo.adaptiveDelay < MIN_ADAPTIVE_DELAY)
+			sendResultInfo.adaptiveDelay = MIN_ADAPTIVE_DELAY;
+		else sendResultInfo.adaptiveDelay -= 10;
+		if(sendResultInfo.adaptiveDelay < workers.wImg)
+			sendResultInfo.adaptiveDelay = workers.wImg;
+		else sendResultInfo.adaptiveDelay -= 10;
+		*/
+
+		// send to target via sdp
+		sendImgChunkViaSDP(line, sendResultInfo.pxBuf, 0);
+
+		// then continue the chain with the next line
+		sendResultInfo.lineToSend++;
+		spin1_schedule_callback(sendResultChain, sendResultInfo.lineToSend, NULL, PRIORITY_PROCESSING);
+	}
 }
 #endif
 
@@ -1019,8 +1092,12 @@ void sendResultChain(uint nextLine, uint unused)
 	// end of sending result? release the buffer
 	if(nextLine==workers.hImg) {
 		sark_free(sendResultInfo.pxBuf);
+
 		// then notify host that we've done with sending the result
 		spin1_schedule_callback(notifyDestDone,0,0,PRIORITY_PROCESSING);
+
+		// then go back to task processing loop
+		notifyTaskDone();
 	}
 	else {
 		// prepare the buffer (reset its pointer)
@@ -1071,9 +1148,13 @@ void sendResult(uint unused, uint arg1)
 	sendResultInfo.pxBuf = sark_alloc(sendResultInfo.nExpected_MCPL_SEND_PIXELS, 4);
 
 	// then trigger the chain
-	// NOTE: mungkin memang harus event-based, karena spin1_schedule_callback tidak
-	// berfungsi!!!
+	// NOTE: harus event-based, karena spin1_schedule_callback tidak berfungsi!!!
+
+	// prepare the chain:
 	sendResultInfo.lineToSend = workers.blkEnd+1;
+	//sendResultInfo.adaptiveDelay = MIN_ADAPTIVE_DELAY;	// I found this is reasonable for small image
+	//sendResultInfo.delayCntr = 0;
+	//sendResultInfo.adaptiveDelay = workers.wImg;
 	spin1_schedule_callback(sendResultChain, sendResultInfo.lineToSend, 0, PRIORITY_PROCESSING);
 
 	/*
@@ -1143,16 +1224,13 @@ void sendResultProcessCmd(uint line, uint null)
 		do {
 			spin1_memcpy((void *)&mcplBuf, resPtr, 4);
 			spin1_send_mc_packet(MCPL_SEND_PIXELS_DATA, mcplBuf, WITH_PAYLOAD);
+			// without delay, there might be packet drop since congestion
+			sark_delay_us(MCPL_DELAY_FACTOR);	// FUTURE: can we optimize this?
 
 			resPtr += 4;
 			rem -= 4;
 		} while(rem > 0);
 	}
-}
-
-void sendResultAssembleLine(uint line, uint null)
-{
-
 }
 
 /*-------------------------------------------------------------------------------------*/

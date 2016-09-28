@@ -74,8 +74,8 @@ typedef struct block_info {
 	// uchar *imgGOut;
 	// uchar *imgBOut;
 	uchar *imgOut1;         // to hold primary output
-	uchar *imgOut2;         // will be used if primary output is for filtering
-	uchar *imgOut3;         // will be used if imgOut2 is used (for sharpening)
+	//uchar *imgOut2;         // will be used if primary output is for filtering
+	//uchar *imgOut3;         // will be used if imgOut2 is used (for sharpening)
 	// miscellaneous info
 	uchar imageInfoRetrieved;
 	uchar fullRImageRetrieved;
@@ -249,6 +249,9 @@ typedef struct task_list {
 task_list_t taskList;
 
 // regarding sending result, the root-node needs to track the current requested line number:
+#define MIN_ADAPTIVE_DELAY		150	// I found this is good enough
+//#define MCPL_DELAY_FACTOR		1	// works OK with small image
+#define MCPL_DELAY_FACTOR		1
 typedef struct send_result_info {
 	ushort lineToSend;				// it used in sendResult()
 	ushort nReceived_MCPL_SEND_PIXELS;
@@ -256,6 +259,9 @@ typedef struct send_result_info {
 	ushort nRemaining_MCPL_SEND_PIXELS;
 	uchar *pxBuf;
 	uchar *pxBufPtr;
+	uchar sdpReady;
+	//uint adaptiveDelay;
+	//uint delayCntr;
 } send_result_info_t;
 send_result_info_t sendResultInfo;
 
@@ -332,6 +338,7 @@ uchar get_block_id();			// get the block id, given the number of chips available
 void getChipXYfromID(ushort id, ushort *X, ushort *Y);
 
 // processing: worker discovery
+void notifyTaskDone();
 void taskProcessingLoop(uint arg0, uint arg1);
 void initIDcollection(uint withBlkInfo, uint Unused);
 void bcastWID(uint Unused, uint null);
@@ -359,7 +366,6 @@ void imgDetection(uint arg0, uint arg1);
 // sending result
 void sendResult(uint blkID, uint arg1);		// blkID is the expected node to send
 void sendResultProcessCmd(uint line, uint null);
-void sendResultAssembleLine(uint line, uint null);
 void sendResultToTarget(uint line, uint null);
 void sendResultToTargetFromRoot();
 void sendResultChain(uint nextLine, uint unused);
@@ -371,6 +377,7 @@ volatile uint giveDelay(uint delVal);	// delVal is the number of clock step
 void hTimer(uint tick, uint Unused);
 void seePxBuffer(char *stream);
 void peekPxBufferInSDRAM(char *stream);
+void getTaskName(proc_t proc, char strBuf[]);
 
 REAL roundr(REAL inVal);
 

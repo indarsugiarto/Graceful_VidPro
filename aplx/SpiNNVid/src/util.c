@@ -63,8 +63,8 @@ void give_report(uint reportType, uint target)
 				debugMsg.cmd_rc = DEBUG_REPORT_IMGBUF_OUT;
 				debugMsg.seq = blkInfo->nodeBlockID;
 				debugMsg.arg1 = (uint)blkInfo->imgOut1;
-				debugMsg.arg2 = (uint)blkInfo->imgOut2;
-				debugMsg.arg3 = (uint)blkInfo->imgOut3;
+				//debugMsg.arg2 = (uint)blkInfo->imgOut2;
+				//debugMsg.arg3 = (uint)blkInfo->imgOut3;
 				spin1_send_sdp_msg(&debugMsg, 10);
 				spin1_delay_us(blkInfo->nodeBlockID*1000);
 			}
@@ -72,8 +72,10 @@ void give_report(uint reportType, uint target)
 		else if(reportType==DEBUG_REPORT_TASKLIST) {
 			if(sv->p2p_addr==0) {
 				io_printf(IO_STD, "Task list:\n");
-				uchar taskStr[15];
+				char taskStr[15];
 				for(uchar i=0; i<taskList.nTasks; i++) {
+					getTaskName(taskList.tasks[i], taskStr);
+					/*
 					switch(taskList.tasks[i]){
 					case PROC_FILTERING:
 						io_printf(taskStr, "FILTERING"); break;
@@ -84,10 +86,18 @@ void give_report(uint reportType, uint target)
 					case PROC_SEND_RESULT:
 						io_printf(taskStr, "RESULTING"); break;
 					}
-
+					*/
 					io_printf(IO_STD, "Task-%d : %s\n", i, taskStr);
 				}
 			}
+		}
+		else if(reportType==DEBUG_REPORT_CLEAR_MEM) {
+			releaseImgBuf();
+		}
+		else if(reportType==DEBUG_REPORT_EDGE_DONE) {
+			if(sv->p2p_addr==0) dest=IO_STD; else dest=IO_BUF;
+			io_printf(dest, "\nworkers.tRunning = %d\n", workers.tRunning);
+			io_printf(dest, "nWorkerDone = %d\n\n", nWorkerDone);
 		}
 	}
 	// for all cores
@@ -109,8 +119,10 @@ void give_report(uint reportType, uint target)
 			io_printf(dest, "Nworkers = %d\n", blkInfo->Nworkers);
 			io_printf(dest, "my wID   = %d\n", workers.subBlockID);
 			switch(blkInfo->opType){
-			case 0: io_printf(dest, "OpType   = SOBEL\n"); break;
-			case 1: io_printf(dest, "OpType   = LAPLACE\n"); break;
+			case 0: io_printf(dest, "OpType   = None\n"); break;
+			case 1: io_printf(dest, "OpType   = SOBEL\n"); break;
+			case 2: io_printf(dest, "OpType   = LAPLACE\n"); break;
+			case 3: io_printf(dest, "OpType   = DVS\n"); break;
 			}
 			switch(blkInfo->opFilter){
 			case 0: io_printf(dest, "OpFilter = no FILTERING\n"); break;
@@ -327,3 +339,12 @@ uchar get_block_id()
 	return N;
 }
 
+void getTaskName(proc_t proc, char strBuf[])
+{
+	switch(proc){
+	case PROC_FILTERING: io_printf(strBuf, "FILTERING"); break;
+	case PROC_SHARPENING: io_printf(strBuf, "SHARPENING"); break;
+	case PROC_EDGING_DVS: io_printf(strBuf, "EDGING_DVS"); break;
+	case PROC_SEND_RESULT: io_printf(strBuf, "RESULTING"); break;
+	}
+}

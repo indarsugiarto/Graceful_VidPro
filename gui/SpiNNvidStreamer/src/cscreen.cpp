@@ -38,13 +38,13 @@ void cScreen::drawFrame()
 void cScreen::putFrame(const QImage &frameku)
 {
 	frame = frameku;
-	drawFrame();
-	/*
+	//drawFrame();
+
 	QPixmap pixmap;
 	pixmap.convertFromImage(frameku);
 	scene->clear();
 	scene->addPixmap(pixmap);
-	*/
+	emit renderDone();
 }
 
 void cScreen::setSize(int w, int h){
@@ -59,3 +59,9 @@ void cScreen::getImgSpiNN(const QByteArray &data)
 {
 	// collect data before constructing QImage from data
 }
+
+void cScreen::clear()
+{
+	scene->clear();
+}
+

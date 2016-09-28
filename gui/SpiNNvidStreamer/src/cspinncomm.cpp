@@ -320,20 +320,6 @@ void cSpiNNcomm::readDebug()
 	}
 }
 
-// helper function to see SDP
-// NOTE: readSDP must have big delay to be seen!!!
-void readSDP(QByteArray ba)
-{
-	// coba tampilkan bytearray sebagai hex:
-	QByteArray hex = ba.toHex();
-	QString str = "SDP(hex): ";
-	for(int i=0; i<hex.count(); i++) {
-		str.append(QString("%1").arg(hex.at(i)));
-		if(i%2!=0)
-			str.append(" ");
-	}
-	qDebug() << str;
-}
 
 void cSpiNNcomm::readResult()
 {
@@ -395,8 +381,7 @@ void cSpiNNcomm::readResult()
 		pxBuff.append(ba);
 
 		// I want to see its data:
-		qDebug() << QString("Recv: %1-%2:%3").arg(ln).arg(cID).arg(ba.count());
-		//readSDP(ba);
+		//qDebug() << QString("Recv: %1-%2:%3").arg(ln).arg(cID).arg(ba.count());
 	}
 }
 
@@ -487,7 +472,8 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 
 		// then give sufficient delay
 		//giveDelay(DEF_QT_WAIT_VAL*5000);	// ini biasanya yang aku pakai
-		giveDelay(DEF_QT_WAIT_VAL*500);	// perfect, no SWC error
+		//giveDelay(DEF_QT_WAIT_VAL*500);	// perfect, no SWC error, but sometimes miss
+		giveDelay(DEF_QT_WAIT_VAL*600);	// perfect, no SWC error
 		// then adjust array position
 		rPtr += sz;
 		gPtr += sz;
@@ -539,6 +525,9 @@ void cSpiNNcomm::sendTest(int testID)
 		imgBufAddrCntr = 0;
 		break;
 	case 8: c.seq = DEBUG_REPORT_TASKLIST; break;
+	case 9: c.seq = DEBUG_REPORT_CLEAR_MEM; break;
+	case 10: c.seq = DEBUG_REPORT_EDGE_DONE; break;
+
     }
 	sendSDP(hdrc, scp(c));
 }
@@ -574,3 +563,18 @@ quint64 cSpiNNcomm::elapsed(timespec start, timespec end)
 }
 
 
+/*---------------------- Helper function ----------------------*/
+// helper function to see SDP
+// NOTE: readSDP must have big delay to be seen!!!
+void readSDP(QByteArray ba)
+{
+	// coba tampilkan bytearray sebagai hex:
+	QByteArray hex = ba.toHex();
+	QString str = "SDP(hex): ";
+	for(int i=0; i<hex.count(); i++) {
+		str.append(QString("%1").arg(hex.at(i)));
+		if(i%2!=0)
+			str.append(" ");
+	}
+	qDebug() << str;
+}

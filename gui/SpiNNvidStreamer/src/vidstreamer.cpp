@@ -270,14 +270,20 @@ void vidStreamer::pbImageClicked()
             return;
     }
 
+	if(experiment == 0)
+		screen->show();
 
     ui->pbSendImage->setEnabled(true);
 
     loadedImage.load(imgFilename);
 
+	// resize the image viewer
+	screen->setSize(loadedImage.width(), loadedImage.height());
+	edge->clear();
+	edge->setSize(loadedImage.width(), loadedImage.height());
+	edge->hide();
+
     screen->putFrame(loadedImage);
-    if(experiment == 0)
-        screen->show();
     //send frame info to spinn
     spinn->frameInfo(loadedImage.width(), loadedImage.height());
 }
