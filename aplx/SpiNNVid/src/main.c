@@ -66,6 +66,10 @@ void c_main()
 	// resImgBuf is used to store one image line from DTCM to SDRAM
 	resImgBuf = NULL;
 
+	// dtcmImgFilt is used to fetch image lines from SDRAM to DTCM,
+	// which is fixed 5 times the image width
+	dtcmImgFilt = NULL;
+
 	/*  pre-processing: grayscaling and histogram counting
 		by default, we assign NUM_CORES_FOR_BCAST_PIXEL cores for pre-processing
 		(i.e. grayscaling and histogram counting) */

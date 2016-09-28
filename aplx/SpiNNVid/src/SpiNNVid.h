@@ -103,6 +103,7 @@ typedef struct w_info {
 	ushort startLine;		// this is per core (it differs from blkStart)
 	ushort endLine;			// it differs from blkStart
 	uint szDtcmImgBuf;			// how many pixels will be fetch by dtcmImgBuf?
+	uint szDtcmImgFilt;		// similar to szDtcmImgBuf, but for dtcmImgFilt
 	uchar active;			// if nLinesPerBlock > tAvailable, this will be on,
 	// helper pointers
 	ushort wImg;		// just a copy of block_info_t.wImg
@@ -308,6 +309,8 @@ volatile uchar nBlockDone;
 uchar *dtcmImgBuf;
 uchar *resImgBuf;
 ushort pixelCntr;				// how many pixel has been processed?
+uchar *dtcmImgFilt;				// similar with dtcmImgBuf, but fixed to 5 block instead of 3 block
+								// in dtcmImgBuf, the block might be 3 (SOBEL) or 5 (LAPLACE)
 
 
 
@@ -347,7 +350,8 @@ void computeWLoad(uint withReport, uint arg1);
 
 // memory management
 void releaseImgBuf();
-void allocateImgBuf();
+void allocateImgBuf();		// allocate image buffers in SDRAM, called for every new frame
+void allocateDtcmImgBuf();	// allocate image buffers in DTCM, called just once (during config only)
 
 void fwdImgData(uint arg0, uint arg1);	// isLastChannel==1 for B-channel
 void processGrayScaling(uint arg0, uint arg1);

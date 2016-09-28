@@ -49,6 +49,35 @@ void bcastWID(uint Unused, uint null)
 }
 
 
+void allocateDtcmImgBuf()
+{
+	if(dtcmImgBuf != NULL) {
+		sark_free(dtcmImgBuf); //dtcmImgBuf = NULL;
+		sark_free(resImgBuf); //resImgBuf = NULL;
+		sark_free(dtcmImgFilt); //dtcmImgFilt = NULL;
+	}
+	// prepare the pixel buffers
+	ushort szMask = blkInfo->opType == IMG_SOBEL ? 3:5;
+	workers.szDtcmImgBuf = szMask * w;
+	workers.szDtcmImgFilt = 5 * w;
+
+	// when first called, dtcmImgBuf should be NULL. It is initialized in SpiNNVid_main()
+	/*
+	if(dtcmImgBuf != NULL) {
+		io_printf(IO_BUF, "[IMGBUF] Releasing DTCM heap...\n");
+		sark_free(dtcmImgBuf);
+		sark_free(resImgBuf);
+	}
+	*/
+
+	/* Initializing image buffers in DTCM
+	 * dtcmImgBuf can be 3 or 5 times the image width
+	 * dtcmImgFilt is fixed 5 times
+	*/
+	dtcmImgBuf = sark_alloc(workers.szDtcmImgBuf, sizeof(uchar));
+	resImgBuf = sark_alloc(w, sizeof(uchar));	// just one line!
+	dtcmImgFilt = sark_alloc(workers.szDtcmImgFilt, sizeof(uchar));
+}
 
 // computeWLoad will be executed by all cores (including leadAps) in all chips
 void computeWLoad(uint withReport, uint arg1)
@@ -178,23 +207,7 @@ void computeWLoad(uint withReport, uint arg1)
 	workers.opType = blkInfo->opType;
 	workers.opSharpen = blkInfo->opSharpen;
 
-	// prepare the pixel buffers
-	ushort szMask = blkInfo->opType == IMG_SOBEL ? 3:5;
-	workers.szDtcmImgBuf = szMask * w;
-
-	// when first called, dtcmImgBuf should be NULL. It is initialized in SpiNNVid_main()
-	if(dtcmImgBuf != NULL) {
-		io_printf(IO_BUF, "[IMGBUF] Releasing DTCM heap...\n");
-		sark_free(dtcmImgBuf);
-		sark_free(resImgBuf);
-	}
-	// dtcmImgBuf can be 3 or 5 times the image width
-	dtcmImgBuf = sark_alloc(workers.szDtcmImgBuf, sizeof(uchar));
-	resImgBuf = sark_alloc(w, sizeof(uchar));	// just one line!
-	//io_printf(IO_BUF, "my startline = %d, my endline = %d\n", workers.startLine, workers.endLine);
-
-	// debugging:
-	//give_report(DEBUG_REPORT_WLOAD, 1);
+	allocateDtcmImgBuf();
 
 	// IT IS WRONG to put the initHistData() here, because initHistData MUST
 	// BE CALLED everytime a new image has arrived. So, we move it to processGrayScaling()
@@ -574,6 +587,7 @@ void triggerProcessing(uint taskID, uint arg1)
 
 	switch((proc_t)taskID){
 	case PROC_FILTERING:
+		spin1_schedule_callback(imgFiltering, 0, 0, PRIORITY_PROCESSING);
 		break;
 	case PROC_SHARPENING:
 		break;
@@ -684,13 +698,91 @@ void imgSharpening(uint arg0, uint arg1)
 
 void imgFiltering(uint arg0, uint arg1)
 {
+	/* it has been checked in the triggerProcessing()...
 	if(workers.active==FALSE) {
 		io_printf(IO_BUF, "I'm disabled!\n");
 		return;
 	}
-	// step-1: do filtering
+	*/
 
-	// step-2: call imgDetection
+	START_TIMER();
+
+	uint offset = 2 * workers.wImg;	// if using 5x5 Gaussian kernel
+
+	short l,c,n,i,j;
+	uchar *dtcmLine;
+	uint dmatag;
+
+	// how many lines this worker has?
+	n = workers.endLine - workers.startLine + 1;
+
+	// prepare the correct line address in sdram
+	getSdramImgAddr(PROC_FILTERING);
+
+	// scan for all lines in the worker's working block
+	for(l=0; l<n; l++) {
+
+		dmaImgFromSDRAMdone = 0;
+		dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
+
+		// fetch a block (5 lines) of image from sdram
+		do {
+			dmaTID = spin1_dma_transfer(dmatag, (void *)workers.sdramImgIn - offset,
+										(void *)dtcmImgFilt, DMA_READ, workers.szDtcmImgFilt);
+		} while (dmaTID==0);
+
+		// wait until dma above is completed
+		while(dmaImgFromSDRAMdone==0) {
+		}
+
+		dtcmLine = dtcmImgBuf + offset;
+
+		// scan for all column in the line
+		for(c=0; c<workers.wImg; c++) {
+			sumXY = 0;
+			if((workers.startLine+l) < 2 || (workers.hImg-workers.startLine+l) <= 2)
+				sumXY = 0;
+			else if(c<2 || (workers.wImg-c)<=2)
+				sumXY = 0;
+			else {
+				for(i=-1; i<=2; i++)
+					for(j=-2; j<=2; j++)
+						sumXY += (int)((*(dtcmLine + c + i + j*workers.wImg)) * LAP[i+2][j+2]);
+			}
+
+			// make necessary correction
+			if(sumXY>255) sumXY = 255;
+			if(sumXY<0) sumXY = 0;
+
+			*(resImgBuf + c) = (uchar)(sumXY);
+
+		} // end for c-loop
+
+		// then copy the resulting line into sdram
+
+		dmatag = (myCoreID << 16) | DMA_STORE_IMG_TAG;
+		do {
+			dmaTID = spin1_dma_transfer(dmatag, (void *)workers.sdramImgOut,
+						   (void *)resImgBuf, DMA_WRITE, workers.wImg);
+		} while(dmaTID==0);
+
+
+		// move to the next line
+		workers.sdramImgIn += workers.wImg;
+		workers.sdramImgOut += workers.wImg;
+
+	} // end for l-loop
+
+	perf.tCore = READ_TIMER();
+
+	// at the end, send MCPL_EDGE_DONE to local leadAp (including the leadAp itself)
+#if (DEBUG_LEVEL > 1)
+	io_printf(IO_BUF, "[Filtering] Done! send MCPL_FILT_DONE!\n");
+#endif
+	spin1_send_mc_packet(MCPL_FILT_DONE, perf.tCore, WITH_PAYLOAD);
+
+	sampai disini... belum selesai untuk yang blok
+
 }
 
 // NOTE: in imgDetection(), we have mode==SOBEL(1), LAPLACE(2)
@@ -703,11 +795,6 @@ void imgDetection(uint arg0, uint arg1)
 	}
 	*/
 
-
-	/* scrap from previous version:
-	uchar *sdramImgIn;
-	sdramImgIn = workers.imgOut1;
-	*/
 
 	// Use timer-2 to measure the performance
 	START_TIMER();
