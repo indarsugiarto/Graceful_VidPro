@@ -147,13 +147,15 @@ void cDecoder::started()
 				}
 			}
 			else {
+				// something wrong with the media
 				isStopped = true;
 			}		
 		}
 		else {
+			// nothing todo!
 			cntr++;
 //			if(cntr==99999999)
-//				qDebug() << "tick...";
+//				qDebug() << "tick...";	// am I alive?
 			QCoreApplication::processEvents();
 		}
 	}

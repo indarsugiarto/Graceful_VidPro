@@ -360,8 +360,7 @@ void cSpiNNcomm::readResult()
 		// and clear pixel buffers
 		pxBuff.clear();
 		// how fast?
-		qDebug() << QString("Receiving %1 lines in ...-ms")
-					.arg(recvLineCntr);
+		//qDebug() << QString("Receiving %1 lines in ...-ms").arg(recvLineCntr);
 
 	} else {
 		// for debugging:
@@ -409,10 +408,14 @@ void cSpiNNcomm::sendImgLine(sdp_hdr_t h, uchar *pixel, quint16 len)
  * Note: Do you know why we cannot use scanline with uchar directly? See this:
  *       http://stackoverflow.com/questions/2095039/qt-qimage-pixel-manipulation
  */
-void cSpiNNcomm::frameIn(const QImage &frame)
+void cSpiNNcomm::frameIn(const QImage &f)
 {
 	// at this point SpiNNaker should know the configuration and
 	// the frame info has also been sent to spinnaker
+
+	// just for debugging if cSpiNNcomm can read QImage sent by cDecoder:
+	//qDebug() << QString("Frame: %1 x %2").arg(f.width()).arg(f.height());
+	//return;
 
 	quint32 remaining = szImg, sz;
 
@@ -443,9 +446,9 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 	//			NOTE: we cannot simply use scanLine!!!
 	for(int i=0; i<hImg; i++) {
 		for(int j=0; j<wImg; j++) {
-			rArray[pxCntr] = QColor(frame.pixel(j,i)).red();
-			gArray[pxCntr] = QColor(frame.pixel(j,i)).green();
-			bArray[pxCntr] = QColor(frame.pixel(j,i)).blue();
+			rArray[pxCntr] = QColor(f.pixel(j,i)).red();
+			gArray[pxCntr] = QColor(f.pixel(j,i)).green();
+			bArray[pxCntr] = QColor(f.pixel(j,i)).blue();
 			pxCntr++;
 		}
 	}
@@ -456,6 +459,10 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 	memcpy(gArray, frame.scanLine(i)+wImg+1, wImg);
 	memcpy(bArray, frame.scanLine(i)+2*wImg+1, wImg);
 	*/
+
+	//int delVal = 600;	// just OK with single image
+	//int delVal = 1000;	// have distorted image on video
+	int delVal = 1200;	// have distorted image on video
 
 	// we work only with color images!!! No gray video :)
 	// NOTE: we cannot alter srce_addr, hence we encode the pxSeq into tag + srce_port
@@ -480,7 +487,6 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 		hdrb.tag = tag; hdrb.srce_port = srce_port; sendImgLine(hdrb, bPtr, sz);
 
 
-		int delVal = 600;
 
 		/*
 		hdrr.tag = tag; hdrr.srce_port = srce_port; sendImgLine(hdrr, rPtr, sz); giveDelay(DEF_QT_WAIT_VAL*delVal);
@@ -506,6 +512,7 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 	//qDebug() << QString("Total pxSeq = %1").arg(pxSeq);
 	// then we have to send empty msg via SDP_PORT_FRAME_END to start decoding
 	sendImgLine(hdre, NULL, 0);
+	giveDelay(DEF_QT_WAIT_VAL*delVal);
 
 	// let's try putting some data on hdre
 	uchar dummy[272] = {0};

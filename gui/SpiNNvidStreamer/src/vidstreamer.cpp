@@ -65,9 +65,11 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	connect(refresh, SIGNAL(timeout()), this, SLOT(refreshUpdate()));
 
 
-	//refresh->setInterval(40);   // which produces roughly 25fps
-	refresh->setInterval(1000);   // which produces roughly 1fps
+	refresh->setInterval(40);   // which produces roughly 25fps
+	//refresh->setInterval(1000);   // which produces roughly 1fps
 	//refresh->setInterval(500);   // which produces roughly 2fps
+	//refresh->setInterval(50);   // which produces roughly 20fps
+	//refresh->setInterval(2000);   // which produces roughly 0.5fps
 	refresh->start();
 
 	// additional setup
@@ -220,8 +222,8 @@ void vidStreamer::pbVideoClicked()
 	connect(decoder, SIGNAL(newFrame(const QImage &)), screen, SLOT(putFrame(const QImage &)));
 
 	// use the following to send the image from decoder to spinnaker
-	connect(decoder, SIGNAL(newFrame(const QImage &)), spinn, SLOT(frameIn(const QImage &)));
-	connect(decoder, SIGNAL(newFrame(const QImage &)), this, SLOT(frameReady()));
+	//connect(decoder, SIGNAL(newFrame(const QImage &)), spinn, SLOT(frameIn(const QImage &)));
+	connect(decoder, SIGNAL(newFrame(const QImage &)), this, SLOT(frameReady(const QImage &)));
 
 	// for debugging only: send the image from decoder to edge-screener
 	// connect(decoder, SIGNAL(newFrame(QImage)), edge, SLOT(putFrame(QImage)));
@@ -334,11 +336,19 @@ void vidStreamer::pbSendImageClicked()
 }
 
 // frameReady() is called when the decoder has a new frame ready to be sent to spinn
-void vidStreamer::frameReady()
+void vidStreamer::frameReady(const QImage &frameIn)
 {
 	// first, indicate that the "edge" widget is going to do the rendering
+	// so the the refresh signal from the timer will be ignored in refreshUpdate()
 	edgeRenderingInProgress = true;
-	qDebug() << "Got new frame from decoder...";
+
+	// the following direct to edge widget works:
+	// edge->putFrame(frameIn);
+
+	//loadedImage = frameIn;
+	spinn->frameIn(frameIn);
+
+	//qDebug() << "Got new frame from decoder...";
 }
 
 void vidStreamer::pbTestClicked()
@@ -360,17 +370,17 @@ void vidStreamer::frameSent()
     // if using "Load Image"
     if(!loadedImage.isNull())
         ui->pbSendImage->setEnabled(true);
-	qDebug() << "Frame is sent to spinn...";
+	//qDebug() << "Frame is sent to spinn...";
 }
 
 void vidStreamer::edgeRenderingDone()
 {
 	// indicate that the "edge" widget is finish in rendering a frame
 	edgeRenderingInProgress = false;
-	qDebug() << "Edge rendering done...";
+	//qDebug() << "Edge rendering done...";
 }
 
 void vidStreamer::spinnSendFrame()
 {
-	qDebug() << "SpiNNVid send the frame";
+	//qDebug() << "SpiNNVid send the frame";
 }

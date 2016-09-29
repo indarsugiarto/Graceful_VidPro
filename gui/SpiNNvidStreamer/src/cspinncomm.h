@@ -77,7 +77,7 @@ public slots:
 					quint8 edgeOperator, quint8 withFiltering,
 					quint8 withSharping, quint8 freq, quint8 nCorePreProc);
 	void frameInfo(int imgW, int imgH);
-	void frameIn(const QImage &frame);
+	void frameIn(const QImage &);
 	void sendImgLine(sdp_hdr_t h, uchar *pixel, quint16 len);
 	// getSpinElapse() is useful if we want to read spinnaker processing time
 

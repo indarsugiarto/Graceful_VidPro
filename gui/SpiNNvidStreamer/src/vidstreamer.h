@@ -48,7 +48,7 @@ public slots:
 	void videoFinish();
 	void setSize(int w, int h);
 	void cbSpiNNchanged(int idx);
-	void frameReady();
+	void frameReady(const QImage &frameIn);
 	void frameSent();
 	void spinnSendFrame();
 	void edgeRenderingDone();		// useful only for video, not image processing

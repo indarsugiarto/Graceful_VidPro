@@ -285,7 +285,7 @@ void processGrayScaling(uint arg0, uint arg1)
 
 	// wait until we get the token
 
-
+/*
 	//io_printf(IO_BUF, "Storing pixels via DMA...\n");
 	//io_printf(IO_BUF, "dmaToken_pxStore = %d\n", blkInfo->dmaToken_pxStore);
 	while(blkInfo->dmaToken_pxStore != myCoreID) {
@@ -346,6 +346,36 @@ void processGrayScaling(uint arg0, uint arg1)
 		blkInfo->dmaToken_pxStore = LEAD_CORE;
 	else
 		blkInfo->dmaToken_pxStore++;
+*/
+
+	uint dmaDone, tg;
+	do {
+		tg = (myCoreID << 16) | DMA_TAG_STORE_R_PIXELS;
+		dmaDone = spin1_dma_transfer(tg, blkInfo->imgRIn+offset,
+									 rpxbuf, DMA_WRITE, pxBuffer.pxLen);
+	} while(dmaDone==0);
+
+	do {
+		tg = (myCoreID << 16) | DMA_TAG_STORE_G_PIXELS;
+		dmaDone = spin1_dma_transfer(tg, blkInfo->imgGIn+offset,
+									 gpxbuf, DMA_WRITE, pxBuffer.pxLen);
+	} while(dmaDone==0);
+
+	do {
+		tg = (myCoreID << 16) | DMA_TAG_STORE_B_PIXELS;
+
+		dmaDone = spin1_dma_transfer(tg, blkInfo->imgBIn+offset,
+									 bpxbuf, DMA_WRITE, pxBuffer.pxLen);
+	} while(dmaDone==0);
+
+
+	do {
+		tg = (myCoreID << 16) | DMA_TAG_STORE_Y_PIXELS;
+
+		dmaDone = spin1_dma_transfer(tg, blkInfo->imgOut1+offset,
+									 ypxbuf, DMA_WRITE, pxBuffer.pxLen);
+	} while(dmaDone==0);
+
 
 	//io_printf(IO_BUF, "dmaToken_pxStore = %d\n", blkInfo->dmaToken_pxStore);
 

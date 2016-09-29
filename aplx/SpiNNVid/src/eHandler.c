@@ -487,11 +487,11 @@ void hSDP(uint mBox, uint port)
 	//       especially when delivering frame's channel
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
 
-#if (DEBUG_LEVEL>3)
+#if (DEBUG_LEVEL>1)
 	io_printf(IO_STD, "got sdp tag = 0x%x, srce_port = 0x%x, srce_addr = 0x%x, dest_port = 0x%x\n",
 			  msg->tag, msg->srce_port, msg->srce_addr, msg->dest_port);
-#elif (DEBUG_LEVEL>1)
-	//io_printf(IO_BUF, "got sdp on port = %d\n", port);
+#elif (DEBUG_LEVEL>2)
+	io_printf(IO_STD, "got sdp on port = %d\n", port);
 #endif
 
 	if(port==SDP_PORT_CONFIG) {
@@ -521,6 +521,10 @@ void hSDP(uint mBox, uint port)
 			// will only send wImg (in arg1.high) and hImg (in arg1.low)
 			blkInfo->wImg = msg->arg1 >> 16;
 			blkInfo->hImg = msg->arg1 & 0xFFFF;
+
+#if (DEBUG_LEVEL>0)
+		io_printf(IO_STD, "[SpiNNVid] Frame: %d x %d\n", blkInfo->wImg, blkInfo->hImg);
+#endif
 
 			// then allocate image buffer in SDRAM
 			allocateImgBuf();
@@ -576,6 +580,9 @@ void hSDP(uint mBox, uint port)
 		// Debugging 28.07.2016: how many pxSeq?
 #if(DEBUG_LEVEL>1)
 		//io_printf(IO_BUF, "Got rpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
+#elif (DEBUG_LEVEL>0)
+		if(pxBuffer.pxSeq==0)
+			io_printf(IO_STD, "[SpiNNVid] New frame arrive!\n");
 #endif
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
 	}
