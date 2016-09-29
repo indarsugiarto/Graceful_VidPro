@@ -1,0 +1,5 @@
+#!/bin/bash
+mkdir -p SpiNNvidStreamer/build
+cd SpiNNvidStreamer/build
+qmake -spec /usr/share/qt4/mkspecs/linux-g++-64 -o Makefile ../src/SpiNNvidStreamer.pro
+make && make clean

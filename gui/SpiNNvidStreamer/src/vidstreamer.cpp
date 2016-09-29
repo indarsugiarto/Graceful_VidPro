@@ -251,7 +251,7 @@ void vidStreamer::refreshUpdate()
 
 	if(!edgeRenderingInProgress && decoderIsActive)
 		decoder->refresh();
-#elif
+#else
 	if(decoderIsActive)
 		decoder->refresh();
 #endif

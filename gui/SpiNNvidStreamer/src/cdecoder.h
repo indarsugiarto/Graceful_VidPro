@@ -1,8 +1,3 @@
-/* Sepertinya bagian decoder ini bertanggung jawab me-load file, kemudian
- * bikin semacam streamer!
- *
- * */
-
 #ifndef CDECODER_H
 #define CDECODER_H
 

@@ -1,2 +1,7 @@
-TODO:
-1. Implement basic interface for setup/configuration
+This is the GUI program for the SpiNNVid - Simple Image/Video Processing on SpiNNaker.
+
+To use it, you need:
+- Qt (4.8 or higher)
+- FFMpeg or libav
+
+To compile, simply run the "compile" script. The result is in the SpiNNvidStreamer/build folder.
