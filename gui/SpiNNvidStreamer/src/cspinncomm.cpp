@@ -394,6 +394,12 @@ void cSpiNNcomm::sendImgLine(sdp_hdr_t h, uchar *pixel, quint16 len)
         sdp.append(data);
     }
     sender->writeDatagram(sdp, ha, DEF_SEND_PORT);
+	/* percobaan berikut membuktikan kalau flush()tidak pengaruh...
+	 * karena semua data sudah otomatis terkirim, jadi ndak ada yang di-flush
+	bool hasil;
+	hasil = sender->flush();
+	qDebug() << hasil;
+	*/
 }
 
 /* Now we have to revise the frameIn() such that it send image data in ordered fashion:
@@ -466,14 +472,29 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 		hdrb.dest_port = (SDP_PORT_B_IMG_DATA << 5) | (core + LEAD_CORE);
 		core = (core+1) < nCore4PxProc ? (core+1) : 0;
 
+		/* Let's introduce small delay after each channel... */
+		// the following is without delay (and works OK for single frame)
+
 		hdrr.tag = tag; hdrr.srce_port = srce_port; sendImgLine(hdrr, rPtr, sz);
 		hdrg.tag = tag; hdrg.srce_port = srce_port; sendImgLine(hdrg, gPtr, sz);
 		hdrb.tag = tag; hdrb.srce_port = srce_port; sendImgLine(hdrb, bPtr, sz);
 
+
+		int delVal = 600;
+
+		/*
+		hdrr.tag = tag; hdrr.srce_port = srce_port; sendImgLine(hdrr, rPtr, sz); giveDelay(DEF_QT_WAIT_VAL*delVal);
+		hdrg.tag = tag; hdrg.srce_port = srce_port; sendImgLine(hdrg, gPtr, sz); giveDelay(DEF_QT_WAIT_VAL*delVal);
+		hdrb.tag = tag; hdrb.srce_port = srce_port; sendImgLine(hdrb, bPtr, sz); giveDelay(DEF_QT_WAIT_VAL*delVal);
+		*/
+
 		// then give sufficient delay
 		//giveDelay(DEF_QT_WAIT_VAL*5000);	// ini biasanya yang aku pakai
 		//giveDelay(DEF_QT_WAIT_VAL*500);	// perfect, no SWC error, but sometimes miss
-		giveDelay(DEF_QT_WAIT_VAL*600);	// perfect, no SWC error
+		//giveDelay(DEF_QT_WAIT_VAL*600);	// perfect, no SWC error
+		//giveDelay(DEF_QT_WAIT_VAL*1000);	// slower...
+		//giveDelay(DEF_QT_WAIT_VAL*50000);	// extreme slow for debugging
+		giveDelay(DEF_QT_WAIT_VAL*delVal);
 		// then adjust array position
 		rPtr += sz;
 		gPtr += sz;
@@ -485,6 +506,10 @@ void cSpiNNcomm::frameIn(const QImage &frame)
 	//qDebug() << QString("Total pxSeq = %1").arg(pxSeq);
 	// then we have to send empty msg via SDP_PORT_FRAME_END to start decoding
 	sendImgLine(hdre, NULL, 0);
+
+	// let's try putting some data on hdre
+	uchar dummy[272] = {0};
+	//sendImgLine(hdre, dummy, 272);
 
 	// emit signal
 	emit sendFrameDone();

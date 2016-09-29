@@ -55,11 +55,12 @@ void allocateDtcmImgBuf()
 		sark_free(dtcmImgBuf); //dtcmImgBuf = NULL;
 		sark_free(resImgBuf); //resImgBuf = NULL;
 		sark_free(dtcmImgFilt); //dtcmImgFilt = NULL;
+		sark_free(sendResultInfo.pxBuf); //--> somehow, it produces corrupt line at the end
 	}
 	// prepare the pixel buffers
 	ushort szMask = blkInfo->opType == IMG_SOBEL ? 3:5;
-	workers.szDtcmImgBuf = szMask * w;
-	workers.szDtcmImgFilt = 5 * w;
+	workers.szDtcmImgBuf = szMask * workers.wImg;
+	workers.szDtcmImgFilt = 5 * workers.wImg;
 
 	// when first called, dtcmImgBuf should be NULL. It is initialized in SpiNNVid_main()
 	/*
@@ -75,8 +76,10 @@ void allocateDtcmImgBuf()
 	 * dtcmImgFilt is fixed 5 times
 	*/
 	dtcmImgBuf = sark_alloc(workers.szDtcmImgBuf, sizeof(uchar));
-	resImgBuf = sark_alloc(w, sizeof(uchar));	// just one line!
+	resImgBuf = sark_alloc(workers.wImg, sizeof(uchar));	// just one line!
 	dtcmImgFilt = sark_alloc(workers.szDtcmImgFilt, sizeof(uchar));
+	// sendResultInfo.pxBuf may not 4-pixel aligned, so we add extra pixels:
+	sendResultInfo.pxBuf = sark_alloc(workers.wImg + 4, sizeof(uchar));
 }
 
 // computeWLoad will be executed by all cores (including leadAps) in all chips
@@ -215,7 +218,12 @@ void computeWLoad(uint withReport, uint arg1)
 }
 
 
-// processGrayScaling() will process pxBuffer
+/* processGrayScaling() will process pxBuffer
+ * It is called when the blue-channel chunk is received. Assuming
+ * that the other channels' chunks are received as well, the grayscaling
+ * is executed.
+ * This is performed by all working core in root-node.
+*/
 void processGrayScaling(uint arg0, uint arg1)
 {
 	/* Problem with uchar and stdfix:
@@ -518,7 +526,7 @@ void notifyTaskDone()
 	taskList.cTask = taskList.tasks[taskList.cTaskPtr];
 	getTaskName(taskList.cTask, newTaskStr);
 
-	io_printf(IO_STD, "[SpiNNVid] Task-%s done, continue with %s\n", prevTaskStr, newTaskStr);
+	//io_printf(IO_STD, "[SpiNNVid] Task-%s done, continue with %s\n", prevTaskStr, newTaskStr);
 
 	spin1_schedule_callback(taskProcessingLoop, 0, 0, PRIORITY_PROCESSING);
 }
@@ -712,6 +720,7 @@ void imgFiltering(uint arg0, uint arg1)
 	short l,c,n,i,j;
 	uchar *dtcmLine;
 	uint dmatag;
+	int sumXY;
 
 	// how many lines this worker has?
 	n = workers.endLine - workers.startLine + 1;
@@ -779,9 +788,9 @@ void imgFiltering(uint arg0, uint arg1)
 #if (DEBUG_LEVEL > 1)
 	io_printf(IO_BUF, "[Filtering] Done! send MCPL_FILT_DONE!\n");
 #endif
-	spin1_send_mc_packet(MCPL_FILT_DONE, perf.tCore, WITH_PAYLOAD);
+	//spin1_send_mc_packet(MCPL_FILT_DONE, perf.tCore, WITH_PAYLOAD);
 
-	sampai disini... belum selesai untuk yang blok
+	// 29 Sep 2016: sampai disini... belum selesai untuk yang blok
 
 }
 
@@ -966,13 +975,17 @@ void debugSDP(ushort line, uchar chunkID, ushort nData)
 	//io_printf(IO_STD, "Sending: %d-%d-%d:%d\n",
 	//		  blkInfo->nodeBlockID, line, chunkID, nData);
 	//sark_delay_us(10000);		// delay 1s
-	sark_delay_us(1000);
 }
 
 // If alternativeDelay==0, then the delay is based on DEF_DEL_VAL, otherwise
 // the delay is set to alternativeDelay.
 void sendImgChunkViaSDP(uint line, uchar * pxbuf, uint alternativeDelay)
 {
+
+#if (DEBUG_LEVEL > 3)
+	io_printf(IO_STD, "sending result via sdp...\n");
+#endif
+
 	sendResultInfo.sdpReady = FALSE;
 	// use full sdp (scp_segment + data_segment) for pixel values
 	ushort rem, sz;
@@ -1016,11 +1029,6 @@ void sendImgChunkViaSDP(uint line, uchar * pxbuf, uint alternativeDelay)
 #if(DESTINATION==DEST_HOST)
 void sendResultToTargetFromRoot()
 {
-
-#if (DEBUG_LEVEL > 0)
-	io_printf(IO_STD, "Block-%d is sending with perf = %u\n",
-			  blkInfo->nodeBlockID, perf.tNode);
-#endif
 
 	/*
 	Synopsis:
@@ -1178,7 +1186,7 @@ void sendResultChain(uint nextLine, uint unused)
 	//io_printf(IO_STD, "Lanjut chain-%d\n", nextLine); sark_delay_us(1000);
 	// end of sending result? release the buffer
 	if(nextLine==workers.hImg) {
-		sark_free(sendResultInfo.pxBuf);
+		//sark_free(sendResultInfo.pxBuf);	// it is dealed together will all other bufs
 
 		// then notify host that we've done with sending the result
 		spin1_schedule_callback(notifyDestDone,0,0,PRIORITY_PROCESSING);
@@ -1232,7 +1240,9 @@ void sendResult(uint unused, uint arg1)
 #endif
 
 	// prepare the buffer
-	sendResultInfo.pxBuf = sark_alloc(sendResultInfo.nExpected_MCPL_SEND_PIXELS, 4);
+
+	//what if we allocate sendresultinfo.pxbuf right after frameinfo?
+	//sendResultInfo.pxBuf = sark_alloc(sendResultInfo.nExpected_MCPL_SEND_PIXELS, 4);
 
 	// then trigger the chain
 	// NOTE: harus event-based, karena spin1_schedule_callback tidak berfungsi!!!
@@ -1244,28 +1254,6 @@ void sendResult(uint unused, uint arg1)
 	//sendResultInfo.adaptiveDelay = workers.wImg;
 	spin1_schedule_callback(sendResultChain, sendResultInfo.lineToSend, 0, PRIORITY_PROCESSING);
 
-	/*
-	// if I'm not include in the list, skip this
-	if(blkInfo->maxBlock==0) return;
-
-	// special case: if I'm the root and the blkID==maxBlock, then
-	// notify host that the sending result process is complete
-	if(blkID==blkInfo->maxBlock && blkInfo->nodeBlockID==0) {
-		notifyDestDone(0,0);
-	} else {
-		// check if this is our turn
-		if(blkID != blkInfo->nodeBlockID) return;
-
-#if (DESTINATION==DEST_HOST)
-		sendResult2Host();
-#elif (DESTINATION==DEST_FPGA)
-		sendResult2FPGA();
-#endif
-
-		// finally, trigger MCPL_BCAST_SEND_RESULT with the next blkID
-		spin1_send_mc_packet(MCPL_BCAST_SEND_RESULT, blkInfo->nodeBlockID+1, WITH_PAYLOAD);
-	}
-	*/
 }
 
 
@@ -1329,7 +1317,7 @@ void sendResultProcessCmd(uint line, uint null)
 void notifyDestDone(uint arg0, uint arg1)
 {
 	perf.tTotal /= blkInfo->maxBlock;
-#if (DEBUG_LEVEL > 0)
+#if (DEBUG_LEVEL > 1)
 	io_printf(IO_STD, "Processing with %d-nodes is done. Elapse %d-ms, tclk = %u\n",
 			  blkInfo->maxBlock, elapse, perf.tTotal);
 #endif

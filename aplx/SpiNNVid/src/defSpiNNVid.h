@@ -72,7 +72,7 @@
 /*-----------------------------------------------------------------------------------*/
 /*--------------------- Debugging and reporting definition --------------------------*/
 //#define DEBUG_LEVEL				0	// no debugging message at all
-#define DEBUG_LEVEL                 1
+#define DEBUG_LEVEL                 2
 // various report for debugging (send by host):
 #define DEBUG_REPORT_NWORKERS       1		// only leadAp (in all nodes)
 #define DEBUG_REPORT_WID            2		// only leadAp (in all nodes)
@@ -157,6 +157,9 @@
 // for sending chunks from spinnaker:
 #define DEF_DEL_VAL					900  // perfect, up to 5.7MBps
 //#define DEF_DEL_VAL					1800
+
+#define DEF_PXLEN_IN_CHUNK	272
+
 
 // dma transfer
 //#define DMA_TAG_STORE_FRAME		10

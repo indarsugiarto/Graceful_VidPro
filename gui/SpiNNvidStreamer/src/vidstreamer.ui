@@ -28,9 +28,9 @@
   <widget class="QPushButton" name="pbVideo">
    <property name="geometry">
     <rect>
-     <x>10</x>
+     <x>30</x>
      <y>400</y>
-     <width>81</width>
+     <width>91</width>
      <height>27</height>
     </rect>
    </property>
@@ -41,9 +41,9 @@
   <widget class="QPushButton" name="pbPause">
    <property name="geometry">
     <rect>
-     <x>192</x>
-     <y>400</y>
-     <width>71</width>
+     <x>30</x>
+     <y>430</y>
+     <width>91</width>
      <height>29</height>
     </rect>
    </property>
@@ -396,9 +396,9 @@
   <widget class="QPushButton" name="pbImage">
    <property name="geometry">
     <rect>
-     <x>100</x>
+     <x>150</x>
      <y>400</y>
-     <width>81</width>
+     <width>91</width>
      <height>27</height>
     </rect>
    </property>
@@ -516,9 +516,9 @@
   <widget class="QPushButton" name="pbSendImage">
    <property name="geometry">
     <rect>
-     <x>100</x>
+     <x>150</x>
      <y>430</y>
-     <width>81</width>
+     <width>91</width>
      <height>27</height>
     </rect>
    </property>

@@ -7,6 +7,7 @@ cDecoder::cDecoder(QObject *parent) : QObject(parent), go(true)
     cntr = 0;
 	testCntr = 0;
     isStopped = true;
+	go = false;			// this go variable should be triggered externally (ie. refresh timer)
 }
 
 void cDecoder::started()
@@ -19,7 +20,7 @@ void cDecoder::started()
     // initialize stuffs
 	is = (VideoState *)av_mallocz(sizeof(VideoState));
 	if(is==NULL) {
-		emit error("Cannot allocate is");
+		emit error("[DECODER] Cannot allocate is");
 		return;
 	}
 	// Register all formats and codecs
@@ -35,12 +36,12 @@ void cDecoder::started()
     // Open video file
 	if(avformat_open_input(&is->pFormatCtx, filename.toLocal8Bit().data(),
 						   NULL, NULL)!=0) {
-		emit error(QString("Cannot open %1").arg(filename));
+		emit error(QString("[DECODER] Cannot open %1").arg(filename));
         return;
     }
     // Retrieve stream information
     if(avformat_find_stream_info(is->pFormatCtx, NULL)<0) {
-        error(QString("Cannot find stream information"));
+		error(QString("[DECODER] Cannot find stream information"));
         return;
     }
     // Indar: Optional, dump information about file onto standard error
@@ -54,7 +55,7 @@ void cDecoder::started()
         break;
       }
     if(videoStream==-1) {
-        error(QString("Cannot find a video stream"));
+		error(QString("[DECODER] Cannot find a video stream"));
         return;
     }
 
@@ -67,13 +68,13 @@ void cDecoder::started()
     // Find the decoder for the video stream
     pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
     if(pCodec==NULL) {
-        emit error("Unsupported codec!");
+		emit error("[DECODER] Unsupported codec!");
       return; // Codec not found
     }
 
     // Open codec
     if(avcodec_open2(pCodecCtx, pCodec, &optionsDict)<0) {
-        emit error("Could not open codec!");
+		emit error("[DECODER] Could not open codec!");
         return;
     }
 
@@ -83,7 +84,7 @@ void cDecoder::started()
     // Allocate an AVFrame structure
     pFrameRGB = av_frame_alloc();
     if(pFrameRGB==NULL) {
-        emit error("Could not allocate AVFrame structure!");
+		emit error("[DECODER] Could not allocate AVFrame structure!");
         return;
     }
 
@@ -105,6 +106,8 @@ void cDecoder::started()
            pCodecCtx->width, pCodecCtx->height);
 
     isStopped = false;
+
+	qDebug() << "[DECODER] Entering loop...";
 
 	while(!isStopped) {
 		//cntr++;

@@ -76,11 +76,7 @@ typedef struct block_info {
 	uchar *imgOut1;         // to hold primary output
 	//uchar *imgOut2;         // will be used if primary output is for filtering
 	//uchar *imgOut3;         // will be used if imgOut2 is used (for sharpening)
-	// miscellaneous info
-	uchar imageInfoRetrieved;
-	uchar fullRImageRetrieved;
-	uchar fullGImageRetrieved;
-	uchar fullBImageRetrieved;
+
 	// miscellaneous flag
 	volatile uchar dmaToken_pxStore;	// token for storing pixel to SDRAM via dma
 										// the value indicates: who's next?
@@ -182,7 +178,6 @@ pxBuf_t pxBuffer;
 // Ada masalah jika buffer dimasukkan ke dalam struct. Coba jika ditaruh di luar:
 // Ternyata masih bermasalah. Sekarang mari kota coba dengan benar-benar membuat
 // berada di boundary 4-byte.
-#define DEF_PXLEN_IN_CHUNK	272
 /*
 uchar rpxbuf[DEF_PXLEN_IN_CHUNK];	// 270/4 = 67 with 2 bytes remaining
 uchar gpxbuf[DEF_PXLEN_IN_CHUNK];
@@ -207,6 +202,7 @@ volatile uchar dmaImgFromSDRAMdone;
 
 enum proc_type_e
 {
+  PROC_NONE,
   PROC_FILTERING,		// Filtering a.k.a. smoothing
   PROC_SHARPENING,		// using Histogram equalization
   PROC_EDGING_DVS,	 	// Edge detection or DVS emulation
@@ -321,7 +317,6 @@ uchar nCoresForPixelPreProc;
 // Initialization
 void initRouter();
 void initSDP();
-void initImage();
 void initIPTag();
 void initOther();
 void initImgBufs();

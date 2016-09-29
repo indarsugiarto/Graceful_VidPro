@@ -50,10 +50,15 @@ public slots:
 	void cbSpiNNchanged(int idx);
 	void frameReady();
 	void frameSent();
+	void spinnSendFrame();
+	void edgeRenderingDone();		// useful only for video, not image processing
 
 private:
     bool isPaused;
+	bool edgeRenderingInProgress;
+	bool decoderIsActive;
     Ui::vidStreamer *ui;
+
 protected:
 	void closeEvent(QCloseEvent *event);
 };

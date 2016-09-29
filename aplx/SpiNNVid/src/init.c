@@ -42,16 +42,14 @@ inline void initImgBufs()
 	blkInfo->imgOut1 = NULL;
 	//blkInfo->imgOut2 = NULL;
 	//blkInfo->imgOut3 = NULL;
-	blkInfo->imageInfoRetrieved = 0;
-	blkInfo->fullRImageRetrieved = 0;
-	blkInfo->fullGImageRetrieved = 0;
-	blkInfo->fullBImageRetrieved = 0;
 }
 
 void releaseImgBuf()
 {
 	if(blkInfo->imgRIn != NULL) {
+#if(DEBUG_LEVEL>1)
 		io_printf(IO_BUF, "[IMGBUF] Releasing SDRAM heap...\n");
+#endif
 		sark_free(blkInfo->imgRIn);
 		sark_free(blkInfo->imgGIn);
 		sark_free(blkInfo->imgBIn);
@@ -508,27 +506,3 @@ void initHistData(uint arg0, uint arg1)
 	histPropTree.SDPItemCntr = 0;
 }
 
-
-
-
-
-
-
-// initImage() is predecated!!!!
-// initImage() should be called by leadAp to initialize buffers
-void initImage()
-{
-	blkInfo->imageInfoRetrieved = 0;
-	blkInfo->fullRImageRetrieved = 0;
-	blkInfo->fullGImageRetrieved = 0;
-	blkInfo->fullBImageRetrieved = 0;
-
-	/*
-	blkInfo->imgRIn = (uchar *)IMG_R_BUFF0_BASE;
-	blkInfo->imgGIn = (uchar *)IMG_G_BUFF0_BASE;
-	blkInfo->imgBIn = (uchar *)IMG_B_BUFF0_BASE;
-	blkInfo->imgOut1 = (uchar *)IMG_O_BUFF1_BASE;
-	blkInfo->imgOut2 = (uchar *)IMG_O_BUFF2_BASE;
-	blkInfo->imgOut3 = (uchar *)IMG_O_BUFF3_BASE;
-	*/
-}

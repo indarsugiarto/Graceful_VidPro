@@ -5,16 +5,25 @@
 #include <QMessageBox>
 #include <QFileDialog>
 #include <time.h>
+#include <QDesktopWidget>	// needed for QApplication::desktop()->screenGeometry();
 
 vidStreamer::vidStreamer(QWidget *parent) :
     QWidget(parent),
     worker(NULL),
     decoder(NULL),
     isPaused(false),
+	edgeRenderingInProgress(false),
+	decoderIsActive(false),
     ui(new Ui::vidStreamer)
 {
     ui->setupUi(this);
     //ui->cbSpiNN->setCurrentIndex(1);
+
+	// at the moment, disable dvs functionality
+	ui->rbDVS->setEnabled(false);
+
+	// we also disable setting number of cores:
+	ui->sbPixelWorkers->setEnabled(false);
 
 	// disable buttons until spinnaker is configured
 	ui->pbVideo->setEnabled(false);
@@ -27,8 +36,18 @@ vidStreamer::vidStreamer(QWidget *parent) :
 
     refresh = new QTimer(this);
     screen = new cScreen();     // this is for displaying original frame
+	screen->setWindowTitle("Original Image/Frame");
     edge = new cScreen();       // this is for displaying result
+	edge->setWindowTitle("Result Image/Frame");
     spinn = new cSpiNNcomm();
+
+	// let's "tile" the widgets
+	QRect rec = QApplication::desktop()->screenGeometry();
+	//int hei = rec.height();
+	int wid = rec.width();
+	//qDebug() << QString("w = %1, h = %2").arg(wid).arg(hei);
+	edge->setGeometry(edge->x()+(wid/2), edge->y(), edge->width(), edge->height());
+
 
 	connect(ui->pbVideo, SIGNAL(pressed()), this, SLOT(pbVideoClicked()));
 	connect(ui->pbPause, SIGNAL(pressed()), this, SLOT(pbPauseClicked()));
@@ -39,13 +58,17 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	connect(ui->pbTest, SIGNAL(pressed()), this, SLOT(pbTestClicked()));
 	connect(ui->pbShowHideTest, SIGNAL(pressed()), this, SLOT(pbShowHideTestClicked()));
 	connect(spinn, SIGNAL(frameOut(const QImage &)), edge, SLOT(putFrame(const QImage &)));
-	connect(spinn, SIGNAL(frameOut(const QImage &)), this, SLOT(frameReady()));
-	connect(spinn, SIGNAL(sendFrameDone()), this, SLOT(frameSent()));
+	connect(spinn, SIGNAL(frameOut(const QImage &)), this, SLOT(spinnSendFrame()));
 
-	refresh->setInterval(40);   // which produces roughly 25fps
-	//refresh->setInterval(1000);   // which produces roughly 1fps
+	connect(spinn, SIGNAL(sendFrameDone()), this, SLOT(frameSent()));
+	connect(edge, SIGNAL(renderDone()), this, SLOT(edgeRenderingDone()));
+	connect(refresh, SIGNAL(timeout()), this, SLOT(refreshUpdate()));
+
+
+	//refresh->setInterval(40);   // which produces roughly 25fps
+	refresh->setInterval(1000);   // which produces roughly 1fps
+	//refresh->setInterval(500);   // which produces roughly 2fps
 	refresh->start();
-	//connect(refresh, SIGNAL(timeout()), this, SLOT(refreshUpdate()));
 
 	// additional setup
 	cbSpiNNchanged(ui->cbSpiNN->currentIndex());
@@ -198,32 +221,41 @@ void vidStreamer::pbVideoClicked()
 
 	// use the following to send the image from decoder to spinnaker
 	connect(decoder, SIGNAL(newFrame(const QImage &)), spinn, SLOT(frameIn(const QImage &)));
+	connect(decoder, SIGNAL(newFrame(const QImage &)), this, SLOT(frameReady()));
 
-	// use the following to send the image from decoder to edge-screener
-	//connect(decoder, SIGNAL(newFrame(QImage)), edge, SLOT(putFrame(QImage)));
+	// for debugging only: send the image from decoder to edge-screener
+	// connect(decoder, SIGNAL(newFrame(QImage)), edge, SLOT(putFrame(QImage)));
 
-	connect(spinn, SIGNAL(frameOut(const QImage &)), edge, SLOT(putFrame(const QImage &)));
 	connect(decoder, SIGNAL(gotPicSz(int,int)), this, SLOT(setSize(int,int)));
 	connect(decoder, SIGNAL(finished()), this, SLOT(videoFinish()));
-	//connect(refresh, SIGNAL(timeout()), decoder, SLOT(refresh()));
-	connect(edge, SIGNAL(renderDone()), decoder, SLOT(refresh()));
 
 	decoder->filename = fName;
 	worker->start();
-	//refresh->start();
+	decoderIsActive = true;
 }
 
 void vidStreamer::refreshUpdate()
 {
-	return;	// disable 25fps update
-	screen->drawFrame();
-	edge->drawFrame();
+	//qDebug() << "Tick";
+
+	// vidstreamer manage the refreshing to create "centralized" update
+
+	// if edge-widget finish rendering, then send the refresh signal
+	// to the video decoder
+
+	// debugging: bypassing edgeRenderingInProgress:
+	//edgeRenderingInProgress = false;
+
+	if(!edgeRenderingInProgress && decoderIsActive)
+		decoder->refresh();
 }
 
 void vidStreamer::setSize(int w, int h)
 {
 	screen->setSize(w,h);
-    edge->setGeometry(edge->x()+w+20,edge->y(),w,h);
+	//edge->setGeometry(edge->x()+w+20,edge->y(),w,h);
+	//edge->clear();
+	//edge->hide();
 	edge->setSize(w,h);
     // then tell spinnaker to start initialization
     spinn->frameInfo(w, h);
@@ -243,9 +275,10 @@ void vidStreamer::videoFinish()
 {
     if(worker != NULL && worker->isRunning())
         worker->quit();
-	refresh->stop();
-	screen->hide();
-	edge->hide();
+	decoderIsActive = false;
+	//refresh->stop();
+	//screen->hide();
+	//edge->hide();
 }
 
 void vidStreamer::pbImageClicked()
@@ -277,43 +310,39 @@ void vidStreamer::pbImageClicked()
 
     loadedImage.load(imgFilename);
 
-	// resize the image viewer
-	screen->setSize(loadedImage.width(), loadedImage.height());
-	edge->clear();
-	edge->setSize(loadedImage.width(), loadedImage.height());
-	edge->hide();
+	// send image size to widgets and SpiNNaker:
+	setSize(loadedImage.width(), loadedImage.height());
+	// the widgets will be shown up!!!
 
-    screen->putFrame(loadedImage);
-    //send frame info to spinn
-    spinn->frameInfo(loadedImage.width(), loadedImage.height());
+	// for the "screen" widget, display the image immediately:
+	screen->putFrame(loadedImage);
+	screen->hide(); screen->show();	// this is a trick to make the widget properly showing the image
 }
 
 void vidStreamer::pbSendImageClicked()
 {
+	/*
     if(experiment == 0)
         edge->show();
+	*/
     // disable the button to see if the image is sent
     ui->pbSendImage->setEnabled(false);
+	edge->clear();
+
     // send the frame to spinn
     spinn->frameIn(loadedImage);
 }
 
+// frameReady() is called when the decoder has a new frame ready to be sent to spinn
 void vidStreamer::frameReady()
 {
-	//quint16 elapse = spinn->getSpinElapse();
-	//qDebug() << QString("SpiNNaker processing time = %1-clk").arg(elapse);
+	// first, indicate that the "edge" widget is going to do the rendering
+	edgeRenderingInProgress = true;
+	qDebug() << "Got new frame from decoder...";
 }
 
 void vidStreamer::pbTestClicked()
 {
-    // Current possible test:
-    // 0 - Workers ID
-    // 1 - Network Configuration
-    // 2 - BlockInfo
-    // 3 - Workload
-    // 4 - FrameInfo
-    // 5 - Performance Measurement
-    // 6 - PLL report
     spinn->sendTest(ui->cbTest->currentIndex());
 }
 
@@ -331,4 +360,17 @@ void vidStreamer::frameSent()
     // if using "Load Image"
     if(!loadedImage.isNull())
         ui->pbSendImage->setEnabled(true);
+	qDebug() << "Frame is sent to spinn...";
+}
+
+void vidStreamer::edgeRenderingDone()
+{
+	// indicate that the "edge" widget is finish in rendering a frame
+	edgeRenderingInProgress = false;
+	qDebug() << "Edge rendering done...";
+}
+
+void vidStreamer::spinnSendFrame()
+{
+	qDebug() << "SpiNNVid send the frame";
 }

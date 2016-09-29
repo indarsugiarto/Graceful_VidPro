@@ -70,6 +70,9 @@ void c_main()
 	// which is fixed 5 times the image width
 	dtcmImgFilt = NULL;
 
+	// this buffer also needs to be initialized:
+	sendResultInfo.pxBuf = NULL;
+
 	/*  pre-processing: grayscaling and histogram counting
 		by default, we assign NUM_CORES_FOR_BCAST_PIXEL cores for pre-processing
 		(i.e. grayscaling and histogram counting) */
@@ -121,10 +124,6 @@ void c_main()
 			/* let's setup basic/default block info: */
 			blkInfo->myX = CHIP_X(sv->p2p_addr);
 			blkInfo->myY = CHIP_Y(sv->p2p_addr);
-			blkInfo->imageInfoRetrieved = 0;
-			blkInfo->fullRImageRetrieved = 0;
-			blkInfo->fullGImageRetrieved = 0;
-			blkInfo->fullBImageRetrieved = 0;
 			initImgBufs();
 
 			blkInfo->dmaToken_pxStore = LEAD_CORE; // the next core to have dma token is LEAD_CORE

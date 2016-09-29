@@ -32,75 +32,72 @@ void build_task_list()
 void configure_network(uint mBox)
 {
 
-	//kenapa default-nya sobel???
-
 	io_printf(IO_STD, "[CONFIG] Got configuration...\n");
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
-	if(msg->cmd_rc == SDP_CMD_CONFIG_NETWORK) {
-		// NOTE: encoding strategy:
-		//		 seq = (opType << 8) | (wFilter << 4) | wHistEq;
 
-		// for safety, reset the network:
-		spin1_send_mc_packet(MCPL_BCAST_RESET_NET, 0, WITH_PAYLOAD);
+	// NOTE: encoding strategy:
+	//		 seq = (opType << 8) | (wFilter << 4) | wHistEq;
 
-		uint payload;   // also for broadcasting
+	// for safety, reset the network:
+	spin1_send_mc_packet(MCPL_BCAST_RESET_NET, 0, WITH_PAYLOAD);
 
-		// then apply frequency requirement
-		// if the freq is 0, then use adaptive mechanism:
-		// initially, it runs at 200MHz, but change to 250 during processing
-		// setFreq(msg->srce_port, NULL); --> obsolete!
-		payload = (msg->srce_port << 16) | PROF_MSG_SET_FREQ;
-		spin1_send_mc_packet(MCPL_TO_ALL_PROFILER, payload, WITH_PAYLOAD);
+	uint payload;   // also for broadcasting
 
-		// then tell the other nodes about this op-freq info
+	// then apply frequency requirement
+	// if the freq is 0, then use adaptive mechanism:
+	// initially, it runs at 200MHz, but change to 250 during processing
+	// setFreq(msg->srce_port, NULL); --> obsolete!
+	payload = (msg->srce_port << 16) | PROF_MSG_SET_FREQ;
+	spin1_send_mc_packet(MCPL_TO_ALL_PROFILER, payload, WITH_PAYLOAD);
 
-		blkInfo->opType = msg->seq >> 8;
-		blkInfo->opFilter = (msg->seq >> 4) & 0xF;
-		blkInfo->opSharpen = msg->seq & 0xF;
+	// then tell the other nodes about this op-freq info
 
-		payload = msg->seq;
-		spin1_send_mc_packet(MCPL_BCAST_OP_INFO, payload, WITH_PAYLOAD);
+	blkInfo->opType = msg->seq >> 8;
+	blkInfo->opFilter = (msg->seq >> 4) & 0xF;
+	blkInfo->opSharpen = msg->seq & 0xF;
 
-		// broadcasting for nodes configuration
-		// convention: chip<0,0> must be root, it has the ETH
-		if(sv->p2p_addr==0) blkInfo->nodeBlockID = 0;
+	payload = msg->seq;
+	spin1_send_mc_packet(MCPL_BCAST_OP_INFO, payload, WITH_PAYLOAD);
 
-		// NOTE: we decide to use at least 4 nodes!!!
-		// another convention:
-		// arg1, arg2, arg3 contain node-1, node-2, node-3
-		chips[0].id = 0; chips[0].x = 0; chips[0].y = 0;
-		chips[1].id = 1; chips[1].x = msg->arg1 >> 8; chips[1].y = msg->arg1 & 0xFF;
-		chips[2].id = 2; chips[2].x = msg->arg2 >> 8; chips[2].y = msg->arg2 & 0xFF;
-		chips[3].id = 3; chips[3].x = msg->arg3 >> 8; chips[3].y = msg->arg3 & 0xFF;
+	// broadcasting for nodes configuration
+	// convention: chip<0,0> must be root, it has the ETH
+	if(sv->p2p_addr==0) blkInfo->nodeBlockID = 0;
 
-		// infer from msg->length
-		uchar restNodes = (msg->length - sizeof(sdp_hdr_t) - sizeof(cmd_hdr_t)) / 2;
-		uchar maxAdditionalNodes;
+	// NOTE: we decide to use at least 4 nodes!!!
+	// another convention:
+	// arg1, arg2, arg3 contain node-1, node-2, node-3
+	chips[0].id = 0; chips[0].x = 0; chips[0].y = 0;
+	chips[1].id = 1; chips[1].x = msg->arg1 >> 8; chips[1].y = msg->arg1 & 0xFF;
+	chips[2].id = 2; chips[2].x = msg->arg2 >> 8; chips[2].y = msg->arg2 & 0xFF;
+	chips[3].id = 3; chips[3].x = msg->arg3 >> 8; chips[3].y = msg->arg3 & 0xFF;
+
+	// infer from msg->length
+	uchar restNodes = (msg->length - sizeof(sdp_hdr_t) - sizeof(cmd_hdr_t)) / 2;
+	uchar maxAdditionalNodes;
 #if(USING_SPIN==3)
-		maxAdditionalNodes = 0;
+	maxAdditionalNodes = 0;
 #else
-		maxAdditionalNodes = 44;
+	maxAdditionalNodes = 44;
 #endif
-		if(restNodes > maxAdditionalNodes) {
-			terminate_SpiNNVid(IO_DBG, "Invalid network size!\n", RTE_SWERR);
+	if(restNodes > maxAdditionalNodes) {
+		terminate_SpiNNVid(IO_DBG, "Invalid network size!\n", RTE_SWERR);
+	}
+	else {
+		if(restNodes > 0) {
+			for(uchar i=0; i<restNodes; i++) {
+				chips[i+4].id = i+4;
+				chips[i+4].x = msg->data[i*2];
+				chips[i+4].y = msg->data[i*2 + 1];
+			}
 		}
-		else {
-			if(restNodes > 0) {
-				for(uchar i=0; i<restNodes; i++) {
-					chips[i+4].id = i+4;
-					chips[i+4].x = msg->data[i*2];
-					chips[i+4].y = msg->data[i*2 + 1];
-				}
-			}
-			blkInfo->maxBlock = restNodes + 4;	// NOTE: minBlock = 4
+		blkInfo->maxBlock = restNodes + 4;	// NOTE: minBlock = 4
 
-			// then broadcast
-			// Note: the other node will use the maxBlock info for counting
-			for(uchar i=0; i<blkInfo->maxBlock; i++) {
-				payload = blkInfo->maxBlock << 24;
-				payload += (chips[i].id << 16) + (chips[i].x << 8) + (chips[i].y);
-				spin1_send_mc_packet(MCPL_BCAST_NODES_INFO, payload, WITH_PAYLOAD);
-			}
+		// then broadcast
+		// Note: the other node will use the maxBlock info for counting
+		for(uchar i=0; i<blkInfo->maxBlock; i++) {
+			payload = blkInfo->maxBlock << 24;
+			payload += (chips[i].id << 16) + (chips[i].x << 8) + (chips[i].y);
+			spin1_send_mc_packet(MCPL_BCAST_NODES_INFO, payload, WITH_PAYLOAD);
 		}
 	}
 
@@ -222,7 +219,8 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		workers.subBlockID = payload & 0xFFFF;
 		spin1_schedule_callback(give_report, DEBUG_REPORT_MYWID, 0, PRIORITY_PROCESSING);
 	}
-	// host sends request for report via leadAp
+
+	// MCPL_BCAST_GET_WLOAD is broadcasted when new frame info arrives
 	else if(key==MCPL_BCAST_GET_WLOAD) {
 		spin1_schedule_callback(computeWLoad, 0, 0, PRIORITY_PROCESSING);
 	}
@@ -489,9 +487,11 @@ void hSDP(uint mBox, uint port)
 	//       especially when delivering frame's channel
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
 
-#if (DEBUG_LEVEL>2)
+#if (DEBUG_LEVEL>3)
 	io_printf(IO_STD, "got sdp tag = 0x%x, srce_port = 0x%x, srce_addr = 0x%x, dest_port = 0x%x\n",
 			  msg->tag, msg->srce_port, msg->srce_addr, msg->dest_port);
+#elif (DEBUG_LEVEL>1)
+	//io_printf(IO_BUF, "got sdp on port = %d\n", port);
 #endif
 
 	if(port==SDP_PORT_CONFIG) {
@@ -505,7 +505,7 @@ void hSDP(uint mBox, uint port)
 			spin1_send_mc_packet(MCPL_BCAST_ALL_REPORT, msg->seq, WITH_PAYLOAD);
 		}
 		else if(msg->cmd_rc == SDP_CMD_RESET_NETWORK) {
-#if (DEBUG_LEVEL>2)
+#if (DEBUG_LEVEL>1)
 			io_printf(IO_STD, "Got net reset cmd\n");
 #endif
 			// ignore this command if using fixed nodes configuration
@@ -515,7 +515,9 @@ void hSDP(uint mBox, uint port)
 #endif
 		}
 		else if(msg->cmd_rc == SDP_CMD_FRAME_INFO) {
+#if (DEBUG_LEVEL>0)
 			io_printf(IO_STD, "[CONFIG] Got frame info...\n");
+#endif
 			// will only send wImg (in arg1.high) and hImg (in arg1.low)
 			blkInfo->wImg = msg->arg1 >> 16;
 			blkInfo->hImg = msg->arg1 & 0xFFFF;
@@ -534,6 +536,9 @@ void hSDP(uint mBox, uint port)
 		}
 		else if(msg->cmd_rc == SDP_CMD_END_VIDEO) {
 
+#if (DEBUG_LEVEL>0)
+			io_printf(IO_STD, "[SpiNNVid] Got SDP_CMD_END_VIDEO...\n");
+#endif
 
 
 
@@ -549,6 +554,9 @@ void hSDP(uint mBox, uint port)
 	/*--------------------------------------------------------------------------------------*/
 	/*--------------------------------------------------------------------------------------*/
 	/*-------------- New revision: several cores may receives frames directly --------------*/
+
+	// How to indicate that a new frame is sent, so that spinnaker can reset/forget
+	// the previous pixels??? No need, because pxSeq contains the pixels sequence
 
 	// NOTE: srce_addr TIDAK BISA DIPAKAI UNTUK pxSeq !!!!!
 	// Karena srce_addr PASTI bernilai 0 jika dikirim dari host-PC
@@ -567,7 +575,7 @@ void hSDP(uint mBox, uint port)
 
 		// Debugging 28.07.2016: how many pxSeq?
 #if(DEBUG_LEVEL>1)
-		io_printf(IO_BUF, "Got rpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
+		//io_printf(IO_BUF, "Got rpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
 #endif
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
 	}
@@ -576,7 +584,7 @@ void hSDP(uint mBox, uint port)
 		pxBuffer.pxLen = msg->length - 8;
 		sark_mem_cpy(gpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
 #if(DEBUG_LEVEL>1)
-		io_printf(IO_BUF, "Got gpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
+		//io_printf(IO_BUF, "Got gpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
 #endif
 		// NOTE: don't forward yet, the core is still receiving "fast" sdp packets
 	}
@@ -586,7 +594,7 @@ void hSDP(uint mBox, uint port)
 		sark_mem_cpy(bpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
 
 #if(DEBUG_LEVEL>1)
-		io_printf(IO_BUF, "Got bpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
+		//io_printf(IO_BUF, "Got bpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
 #endif
 		// process gray scalling and forward afterwards
 		spin1_schedule_callback(processGrayScaling, 0, 0, PRIORITY_PROCESSING);
@@ -598,12 +606,16 @@ void hSDP(uint mBox, uint port)
 	/*-------------- to trigger spiNNaker to do the processing                  ------------*/
 	/*-------------- This command should be sent to core<0,0,LEAD_CORE>         ------------*/
 	else if(port==SDP_PORT_FRAME_END) {
+
 		// at this point, the task list has already been built in the root-leadAp
 		// then go to event-loop for task processing
 #if(DEBUG_LEVEL>0)
 		io_printf(IO_STD, "[EOF_CMD] Got EOF...\n");
 #endif
 		spin1_schedule_callback(taskProcessingLoop,0,0,PRIORITY_PROCESSING);
+
+		// reset token to the LEAD_CORE
+		// blkInfo->dmaToken_pxStore = LEAD_CORE;
 	}
 
 	else if(port==SDP_PORT_FPGA_OUT) {

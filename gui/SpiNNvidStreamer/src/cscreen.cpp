@@ -16,7 +16,7 @@ cScreen::cScreen(QWidget *parent) : QWidget(parent)
 	this->setLayout(&layout);
 
 	// test
-	viewPort->show();
+	//viewPort->show();
 }
 
 cScreen::~cScreen()
