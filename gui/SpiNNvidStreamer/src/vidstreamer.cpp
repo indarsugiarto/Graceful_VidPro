@@ -247,9 +247,14 @@ void vidStreamer::refreshUpdate()
 
 	// debugging: bypassing edgeRenderingInProgress:
 	//edgeRenderingInProgress = false;
+#if(DESTINATION==DEST_HOST)
 
 	if(!edgeRenderingInProgress && decoderIsActive)
 		decoder->refresh();
+#elif
+	if(decoderIsActive)
+		decoder->refresh();
+#endif
 }
 
 void vidStreamer::setSize(int w, int h)

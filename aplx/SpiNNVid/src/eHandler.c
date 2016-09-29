@@ -625,6 +625,8 @@ void hSDP(uint mBox, uint port)
 		// blkInfo->dmaToken_pxStore = LEAD_CORE;
 	}
 
+
+	// NOTE: this SDP_PORT_FPGA_OUT is not used in this version!!!
 	else if(port==SDP_PORT_FPGA_OUT) {
 		if(msg->cmd_rc==SDP_CMD_SEND_PX_FPGA) {
 			// TODO: extract the data and convert into fix-route

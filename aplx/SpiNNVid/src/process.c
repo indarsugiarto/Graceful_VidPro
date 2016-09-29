@@ -363,7 +363,6 @@ void processGrayScaling(uint arg0, uint arg1)
 
 	do {
 		tg = (myCoreID << 16) | DMA_TAG_STORE_B_PIXELS;
-
 		dmaDone = spin1_dma_transfer(tg, blkInfo->imgBIn+offset,
 									 bpxbuf, DMA_WRITE, pxBuffer.pxLen);
 	} while(dmaDone==0);
@@ -371,7 +370,6 @@ void processGrayScaling(uint arg0, uint arg1)
 
 	do {
 		tg = (myCoreID << 16) | DMA_TAG_STORE_Y_PIXELS;
-
 		dmaDone = spin1_dma_transfer(tg, blkInfo->imgOut1+offset,
 									 ypxbuf, DMA_WRITE, pxBuffer.pxLen);
 	} while(dmaDone==0);
@@ -1099,13 +1097,34 @@ void sendResultToTargetFromRoot()
 
 		// move to the next address
 		imgOut += workers.wImg;
-
 	}
-
 }
 #endif
 
 #if(DESTINATION==DEST_FPGA)
+
+void sendImgChunkViaFR(ushort line, uchar * pxbuf)
+{
+	sendResultInfo.sdpReady = FALSE;
+
+	uint key;
+	uchar px;
+
+	ushort x,y;
+
+	y = line;
+
+	for(x=0; x<workers.wImg; x++) {
+		px = *(pxbuf+x);
+		key = (((uint)x << 16) | y) & 0x7FFF7FFF;
+		spin1_send_fr_packet(key, px, WITH_PAYLOAD);
+		giveDelay(DEF_FR_DELAY);
+	}
+
+	sendResultInfo.sdpReady = TRUE;
+
+}
+
 // will use fixed-route packet
 void sendResultToTargetFromRoot()
 {
@@ -1113,13 +1132,8 @@ void sendResultToTargetFromRoot()
 	uchar *imgOut;
 	imgOut  = (uchar *)getSdramResultAddr();
 
-	// prepare FR packet:
-	TODO... lihat kode dari Gengting
-
 	uint dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
 	for(ushort lines=workers.blkStart; lines<=workers.blkEnd; lines++) {
-		// get the line from sdram
-		//imgOut += l*workers.wImg;
 
 		dmaImgFromSDRAMdone = 0;	// will be altered in hDMA
 		do {
@@ -1132,16 +1146,11 @@ void sendResultToTargetFromRoot()
 		}
 
 		// then sequentially copy & send via fr
-		uint frBuf;
-		for(ushort px=0; px<workers.wImg; px++) {
-			// TODO: lihat kode yang di Gengting....
-		}
+		sendImgChunkViaFR(lines, resImgBuf);
 
 		// move to the next address
 		imgOut += workers.wImg;
-
 	}
-
 }
 #endif
 
@@ -1203,6 +1212,20 @@ void sendResultToTarget(uint line, uint null)
 #if(DESTINATION==DEST_FPGA)
 void sendResultToTarget(uint line, uint null)
 {
+	// if sdp is not ready, then go to wait state (in recursion-like mechanism)
+	if(sendResultInfo.sdpReady==FALSE) {
+		// then call again
+		spin1_schedule_callback(sendResultToTarget, line, NULL, PRIORITY_PROCESSING);
+	}
+	else {
+
+		// send to target via sdp
+		sendImgChunkViaFR(line, sendResultInfo.pxBuf);
+
+		// then continue the chain with the next line
+		sendResultInfo.lineToSend++;
+		spin1_schedule_callback(sendResultChain, sendResultInfo.lineToSend, NULL, PRIORITY_PROCESSING);
+	}
 
 }
 #endif

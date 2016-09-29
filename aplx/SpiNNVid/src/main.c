@@ -47,6 +47,10 @@ void c_main()
 		return;
 	}
 
+#if (DESTINATION==DEST_FPGA)
+	rtr_fr_set(1 << 4);	// send to link-4, where FPGA is connected to
+#endif
+
 	/*  allocate ?pxbuf
 		?pxbuf is used to contain a chunk of image pixels (up to 272 pixels),
 		initially sent via SDP and later broadcasted using MCPL */

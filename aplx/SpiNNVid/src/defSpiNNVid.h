@@ -7,13 +7,15 @@
 #define DEFSPINNVID_H
 
 #define MAJOR_VERSION               1
-#define MINOR_VERSION               0
+#define MINOR_VERSION               1
 
 // Version log
 // 0.1 Sending frame to SpiNNaker at 10MBps
 // 0.2 Do the edge detection and smoothing
 // 0.3 Do histogram equalization
-// 1.0 Implement task scheduling and DVS emulation
+// 1.0 Implement video processing (filtering & sharpening are excluded)
+// 1.1 Send to FPGA via FR directly (without SDP)
+// 2.0 Implement task scheduling and DVS emulation
 
 
 #define ADAPTIVE_FREQ               FALSE
@@ -66,7 +68,7 @@
 // where will the result be sent? To Host or to FPGA board
 #define DEST_HOST                   1
 #define DEST_FPGA                   2
-#define DESTINATION                 DEST_HOST
+#define DESTINATION                 DEST_FPGA
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
@@ -157,6 +159,7 @@
 // for sending chunks from spinnaker:
 #define DEF_DEL_VAL					900  // perfect, up to 5.7MBps
 //#define DEF_DEL_VAL					1800
+#define DEF_FR_DELAY				200
 
 #define DEF_PXLEN_IN_CHUNK	272
 
