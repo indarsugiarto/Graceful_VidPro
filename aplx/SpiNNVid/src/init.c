@@ -203,13 +203,15 @@ void initRouter()
 	else if(x>0 && y==0)	dest = (1 << 3);	// west
 	else if(x==0 && y>0)	dest = (1 << 5);	// south
 	else					dest = leader;
-	e = rtr_alloc(1);
+	e = rtr_alloc(3);
 	if(e==0)
 	{
 		terminate_SpiNNVid(IO_STD, "initRouter err for special keys!\n", RTE_ABORT);
 	} else {
 		//rtr_mc_set(e, MCPL_BLOCK_DONE, 0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BLOCK_DONE_TEDGE, 0xFFFF0000, dest); e++;
+		rtr_mc_set(e, MCPL_RECV_END_OF_FRAME, 0xFFFF0000, dest); e++;
+		rtr_mc_set(e, MCPL_IGNORE_END_OF_FRAME, 0xFFFFFFFF, workers); e++;
 	}
 
 

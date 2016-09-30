@@ -65,7 +65,8 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	connect(refresh, SIGNAL(timeout()), this, SLOT(refreshUpdate()));
 
 
-	refresh->setInterval(40);   // which produces roughly 25fps
+	//refresh->setInterval(40);   // which produces roughly 25fps
+	refresh->setInterval(100);   // which produces roughly 10fps
 	//refresh->setInterval(1000);   // which produces roughly 1fps
 	//refresh->setInterval(500);   // which produces roughly 2fps
 	//refresh->setInterval(50);   // which produces roughly 20fps
@@ -222,7 +223,7 @@ void vidStreamer::pbVideoClicked()
 	connect(decoder, SIGNAL(newFrame(const QImage &)), screen, SLOT(putFrame(const QImage &)));
 
 	// use the following to send the image from decoder to spinnaker
-	//connect(decoder, SIGNAL(newFrame(const QImage &)), spinn, SLOT(frameIn(const QImage &)));
+	connect(decoder, SIGNAL(newFrame(const QImage &)), spinn, SLOT(frameIn(const QImage &)));
 	connect(decoder, SIGNAL(newFrame(const QImage &)), this, SLOT(frameReady(const QImage &)));
 
 	// for debugging only: send the image from decoder to edge-screener
@@ -238,7 +239,6 @@ void vidStreamer::pbVideoClicked()
 
 void vidStreamer::refreshUpdate()
 {
-	//qDebug() << "Tick";
 
 	// vidstreamer manage the refreshing to create "centralized" update
 
@@ -247,6 +247,17 @@ void vidStreamer::refreshUpdate()
 
 	// debugging: bypassing edgeRenderingInProgress:
 	//edgeRenderingInProgress = false;
+
+	timespec temp;
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &temp);
+
+	if(!edgeRenderingInProgress && decoderIsActive) {
+
+		qDebug() << QString("Refresh encoder at-%1").arg(temp.tv_sec);
+		decoder->refresh();
+	}
+
+	/*
 #if(DESTINATION==DEST_HOST)
 
 	if(!edgeRenderingInProgress && decoderIsActive)
@@ -255,6 +266,8 @@ void vidStreamer::refreshUpdate()
 	if(decoderIsActive)
 		decoder->refresh();
 #endif
+
+*/
 }
 
 void vidStreamer::setSize(int w, int h)
@@ -347,11 +360,11 @@ void vidStreamer::frameReady(const QImage &frameIn)
 	// so the the refresh signal from the timer will be ignored in refreshUpdate()
 	edgeRenderingInProgress = true;
 
-	// the following direct to edge widget works:
+	// for DEBUGGING: the following directly-to-edge-widget works:
 	// edge->putFrame(frameIn);
 
 	//loadedImage = frameIn;
-	spinn->frameIn(frameIn);
+	//spinn->frameIn(frameIn);
 
 	//qDebug() << "Got new frame from decoder...";
 }

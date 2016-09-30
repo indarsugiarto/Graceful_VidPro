@@ -27,6 +27,8 @@ void build_task_list()
 	taskList.nTasks = n;
 	taskList.cTaskPtr = 0;
 	taskList.cTask = taskList.tasks[0];
+	// in addition, we introduce a new flag for fault tolerance:
+	taskList.EOF_flag = -1;	// so the host-PC may send several SDP_PORT_FRAME_END
 }
 
 void configure_network(uint mBox)
@@ -413,6 +415,26 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		}
 	}
 
+	// MCPL_RECV_END_OF_FRAME is sent by some cores to LEAD_CORE
+	// as a means for fault tolerance regarding SDP_PORT_FRAME_END
+	else if(key_hdr == MCPL_RECV_END_OF_FRAME) {
+		// first, check if taskList.EOF_flag is the same as the payload
+		if(taskList.EOF_flag != (int)payload) {
+			// yes, take it and schedule taskProcessingLoop
+#if(DEBUG_LEVEL>0)
+			io_printf(IO_STD, "[EOF_CMD] Got EOF from core-%d...\n", key_arg);
+#endif
+			taskList.EOF_flag = (int)payload;
+			spin1_schedule_callback(taskProcessingLoop,payload,0,PRIORITY_PROCESSING);
+		}
+	}
+
+	// LEAD_CORE will broadcast MCPL_IGNORE_END_OF_FRAME when it enters the Loop
+	else if(key==MCPL_IGNORE_END_OF_FRAME) {
+		taskList.EOF_flag = (int)payload;	// node, each core has taskList variable
+											// but not fully used
+	}
+
 	// the following MCPL_BCAST_SEND_RESULT will trigger a chain in it:
 	else if(key==MCPL_BCAST_SEND_RESULT) {
 		// if my block is enable, then proceed:
@@ -577,6 +599,9 @@ void hSDP(uint mBox, uint port)
 		pxBuffer.pxLen = msg->length - 8;
 		sark_mem_cpy(rpxbuf, &msg->cmd_rc, pxBuffer.pxLen);	
 
+		// what if we reset the EOF_flag here?
+		taskList.EOF_flag = -1;
+
 		// Debugging 28.07.2016: how many pxSeq?
 #if(DEBUG_LEVEL>1)
 		//io_printf(IO_BUF, "Got rpx Seq = %d, Len = %d\n", pxBuffer.pxSeq, pxBuffer.pxLen);
@@ -612,18 +637,53 @@ void hSDP(uint mBox, uint port)
 	/*-------------- Host will send an empty message at port SDP_PORT_FRAME_END ------------*/
 	/*-------------- to trigger spiNNaker to do the processing                  ------------*/
 	/*-------------- This command should be sent to core<0,0,LEAD_CORE>         ------------*/
-	else if(port==SDP_PORT_FRAME_END) {
+	else if(port==SDP_PORT_FRAME_END && (myCoreID==LEAD_CORE)) {
+
+		/* Fault tolerance regarding UDP drop...
+		 * Sometimes, this SDP_PORT_FRAME_END signal is dropped. Simple solution:
+		 * redundancy:
+		 * - Host will send SDP_PORT_FRAME_END to several cores
+		 *   To indicate a new frame, host will send the frame-ID (int number)
+		 *   in arg1. LEAD_CORE will use this frame-ID to indicate if it is already
+		 *   being processed.
+		 *
+		 * - If LEAD_CORE receives it (either via sdp or mcpl from other cores),
+		 *   it'll raise the flag:
+		 *       taskList.EOF_flag
+		 *   and schedule taskProcessingLoop
+		 *
+		 * - If other cores receives it, they send MCPL to tell LEAD_CORE
+		 *
+		 * */
 
 		// at this point, the task list has already been built in the root-leadAp
 		// then go to event-loop for task processing
+
 #if(DEBUG_LEVEL>0)
-		io_printf(IO_STD, "[EOF_CMD] Got EOF...\n");
+		io_printf(IO_STD, "[EOF_CMD] Got EOF frame-%d with EOF_flag-%d...\n",
+				  (int)msg->arg1, taskList.EOF_flag);
 #endif
-		spin1_schedule_callback(taskProcessingLoop,0,0,PRIORITY_PROCESSING);
+		// then check if the flag has been altered (somewhere in hMCPL())
+		if((int)msg->arg1 != taskList.EOF_flag) {
+			taskList.EOF_flag = (int)msg->arg1;
+#if(DEBUG_LEVEL>0)
+		io_printf(IO_STD, "[SpiNNVid] Sceduling Loop with EOF_flag-%d...\n",
+				  taskList.EOF_flag);
+#endif
+			spin1_schedule_callback(taskProcessingLoop,msg->arg1,0,PRIORITY_PROCESSING);
+		}
 
 		// reset token to the LEAD_CORE
 		// blkInfo->dmaToken_pxStore = LEAD_CORE;
 	}
+	else if(port==SDP_PORT_FRAME_END && (myCoreID!=LEAD_CORE)) {
+		// if EOF is received by ohter cores, then tell LEAD_CORE, only if LEAD_CORE didn't
+		// send MCPL_IGNORE_END_OF_FRAME yet
+		if(taskList.EOF_flag!=(int)msg->arg1)
+			spin1_send_mc_packet(MCPL_RECV_END_OF_FRAME + myCoreID, msg->arg1, WITH_PAYLOAD);
+	}
+
+
 
 
 	// NOTE: this SDP_PORT_FPGA_OUT is not used in this version!!!

@@ -52,6 +52,7 @@
 // for the profiler. TODO: check all leadAp usage!!!
 #define PROF_CORE					1	// profiler
 #define LEAD_CORE                   2	// lead core for SpiNNVid
+#define N_CORE_FOR_EOF			1
 
 // how many cores are used for pixel propagation (and histogram calculation)?
 // this value MUST BE THE SAME with the number of cores used during SDP
@@ -68,7 +69,7 @@
 // where will the result be sent? To Host or to FPGA board
 #define DEST_HOST                   1
 #define DEST_FPGA                   2
-#define DESTINATION                 DEST_FPGA
+#define DESTINATION                 DEST_HOST
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
@@ -211,6 +212,9 @@
 //#define MCPL_BLOCK_DONE			0x1ead1ead	// should be sent to <0,0,1>
 //#define MCPL_BLOCK_DONE_TEDGE   0x1eaddea1 // should be sent to <0,0,1>
 #define MCPL_BLOCK_DONE_TEDGE		0xdea10000	// for sending block done with info nodeID + perf
+#define MCPL_RECV_END_OF_FRAME		0xdea20000	// for sending SDP_PORT_FRAME_END to LEAD_CORE
+#define MCPL_IGNORE_END_OF_FRAME	0xdea30000	// LEAD_CORE broadcast this because it has
+												// already received SDP_PORT_FRAME_END
 
 // special key for communication with the profiler
 #define MCPL_TO_ALL_PROFILER		0x11111111	// profiler in all nodes

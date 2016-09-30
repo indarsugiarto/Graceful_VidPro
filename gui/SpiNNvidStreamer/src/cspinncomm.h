@@ -116,6 +116,8 @@ private:
 
 	uchar *rArray, *gArray, *bArray;	// line container
 
+	qint32 frameID;	// this to tell SpiNN, which frame is being sent
+
 	// helper functions & variables
 	void giveDelay(quint32 ns);	// in nanoseconds
 	quint64 elapsed(timespec start, timespec end);

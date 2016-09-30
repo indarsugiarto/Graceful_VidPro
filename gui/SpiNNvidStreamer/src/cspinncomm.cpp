@@ -35,7 +35,8 @@ uchar cSpiNNcomm::Y_CHIPS[48] = {0,0,1,1,0,0,0,1,1,1,1,2,2,2,2,2,2,2,3,3,3,3,3,3
 /*---------------------------------------------------------------------------*/
 /*-------------------- Class Constructor and Destructor ---------------------*/
 cSpiNNcomm::cSpiNNcomm(QObject *parent): QObject(parent),
-    frResult(NULL)
+	frResult(NULL),
+	frameID(0)	// start from-0
 {
     // initialize nodes
     for(int i=0; i<MAX_CHIPS; i++) {
@@ -69,7 +70,7 @@ cSpiNNcomm::cSpiNNcomm(QObject *parent): QObject(parent),
 
 	hdrg = hdrr; // hdrg.dest_port = (SDP_PORT_G_IMG_DATA << 5) + leadAp;
 	hdrb = hdrr; // hdrb.dest_port = (SDP_PORT_B_IMG_DATA << 5) + leadAp;
-	hdre = hdrr; hdre.dest_port = (SDP_PORT_FRAME_END  << 5) + leadAp;
+	hdre = hdrr; // hdre.dest_port = (SDP_PORT_FRAME_END  << 5) + leadAp;
 	hdrc = hdrr; hdrc.dest_port = (SDP_PORT_CONFIG     << 5) + leadAp;
 }
 
@@ -509,14 +510,22 @@ void cSpiNNcomm::frameIn(const QImage &f)
 		remaining -= sz;
 	}
 
-	//qDebug() << QString("Total pxSeq = %1").arg(pxSeq);
 	// then we have to send empty msg via SDP_PORT_FRAME_END to start decoding
-	sendImgLine(hdre, NULL, 0);
-	giveDelay(DEF_QT_WAIT_VAL*delVal);
+	// first check if frameID needs to be reset
+	if(frameID >= 0x7FFFFFF0)
+		frameID = 0;
+	else
+		frameID++;
+	// let's send to several cores:
+	cmd_hdr_t c;
+	c.arg1 = frameID;
 
-	// let's try putting some data on hdre
-	uchar dummy[272] = {0};
-	//sendImgLine(hdre, dummy, 272);
+	for(uchar core=LEAD_CORE; core<LEAD_CORE+N_CORE_FOR_EOF; core++) {
+		hdre.dest_port = (SDP_PORT_FRAME_END  << 5) + core;
+		sendSDP(hdre, scp(c));
+	}
+	// sendImgLine(hdre, NULL, 0); // deprecated!!!
+	giveDelay(DEF_QT_WAIT_VAL*delVal);
 
 	// emit signal
 	emit sendFrameDone();

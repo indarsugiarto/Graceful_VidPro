@@ -559,8 +559,15 @@ void notifyTaskDone()
 	spin1_schedule_callback(taskProcessingLoop, 0, 0, PRIORITY_PROCESSING);
 }
 
-void taskProcessingLoop(uint arg0, uint arg1)
+void taskProcessingLoop(uint frameID, uint arg1)
 {
+	// first, block other cores for sending MCPL_RECV_END_OF_FRAME
+	spin1_send_mc_packet(MCPL_IGNORE_END_OF_FRAME, frameID, WITH_PAYLOAD);
+
+#if(DEBUG_LEVEL>0)
+	io_printf(IO_STD, "[SpiNNVid] Entering Loop with EOF_flag-%d...\n",
+				  taskList.EOF_flag);
+#endif
 
 	// NOTE: task increment is done directly in eHandler.c
 

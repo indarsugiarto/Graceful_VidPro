@@ -242,6 +242,8 @@ typedef struct task_list {
 	uchar nTasks;
 	proc_t cTask;				// current task
 	uchar cTaskPtr;				// current task pointer
+	int EOF_flag;				// SDP_PORT_FRAME_END flag for fault tolerance via redundancy
+								// it contains the frame-ID sent by the host-PC
 } task_list_t;
 task_list_t taskList;
 
@@ -337,7 +339,7 @@ void getChipXYfromID(ushort id, ushort *X, ushort *Y);
 
 // processing: worker discovery
 void notifyTaskDone();
-void taskProcessingLoop(uint arg0, uint arg1);
+void taskProcessingLoop(uint frameID, uint arg1);
 void initIDcollection(uint withBlkInfo, uint Unused);
 void bcastWID(uint Unused, uint null);
 
