@@ -156,7 +156,8 @@ sdp_hdr_t cSpiNNcomm::get_hdr(QByteArray const &ba)
 //	- nCorePreProc: number of cores used for pixel retrieval
 void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
                             quint8 edgeOperator, quint8 withFiltering,
-							quint8 withSharping, quint8 freq, quint8 nCorePreProc)
+							quint8 withSharping, quint8 freq, quint8 nCorePreProc,
+							int delF)
 {
 	/*
 	// first, send notification to reset the network to spinnaker
@@ -177,6 +178,7 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
 	wFilter = withFiltering;		// with Gaussian filtering?
 	wHistEq = withSharping;			// with Histogram Equalization?
 	nCore4PxProc = nCorePreProc;	// will be used in frameIn()
+	sdpDelayFactor = delF;
 
 	// collect the parameters
 	if(SpinIdx==SPIN3) {
@@ -463,7 +465,7 @@ void cSpiNNcomm::frameIn(const QImage &f)
 
 	//int delVal = 600;	// just OK with single image
 	//int delVal = 1000;	// have distorted image on video
-	int delVal = 1200;	// have distorted image on video
+	int delVal = sdpDelayFactor;	// can be configured from gui
 
 	// we work only with color images!!! No gray video :)
 	// NOTE: we cannot alter srce_addr, hence we encode the pxSeq into tag + srce_port

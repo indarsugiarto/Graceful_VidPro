@@ -4,7 +4,6 @@
 #include <QDebug>
 #include <QMessageBox>
 #include <QFileDialog>
-#include <time.h>
 #include <QDesktopWidget>	// needed for QApplication::desktop()->screenGeometry();
 
 vidStreamer::vidStreamer(QWidget *parent) :
@@ -14,6 +13,7 @@ vidStreamer::vidStreamer(QWidget *parent) :
     isPaused(false),
 	edgeRenderingInProgress(false),
 	decoderIsActive(false),
+	tictoc(0),
     ui(new Ui::vidStreamer)
 {
     ui->setupUi(this);
@@ -54,6 +54,7 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	connect(ui->pbImage, SIGNAL(pressed()), this, SLOT(pbImageClicked()));
 	connect(ui->pbSendImage, SIGNAL(pressed()), this, SLOT(pbSendImageClicked()));
 	connect(ui->pbConfigure, SIGNAL(pressed()), this, SLOT(pbConfigureClicked()));
+
 	connect(ui->sbNchips, SIGNAL(editingFinished()), this, SLOT(newChipsNum()));
 	connect(ui->pbTest, SIGNAL(pressed()), this, SLOT(pbTestClicked()));
 	connect(ui->pbShowHideTest, SIGNAL(pressed()), this, SLOT(pbShowHideTestClicked()));
@@ -64,11 +65,12 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	connect(edge, SIGNAL(renderDone()), this, SLOT(edgeRenderingDone()));
 	connect(refresh, SIGNAL(timeout()), this, SLOT(refreshUpdate()));
 
-
+	//refresh->setInterval(20);   // which produces roughly 50fps
 	//refresh->setInterval(40);   // which produces roughly 25fps
-	refresh->setInterval(100);   // which produces roughly 10fps
+	//refresh->setInterval(100);   // which produces roughly 10fps
 	//refresh->setInterval(1000);   // which produces roughly 1fps
-	//refresh->setInterval(500);   // which produces roughly 2fps
+	refresh->setInterval(500);   // which produces roughly 2fps
+	//refresh->setInterval(250);   // which produces roughly 4fps
 	//refresh->setInterval(50);   // which produces roughly 20fps
 	//refresh->setInterval(2000);   // which produces roughly 0.5fps
 	refresh->start();
@@ -168,7 +170,9 @@ void vidStreamer::pbConfigureClicked()
 
 	quint8 nCorePreProc = ui->sbPixelWorkers->value();
 
-	spinn->configSpin(spinIdx, nNodes, opType, wFilter, wHist, freq, nCorePreProc);
+	int delF = ui->delFactor->text().toInt();
+
+	spinn->configSpin(spinIdx, nNodes, opType, wFilter, wHist, freq, nCorePreProc, delF);
 
     // just for the experiment: it's boring...
     if(experiment > 0) {
@@ -251,31 +255,24 @@ void vidStreamer::refreshUpdate()
 	timespec temp;
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &temp);
 
-	if(!edgeRenderingInProgress && decoderIsActive) {
+#if(DESTINATION==DEST_HOST)
 
+	if(!edgeRenderingInProgress && decoderIsActive) {
 		qDebug() << QString("Refresh encoder at-%1").arg(temp.tv_sec);
 		decoder->refresh();
 	}
-
-	/*
-#if(DESTINATION==DEST_HOST)
-
-	if(!edgeRenderingInProgress && decoderIsActive)
-		decoder->refresh();
 #else
-	if(decoderIsActive)
+	if(decoderIsActive) {
+		qDebug() << QString("Refresh encoder at-%1").arg(temp.tv_sec);
 		decoder->refresh();
+	}
 #endif
 
-*/
 }
 
 void vidStreamer::setSize(int w, int h)
 {
 	screen->setSize(w,h);
-	//edge->setGeometry(edge->x()+w+20,edge->y(),w,h);
-	//edge->clear();
-	//edge->hide();
 	edge->setSize(w,h);
     // then tell spinnaker to start initialization
     spinn->frameInfo(w, h);
@@ -296,7 +293,7 @@ void vidStreamer::videoFinish()
     if(worker != NULL && worker->isRunning())
         worker->quit();
 	decoderIsActive = false;
-	//refresh->stop();
+	refresh->stop();
 	//screen->hide();
 	//edge->hide();
 }
@@ -350,12 +347,15 @@ void vidStreamer::pbSendImageClicked()
 	edge->clear();
 
     // send the frame to spinn
+	frameReady(loadedImage);
     spinn->frameIn(loadedImage);
 }
 
 // frameReady() is called when the decoder has a new frame ready to be sent to spinn
 void vidStreamer::frameReady(const QImage &frameIn)
 {
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tic);
+
 	// first, indicate that the "edge" widget is going to do the rendering
 	// so the the refresh signal from the timer will be ignored in refreshUpdate()
 	edgeRenderingInProgress = true;
@@ -366,7 +366,9 @@ void vidStreamer::frameReady(const QImage &frameIn)
 	//loadedImage = frameIn;
 	//spinn->frameIn(frameIn);
 
-	//qDebug() << "Got new frame from decoder...";
+#if(DEBUG_LEVEL>1)
+	qDebug() << "Got new frame from decoder...";
+#endif
 }
 
 void vidStreamer::pbTestClicked()
@@ -376,29 +378,57 @@ void vidStreamer::pbTestClicked()
 
 void vidStreamer::newChipsNum()
 {
-    //qDebug() << QString("%1").arg(ui->sbNchips->value());
     if(ui->sbNchips->value() != oldNchips) {
         oldNchips = ui->sbNchips->value();
-        pbConfigureClicked();
+		//the following is just used during experimentation for the paper:
+		//pbConfigureClicked();
     }
 }
 
 void vidStreamer::frameSent()
 {
+
     // if using "Load Image"
+	/*
     if(!loadedImage.isNull())
         ui->pbSendImage->setEnabled(true);
-	//qDebug() << "Frame is sent to spinn...";
+		*/
+#if(DEBUG_LEVEL>1)
+	qDebug() << "Frame is sent to spinn...";
+#endif
 }
 
 void vidStreamer::edgeRenderingDone()
 {
+		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &toc);
+		timespec temp;
+		quint64 df_ns;
+		double fps;
+		if ((toc.tv_nsec-tic.tv_nsec)<0) {
+			temp.tv_sec = toc.tv_sec-tic.tv_sec-1;
+			temp.tv_nsec = 1000000000+toc.tv_nsec-tic.tv_nsec;
+		} else {
+			temp.tv_sec = toc.tv_sec-tic.tv_sec;
+			temp.tv_nsec = toc.tv_nsec-tic.tv_nsec;
+		}
+		// difference in nanosecond
+		df_ns = temp.tv_sec*1000000000+temp.tv_nsec;
+		fps = 1000000000.0/(double)df_ns;
+		qDebug() << QString("fps = %1").arg((int)round(fps));
+
+
 	// indicate that the "edge" widget is finish in rendering a frame
+	if(!ui->pbSendImage->isEnabled())
+		ui->pbSendImage->setEnabled(true);
 	edgeRenderingInProgress = false;
-	//qDebug() << "Edge rendering done...";
+#if(DEBUG_LEVEL>1)
+	qDebug() << "Edge rendering done...";
+#endif
 }
 
 void vidStreamer::spinnSendFrame()
 {
-	//qDebug() << "SpiNNVid send the frame";
+#if(DEBUG_LEVEL>1)
+	qDebug() << "SpiNNVid send the frame";
+#endif
 }

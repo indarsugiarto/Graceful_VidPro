@@ -353,6 +353,16 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		blkInfo->maxBlock = 0;
 		blkInfo->nodeBlockID = 0xFF;
 	}
+	else if(key==MCPL_BCAST_NET_DISCOVERY) {
+		// without delay, there might be packets that not captured by the root-leadAp
+		// although those packets are not dropped by the router
+		sark_delay_us(myChipID);
+		spin1_send_mc_packet(MCPL_BCAST_NET_REPLY, sv->p2p_addr, WITH_PAYLOAD);
+	}
+	else if(key==MCPL_BCAST_NET_REPLY) {
+		aliveNodeAddr[nChipAlive] = payload;
+		nChipAlive++;
+	}
 	/*------------------ End of network and task configuration ----------------*/
 	/*-------------------------------------------------------------------------*/
 
@@ -386,6 +396,8 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 			//elapse = toc-tic;	// in milliseconds
 
 			// send notification to <0,0,LEAD_CORE> with ID and performance measurement
+			// give a short delay to prevent packet missing (not dropped by router):
+			sark_delay_us(myChipID);
 			uint key = MCPL_BLOCK_DONE_TEDGE | blkInfo->nodeBlockID;
 			spin1_send_mc_packet(key, perf.tNode, WITH_PAYLOAD);
 
@@ -395,12 +407,45 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		}
 	}
 
+	// MCPL_FILT_DONE is sent by every core to leadAp in the node
+	else if(key==MCPL_FILT_DONE) {
+		nWorkerDone++;
+		perf.tNode += payload;
+		if(nWorkerDone==workers.tRunning) {
+			perf.tNode /= nWorkerDone;
+
+			// send notification to root-leadAp
+			sark_delay_us(myChipID);
+			uint key = MCPL_BLOCK_DONE_TFILT | blkInfo->nodeBlockID;
+			spin1_send_mc_packet(key, perf.tNode, WITH_PAYLOAD);
+		}
+	}
+
 	// MCPL_BLOCK_DONE_TEDGE is sent by each node to <0,0,LEAD_CORE>,
 	// which contains node-ID and perf
 	else if(key_hdr == MCPL_BLOCK_DONE_TEDGE) {
 		nBlockDone++;
 
 		// collect measurement for each processing
+		perf.tTotal += payload;
+
+		// check if all blocks have finished
+		if(nBlockDone == blkInfo->maxBlock) {
+
+			// collect total measurement
+			perf.tTotal /= blkInfo->maxBlock;
+			taskList.tPerf[taskList.cTaskPtr] = perf.tTotal;
+
+			// then prepare for taskProcessingLoop again
+			notifyTaskDone();
+		}
+	}
+
+	// MCPL_BLOCK_DONE_TFILT is sent by each node to root-leadAp
+	else if(key_hdr == MCPL_BLOCK_DONE_TFILT) {
+
+		// collect measurement for each processing
+		nBlockDone++;
 		perf.tTotal += payload;
 
 		// check if all blocks have finished
@@ -748,5 +793,25 @@ void hTimer(uint tick, uint Unused)
 		// how many workers are there?
 		spin1_schedule_callback(give_report, DEBUG_REPORT_NWORKERS, 0, PRIORITY_PROCESSING);
 	}
+#if(DEBUG_LEVEL>2)
+	else if(tick==2) {
+		if(sv->p2p_addr==0) {
+			//how many chips are there?
+			aliveNodeAddr[0] = 0;	// myself
+			nChipAlive = 1;
+			spin1_send_mc_packet(MCPL_BCAST_NET_DISCOVERY, 0, WITH_PAYLOAD);
+		}
+	}
+	else if(tick==3) {
+		if(sv->p2p_addr==0) {
+			io_printf(IO_STD, "[SpiNNVid] Available node = %d\n", nChipAlive);
+			for(ushort i=0; i<nChipAlive; i++) {
+				io_printf(IO_BUF, "Node-%d = <%d,%d>\n", i,
+						  CHIP_X(aliveNodeAddr[i]), CHIP_Y(aliveNodeAddr[i]));
+			}
+			io_printf(IO_STD, "[SpiNNVid] We are ready!\n");
+		}
+	}
+#endif
 }
 

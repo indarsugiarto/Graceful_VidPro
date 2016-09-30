@@ -29,6 +29,9 @@ void SpiNNVid_greetings()
 				  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
 #endif
 #endif
+#if(DEBUG_LEVEL>2)
+	io_printf(stream, "[SpiNNVid] Initialization...\n");
+#endif
 
 	// small delay, so all chips can be seen on Tubotron
 	sark_delay_us(get_block_id() * 1000);
@@ -42,6 +45,7 @@ void c_main()
 
 	// first thing: am I a profiler or a SpiNNVid?
 	myCoreID = sark_core_id();
+	myChipID = get_block_id();
 	if(myCoreID == PROF_CORE) {
 		terminate_SpiNNVid(IO_DBG, "Invalid core for SpiNNVid!\n", RTE_SWERR);
 		return;

@@ -52,11 +52,17 @@ void bcastWID(uint Unused, uint null)
 void allocateDtcmImgBuf()
 {
 	if(dtcmImgBuf != NULL) {
+#if(DEBUG_LEVEL>1)
+		io_printf(IO_BUF, "[IMGBUF] Releasing DTCM heap...\n");
+#endif
 		sark_free(dtcmImgBuf); //dtcmImgBuf = NULL;
 		sark_free(resImgBuf); //resImgBuf = NULL;
 		sark_free(dtcmImgFilt); //dtcmImgFilt = NULL;
 		sark_free(sendResultInfo.pxBuf); //--> somehow, it produces corrupt line at the end
 	}
+#if(DEBUG_LEVEL>1)
+		io_printf(IO_BUF, "[IMGBUF] Allocating DTCM heap...\n");
+#endif
 	// prepare the pixel buffers
 	ushort szMask = blkInfo->opType == IMG_SOBEL ? 3:5;
 	workers.szDtcmImgBuf = szMask * workers.wImg;
@@ -790,10 +796,14 @@ void imgFiltering(uint arg0, uint arg1)
 				sumXY = 0;
 			else {
 				for(i=-1; i<=2; i++)
-					for(j=-2; j<=2; j++)
-						sumXY += (int)((*(dtcmLine + c + i + j*workers.wImg)) * LAP[i+2][j+2]);
+					for(j=-2; j<=2; j++) {
+						//sumXY += (int)((*(dtcmLine + c + i + j*workers.wImg)) * LAP[i+2][j+2]);
+						sumXY += (int)((*(dtcmLine + c + i + j*workers.wImg)) * FILT[i+2][j+2]);
+						//sumXY /= FILT_DENOM;
+				}
 			}
 
+			sumXY /= FILT_DENOM;
 			// make necessary correction
 			if(sumXY>255) sumXY = 255;
 			if(sumXY<0) sumXY = 0;
@@ -810,7 +820,6 @@ void imgFiltering(uint arg0, uint arg1)
 						   (void *)resImgBuf, DMA_WRITE, workers.wImg);
 		} while(dmaTID==0);
 
-
 		// move to the next line
 		workers.sdramImgIn += workers.wImg;
 		workers.sdramImgOut += workers.wImg;
@@ -823,7 +832,7 @@ void imgFiltering(uint arg0, uint arg1)
 #if (DEBUG_LEVEL > 1)
 	io_printf(IO_BUF, "[Filtering] Done! send MCPL_FILT_DONE!\n");
 #endif
-	//spin1_send_mc_packet(MCPL_FILT_DONE, perf.tCore, WITH_PAYLOAD);
+	spin1_send_mc_packet(MCPL_FILT_DONE, perf.tCore, WITH_PAYLOAD);
 
 	// 29 Sep 2016: sampai disini... belum selesai untuk yang blok
 
@@ -1125,7 +1134,7 @@ void sendImgChunkViaFR(ushort line, uchar * pxbuf)
 		px = *(pxbuf+x);
 		key = (((uint)x << 16) | y) & 0x7FFF7FFF;
 		spin1_send_fr_packet(key, px, WITH_PAYLOAD);
-		giveDelay(DEF_FR_DELAY);
+		//giveDelay(DEF_FR_DELAY);
 	}
 
 	sendResultInfo.sdpReady = TRUE;

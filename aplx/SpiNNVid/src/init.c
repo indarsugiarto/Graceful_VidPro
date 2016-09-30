@@ -63,6 +63,9 @@ void releaseImgBuf()
 // it should be called with SDP_CMD_FRAME_INFO and MCPL_BCAST_FRAME_INFO
 void allocateImgBuf()
 {
+#if(DEBUG_LEVEL>1)
+		io_printf(IO_BUF, "[IMGBUF] Allocating SDRAM heap...\n");
+#endif
 
 	// at this point, we just need to know the size of the image
 	uint sz = blkInfo->wImg * blkInfo->hImg;
@@ -140,7 +143,7 @@ void initRouter()
 			rtr_mc_set(e+i, i+1, 0xFFFFFFFF, (MC_CORE_ROUTE(i+1)));
 	}
 	// other broadcasting keys
-	e = rtr_alloc(5);
+	e = rtr_alloc(6);
 	if(e==0)
 	{
 		terminate_SpiNNVid(IO_STD, "initRouter err for intra-chip!\n", RTE_ABORT);
@@ -149,6 +152,7 @@ void initRouter()
 		rtr_mc_set(e, MCPL_PING_REPLY,		0xFFFFFFFF, leader);	e++;
 		rtr_mc_set(e, MCPL_BCAST_GET_WLOAD, 0xFFFFFFFF, allRoute);	e++;
 		rtr_mc_set(e, MCPL_EDGE_DONE,		0xFFFFFFFF, leader);	e++;
+		rtr_mc_set(e, MCPL_FILT_DONE,		0xFFFFFFFF, leader);	e++;
 		rtr_mc_set(e, MCPL_REPORT_HIST2LEAD, MCPL_REPORT_HIST2LEAD_MASK, leader); e++;
 	}
 
@@ -185,7 +189,7 @@ void initRouter()
 	if(sv->p2p_addr==0)
 		dest = 1 + (1<<1) + (1<<2);
 #endif
-	e = rtr_alloc(5);
+	e = rtr_alloc(6);
 	if(e==0)
 	{
 		terminate_SpiNNVid(IO_STD, "initRouter err for inter-chip!\n", RTE_ABORT);
@@ -195,6 +199,7 @@ void initRouter()
 		rtr_mc_set(e, MCPL_BCAST_FRAME_INFO,	0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_SEND_RESULT,	0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_RESET_NET,		0xFFFFFFFF, dest); e++;
+		rtr_mc_set(e, MCPL_BCAST_NET_DISCOVERY, 0xFFFFFFFF, dest); e++;
 	}
 
 	// special for MCPL_BLOCK_DONE
@@ -203,15 +208,17 @@ void initRouter()
 	else if(x>0 && y==0)	dest = (1 << 3);	// west
 	else if(x==0 && y>0)	dest = (1 << 5);	// south
 	else					dest = leader;
-	e = rtr_alloc(3);
+	e = rtr_alloc(5);
 	if(e==0)
 	{
 		terminate_SpiNNVid(IO_STD, "initRouter err for special keys!\n", RTE_ABORT);
 	} else {
 		//rtr_mc_set(e, MCPL_BLOCK_DONE, 0xFFFFFFFF, dest); e++;
-		rtr_mc_set(e, MCPL_BLOCK_DONE_TEDGE, 0xFFFF0000, dest); e++;
-		rtr_mc_set(e, MCPL_RECV_END_OF_FRAME, 0xFFFF0000, dest); e++;
+		rtr_mc_set(e, MCPL_BLOCK_DONE_TEDGE,	0xFFFF0000, dest); e++;
+		rtr_mc_set(e, MCPL_BLOCK_DONE_TFILT,	0xFFFF0000, dest); e++;
+		rtr_mc_set(e, MCPL_RECV_END_OF_FRAME,	0xFFFF0000, dest); e++;
 		rtr_mc_set(e, MCPL_IGNORE_END_OF_FRAME, 0xFFFFFFFF, workers); e++;
+		rtr_mc_set(e, MCPL_BCAST_NET_REPLY,		0xFFFFFFFF, dest); e++;
 	}
 
 

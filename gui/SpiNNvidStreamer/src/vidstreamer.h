@@ -6,6 +6,7 @@
 #include <QTimer>
 #include <QCloseEvent>
 #include <QImage>
+#include <time.h>
 
 #include "cdecoder.h"
 #include "cscreen.h"
@@ -58,6 +59,9 @@ private:
 	bool edgeRenderingInProgress;
 	bool decoderIsActive;
     Ui::vidStreamer *ui;
+
+	int tictoc;
+	timespec tic, toc;
 
 protected:
 	void closeEvent(QCloseEvent *event);

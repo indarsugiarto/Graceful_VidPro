@@ -75,7 +75,7 @@
 /*-----------------------------------------------------------------------------------*/
 /*--------------------- Debugging and reporting definition --------------------------*/
 //#define DEBUG_LEVEL				0	// no debugging message at all
-#define DEBUG_LEVEL                 0
+#define DEBUG_LEVEL                 1
 // various report for debugging (send by host):
 #define DEBUG_REPORT_NWORKERS       1		// only leadAp (in all nodes)
 #define DEBUG_REPORT_WID            2		// only leadAp (in all nodes)
@@ -194,6 +194,8 @@
 // mechanism for discovery:
 #define MCPL_BCAST_INFO_KEY			0xbca50001	// for broadcasting ping and blkInfo
 #define MCPL_PING_REPLY				0x1ead0001
+#define MCPL_BCAST_NET_DISCOVERY	0x1ead0002	// root-leadAp broadcast this to all chips
+#define MCPL_BCAST_NET_REPLY		0x1ead0003	// leadAps respond with this
 
 // mechanism for broadcasting info
 #define MCPL_BCAST_OP_INFO          0xbca50002  // filtering & operator types
@@ -206,14 +208,16 @@
 #define MCPL_BCAST_RESET_NET        0xbca50009  // reset the network
 
 // mechanism for controlling the image processing
-#define MCPL_EDGE_DONE				0x1ead0003
+#define MCPL_EDGE_DONE				0x1ead0004
+#define MCPL_FILT_DONE				0x1ead0005
 
 // special key (with values)
 //#define MCPL_BLOCK_DONE			0x1ead1ead	// should be sent to <0,0,1>
 //#define MCPL_BLOCK_DONE_TEDGE   0x1eaddea1 // should be sent to <0,0,1>
 #define MCPL_BLOCK_DONE_TEDGE		0xdea10000	// for sending block done with info nodeID + perf
-#define MCPL_RECV_END_OF_FRAME		0xdea20000	// for sending SDP_PORT_FRAME_END to LEAD_CORE
-#define MCPL_IGNORE_END_OF_FRAME	0xdea30000	// LEAD_CORE broadcast this because it has
+#define MCPL_BLOCK_DONE_TFILT		0xdea20000	//
+#define MCPL_RECV_END_OF_FRAME		0xdea40000	// for sending SDP_PORT_FRAME_END to LEAD_CORE
+#define MCPL_IGNORE_END_OF_FRAME	0xdea50000	// LEAD_CORE broadcast this because it has
 												// already received SDP_PORT_FRAME_END
 
 // special key for communication with the profiler

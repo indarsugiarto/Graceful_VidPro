@@ -268,6 +268,11 @@ send_result_info_t sendResultInfo;
 /*-----------------------------------------------------------------------------------*/
 /*-------------------------- Global/Static Variables --------------------------------*/
 
+// how many chips are responding
+uint nChipAlive;
+ushort aliveNodeAddr[MAX_NODES];
+
+
 // newImageFlag will be set on in the beginning or when the host send something via
 // SDP_PORT_FRAME_END, and it will be set off when any pixel arrives.
 // newImageFlag will be usedful to indicate if the new image just arrives, for example
@@ -295,6 +300,7 @@ block_info_t *blkInfo;			// general frame info stored in sysram, to be shared wi
 w_info_t workers;				// specific info each core should hold individually
 uchar needSendDebug;
 uint myCoreID;
+uint myChipID;
 uint dmaTID;
 
 // nFiltJobDone and nEdgeJobDone are deprecated!!!

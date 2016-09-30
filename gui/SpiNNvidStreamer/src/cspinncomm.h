@@ -75,7 +75,8 @@ public slots:
 	void readDebug();
 	void configSpin(quint8 SpinIdx, quint8 nodesNum,
 					quint8 edgeOperator, quint8 withFiltering,
-					quint8 withSharping, quint8 freq, quint8 nCorePreProc);
+					quint8 withSharping, quint8 freq, quint8 nCorePreProc,
+					int delF);
 	void frameInfo(int imgW, int imgH);
 	void frameIn(const QImage &);
 	void sendImgLine(sdp_hdr_t h, uchar *pixel, quint16 len);
@@ -103,6 +104,8 @@ private:
     QByteArray hdr(sdp_hdr_t h);
     QByteArray scp(cmd_hdr_t cmd);
     sdp_hdr_t get_hdr(QByteArray const &ba);
+
+	int sdpDelayFactor;
 
 	quint32 wImg, hImg, szImg;
 	quint8 N_nodes;					// how many nodes are used in the network?
