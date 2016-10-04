@@ -43,15 +43,27 @@ static const short LAP[5][5] = {{-1,-1,-1,-1,-1},
 
 /* Gaussian filter. Ref:  en.wikipedia.org/wiki/Canny_edge_detector */
 // with sigma  = 1.4
-static const short FILT[5][5] = {{2,4,5,4,2},
+/*
+static const uchar FILT[5][5] = {{2,4,5,4,2},
 				   {4,9,12,9,4},
 				   {5,12,15,12,5},
 				   {4,9,12,9,4},
 				   {2,4,5,4,2}};
-static const short FILT_DENOM = 159;
+static const uchar FILT_DENOM = 159;
+*/
+// based on: http://homepages.inf.ed.ac.uk/rbf/HIPR2/gsmooth.htm
 
+static const short FILT[5][5] = {{1,4,7,4,1},
+				   {4,16,26,16,4},
+				   {7,26,41,26,7},
+				   {4,16,26,16,4},
+				   {1,4,7,4,1}};
+static const short FILT_DENOM = 273;
 
-
+/*
+static const uchar FILT[5][5] = {1};
+static const uchar FILT_DENOM = 25;
+*/
 /*------------------------ Struct, Enum, Type definition ----------------------------*/
 // block info
 typedef struct block_info {
@@ -267,6 +279,9 @@ send_result_info_t sendResultInfo;
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
 /*-------------------------- Global/Static Variables --------------------------------*/
+
+// are we running in release mode or debug mode?
+char signature[15];	// Will display [SpiNNVid] or [SpiNNVid-dbg-x]
 
 // how many chips are responding
 uint nChipAlive;

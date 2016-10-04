@@ -329,6 +329,7 @@ uchar get_block_id()
 					   5,5,5,5,5,5,
 						 6,6,6,6,6,
 						   7,7,7,7};
+
 	for(uchar i=0; i<48; i++) {
 		if((CHIP_X(sv->p2p_addr)==x[i]) && (CHIP_Y(sv->p2p_addr)==y[i])) {
 			N = i;

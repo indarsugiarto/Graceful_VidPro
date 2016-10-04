@@ -14,3 +14,14 @@
 ---------------------------
 28 Juli 2016:
 - Test broadcasted MCPL step-by-step (dengan delay supaya bisa dilihat dengan io_printf
+
+---------------------------
+2 Oct 2016:
+- If using 48 nodes, and all nodes send MCPL_BLOCK_DONE_TEDGE, the LEAD_CORE in root-node
+  sometimes misses the packet (although not dropped).
+  Solution:
+  - split the MCPL and processed by two cores: NO! Too complicated for counting how-many
+  - using FR: NO! also too complicated (its routing handle)
+  - ignore MCPL_BLOCK_DONE and continue with the next task, assuming that sending result
+    will long enough to make other nodes complete their tasks
+

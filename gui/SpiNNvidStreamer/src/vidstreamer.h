@@ -63,6 +63,8 @@ private:
 	int tictoc;
 	timespec tic, toc;
 
+	QString currDir;
+
 protected:
 	void closeEvent(QCloseEvent *event);
 };

@@ -33,6 +33,9 @@
 
 #define IDLE_VIC_SLOT           SLOT_FIQ
 
+#define MY_CODE					1
+#define PATRICK_CODE			2
+#define READING_VERSION			MY_CODE	// 1 = mine, 2 = patrick's
 
 
 // related with frequency scalling
@@ -142,9 +145,10 @@ static uchar memTable[lnMemTable][wdMemTable] = {
 
 // communication with other cores via MCPL
 void hMCPL_profiler(uint key, uint payload);
+void hSDP_profiler(uint mBox, uint port);
 
 // temperature-related
-void readTemp();
+REAL readTemp();
 
 // frequency-related
 void getFreqParams(uint f, uint *ms, uint *ns);
@@ -164,14 +168,18 @@ void getProcUtil(uint idleCntr[18], uchar format);
 // initProfiler() will set the CPUs frequency to cpuFreq and return
 // the current (real?) frequency -> can be used for reporting/debugging
 uint initProfiler();		// mainly for changing PLL-2
+void initProfilerSDP();
+void collectReport();
 void terminateProfiler(uint cpuFreq);	// and for restoring PLL-2
 
 
 /*----------------------------------------------------------------*/
 /*----------------------------------------------------------------*/
 /*---------------------------- variables -------------------------*/
+sdp_msg_t reportMsg;				// prepare the reply message
 
 /* global variables */
+uint myCoreID;
 uchar myPhyCore;
 
 // are we going to run adaptively ?

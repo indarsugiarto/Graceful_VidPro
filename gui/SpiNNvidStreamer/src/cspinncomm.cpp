@@ -26,10 +26,17 @@ int imgBufAddrCntr;
 
 // TODO: the following X_CHIPS and Y_CHIPS should be configurable
 // but now, let's make it convenient
+/*
 uchar cSpiNNcomm::X_CHIPS[48] = {0,1,0,1,2,3,4,2,3,4,5,0,1,2,3,4,5,6,0,1,2,3,4,5,
                                  6,7,1,2,3,4,5,6,7,2,3,4,5,6,7,3,4,5,6,7,4,5,6,7};
 uchar cSpiNNcomm::Y_CHIPS[48] = {0,0,1,1,0,0,0,1,1,1,1,2,2,2,2,2,2,2,3,3,3,3,3,3,
                                  3,3,4,4,4,4,4,4,4,5,5,5,5,5,5,6,6,6,6,6,7,7,7,7};
+*/
+// with circular rings
+uchar cSpiNNcomm::X_CHIPS[48] = {0,1,1,0,2,2,2,1,0,3,3,3,3,2,1,0,4,4,4,4,4,3,2,1,
+                                 5,5,5,5,5,4,3,2,6,6,6,6,6,5,4,3,7,7,7,7,7,6,5,4};
+uchar cSpiNNcomm::Y_CHIPS[48] = {0,0,1,1,0,1,2,2,2,0,1,2,3,3,3,3,0,1,2,3,4,4,4,4,
+                                 1,2,3,4,5,5,5,5,2,3,4,5,6,6,6,6,3,4,5,6,7,7,7,7};
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -193,15 +200,6 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
 	qDebug() << QString("opType = %1, wFilter = %2, wHistEq = %3, freq = %4")
 				.arg(opType).arg(wFilter).arg(wHistEq).arg(freq);
 
-
-    /*
-    if(opType==0) qDebug() << "Will use Sobel operator"; else
-                  qDebug() << "Will use Laplace operator";
-    if(wFilter==0) qDebug() << "Will use no filtering"; else
-                   qDebug() << "Will use filtering";
-    if(wHistEq==0) qDebug() << "Will use no sharpening"; else
-                   qDebug() << "Will use sharpening";
-    */
 
     // send to spinnaker
 	hdrc.srce_port = freq;

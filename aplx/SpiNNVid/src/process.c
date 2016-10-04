@@ -121,14 +121,29 @@ void computeWLoad(uint withReport, uint arg1)
 	}
 	// then compute the blkStart according to wl (block-size)
 	ushort blkStart, blkEnd;
+	ushort skippedLines;
+
 	// for root, it should start at 0 position
 	if(sv->p2p_addr==0)	{
 		blkStart = 0;
 		blkEnd = wl[0] - 1;
 	}
 	else {
+		i = 0;
+		skippedLines = 0;
+		do {
+			skippedLines += wl[i];
+			i++;
+		} while(i<nodeBlockID);
+
+
+		blkStart = skippedLines;
+		blkEnd = blkStart + wl[nodeBlockID] - 1;
+
+		/*
 		blkStart = nodeBlockID*wl[nodeBlockID-1];
 		blkEnd = blkStart + wl[nodeBlockID] - 1;
+		*/
 	}
 	// then locally record these block info
 	workers.nLinesPerBlock = wl[nodeBlockID];
@@ -565,9 +580,18 @@ void notifyTaskDone()
 	spin1_schedule_callback(taskProcessingLoop, 0, 0, PRIORITY_PROCESSING);
 }
 
+/* taskProcessingLoop() is the entry point for the task iteration.
+ * It should be accessible only to root-leadAp.
+ * It is firstly called after SDP_PORT_FRAME_END and iteratively called when
+ * a task (according to taskList) is completed.
+ * */
 void taskProcessingLoop(uint frameID, uint arg1)
 {
+	if(sv->p2p_addr != 0) return;
+	if(myCoreID!=LEAD_CORE) return;
+
 	// first, block other cores for sending MCPL_RECV_END_OF_FRAME
+	// this is useful especially when detecting SDP_PORT_FRAME_END
 	spin1_send_mc_packet(MCPL_IGNORE_END_OF_FRAME, frameID, WITH_PAYLOAD);
 
 #if(DEBUG_LEVEL>0)
@@ -590,6 +614,8 @@ void taskProcessingLoop(uint frameID, uint arg1)
 #endif
 		// broadcast the current task to all cores...
 		// the MCPL_BCAST_START_PROC will trigger triggerProcessing(taskID)
+		// this MCPL_BCAST_START_PROC is broadcasted to all leadAp (including to the root-node)
+		// and will trigger triggerProcessing() in all cores
 		spin1_send_mc_packet(MCPL_BCAST_START_PROC, (uint)taskList.cTask, WITH_PAYLOAD);
 	}
 	else {
@@ -758,7 +784,8 @@ void imgFiltering(uint arg0, uint arg1)
 
 	uint offset = 2 * workers.wImg;	// if using 5x5 Gaussian kernel
 
-	short l,c,n,i,j;
+	short l,c,n;
+	uchar i,j;
 	uchar *dtcmLine;
 	uint dmatag;
 	int sumXY;
@@ -785,30 +812,34 @@ void imgFiltering(uint arg0, uint arg1)
 		while(dmaImgFromSDRAMdone==0) {
 		}
 
-		dtcmLine = dtcmImgBuf + offset;
+		dtcmLine = dtcmImgFilt + offset;
 
 		// scan for all column in the line
 		for(c=0; c<workers.wImg; c++) {
 			sumXY = 0;
 			if((workers.startLine+l) < 2 || (workers.hImg-workers.startLine+l) <= 2)
-				sumXY = 0;
+				//sumXY = 0;
+				sumXY = *(dtcmLine + c + i + j*workers.wImg);
 			else if(c<2 || (workers.wImg-c)<=2)
-				sumXY = 0;
+				//sumXY = 0;
+				sumXY = *(dtcmLine + c + i + j*workers.wImg);
 			else {
-				for(i=-1; i<=2; i++)
+				for(i=-2; i<=2; i++)
 					for(j=-2; j<=2; j++) {
 						//sumXY += (int)((*(dtcmLine + c + i + j*workers.wImg)) * LAP[i+2][j+2]);
-						sumXY += (int)((*(dtcmLine + c + i + j*workers.wImg)) * FILT[i+2][j+2]);
-						//sumXY /= FILT_DENOM;
+						sumXY += (int)((*(dtcmLine + c + j + i*workers.wImg)) * FILT[i+2][j+2]);
+						//sumXY += (int)(FILT[i+2][j+2] * (*(dtcmLine + c + i + j*workers.wImg)));
 				}
 			}
 
 			sumXY /= FILT_DENOM;
+			//io_printf(IO_BUF, "%d\n",sumXY);
 			// make necessary correction
 			if(sumXY>255) sumXY = 255;
-			if(sumXY<0) sumXY = 0;
+			//if(sumXY<0) sumXY = 0;
 
 			*(resImgBuf + c) = (uchar)(sumXY);
+			//*(resImgBuf + c) = 255 - (uchar)(sumXY);
 
 		} // end for c-loop
 
@@ -827,6 +858,11 @@ void imgFiltering(uint arg0, uint arg1)
 	} // end for l-loop
 
 	perf.tCore = READ_TIMER();
+
+
+	// EXPERIMENT: what if we just proceed with the next task?
+	notifyTaskDone();
+	return;
 
 	// at the end, send MCPL_EDGE_DONE to local leadAp (including the leadAp itself)
 #if (DEBUG_LEVEL > 1)
@@ -934,7 +970,8 @@ void imgDetection(uint arg0, uint arg1)
 				else if(c<2 || (workers.wImg-c)<=2)
 					sumXY = 0;
 				else {
-					for(i=-1; i<=2; i++)
+					//for(i=-1; i<=2; i++)
+					for(i=-2; i<=2; i++)
 						for(j=-2; j<=2; j++)
 							sumXY += (int)((*(dtcmLine + c + i + j*workers.wImg)) * LAP[i+2][j+2]);
 				}
@@ -944,10 +981,7 @@ void imgDetection(uint arg0, uint arg1)
 			if(sumXY>255) sumXY = 255;
 			if(sumXY<0) sumXY = 0;
 
-			if(workers.opType==IMG_SOBEL)
-				*(resImgBuf + c) = 255 - (uchar)(sumXY);
-			else
-				*(resImgBuf + c) = (uchar)(sumXY);
+			*(resImgBuf + c) = 255 - (uchar)(sumXY);
 
 		} // end for c-loop
 
@@ -973,6 +1007,11 @@ void imgDetection(uint arg0, uint arg1)
 	} // end for l-loop
 
 	perf.tCore = READ_TIMER();
+
+
+	// EXPERIMENT: at the end, just proceed with the next task
+	notifyTaskDone();
+	return;
 
 	// at the end, send MCPL_EDGE_DONE to local leadAp (including the leadAp itself)
 #if (DEBUG_LEVEL > 1)
@@ -1026,8 +1065,8 @@ void debugSDP(ushort line, uchar chunkID, ushort nData)
 void sendImgChunkViaSDP(uint line, uchar * pxbuf, uint alternativeDelay)
 {
 
-#if (DEBUG_LEVEL > 3)
-	io_printf(IO_STD, "sending result via sdp...\n");
+#if (DEBUG_LEVEL > 0)
+	io_printf(IO_STD, "sending line-%d via sdp...", line);
 #endif
 
 	sendResultInfo.sdpReady = FALSE;
@@ -1061,6 +1100,9 @@ void sendImgChunkViaSDP(uint line, uchar * pxbuf, uint alternativeDelay)
 		rem -= sz;
 	} while(rem > 0);
 	sendResultInfo.sdpReady = TRUE;
+#if (DEBUG_LEVEL > 0)
+	io_printf(IO_STD, "done!\n", line);
+#endif
 }
 
 
@@ -1337,9 +1379,9 @@ void sendResultProcessCmd(uint line, uint null)
 	//io_printf(IO_BUF, "Got MCPL_SEND_PIXELS_CMD line-%d\n", line);
 	// first, check if the line is within our block
 	if(line>=workers.blkStart && line<=workers.blkEnd) {
-
-		//io_printf(IO_BUF, "respond to MCPL_SEND_PIXELS_CMD, will send line-%d\n", line); //sark_delay_us(1000);
-
+#if(DEBUG_LEVEL>1)
+		io_printf(IO_STD, "respond to MCPL_SEND_PIXELS_CMD, will send line-%d\n", line); //sark_delay_us(1000);
+#endif
 		// fetch from sdram
 		uchar *imgOut;
 		imgOut  = (uchar *)getSdramResultAddr();

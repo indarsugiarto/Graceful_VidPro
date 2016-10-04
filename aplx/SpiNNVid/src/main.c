@@ -9,31 +9,37 @@ void SpiNNVid_greetings()
 	char *stream = sv->p2p_addr == 0 ? IO_STD : IO_BUF;
 	if(myCoreID != LEAD_CORE) stream = IO_BUF;
 
-// deprecated: if using fix number of nodes
-#ifdef USE_FIX_NODES
-#if (FWD_FULL_COLOR==TRUE)
-	io_printf(stream, "[SpiNNVid-v%d.%d] for Spin%d with CONFIGURABLE_NODES and FWD_RGB\n",
-				  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
+	char tgt[8];
+	char cfgNode[20];
+	char fwdMode[9];
+#if(DESTINATION==DEST_FPGA)
+	io_printf(tgt, "FPGA");
 #else
-	io_printf(stream, "[SpiNNVid-v%d.%d] for Spin%d with CONFIGURABLE_NODES and FWD_GRAY\n",
-				  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
+	io_printf(tgt, "Host-PC");
+#endif
+#ifdef USE_FIX_NODES
+	// deprecated: if using fix number of nodes
+	io_printf(cfgNode, "FIXED_NODES");
+#else
+	// recent version: using configurable nodes
+	io_printf(cfgNode, "CONFIGURABLE_NODES");
+#endif
+#if(FWD_FULL_COLOR==TRUE)
+	io_printf(fwdMode, "FWD_RGB");
+#else
+	io_printf(fwdMode, "FWD_GRAY");
 #endif
 
-#else
-// recent version: using configurable nodes
-#if (FWD_FULL_COLOR==TRUE)
-	io_printf(stream, "[SpiNNVid-v%d.%d] for Spin%d with CONFIGURABLE_NODES and FWD_RGB\n",
-				  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
-#else
-	io_printf(stream, "[SpiNNVid-v%d.%d] for Spin%d with CONFIGURABLE_NODES and FWD_GRAY\n",
-				  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
-#endif
-#endif
+	io_printf(stream, "%s Version %d.%d for Spin%d\n", signature,
+			  MAJOR_VERSION, MINOR_VERSION, USING_SPIN);
+	io_printf(stream, "%s Setup with %s, %s, and %s\n", signature,
+				  tgt, cfgNode, fwdMode);
+
 #if(DEBUG_LEVEL>2)
 	io_printf(stream, "[SpiNNVid] Initialization...\n");
 #endif
 
-	// small delay, so all chips can be seen on Tubotron
+	// small delay, so all chips can be ready
 	sark_delay_us(get_block_id() * 1000);
 }
 
@@ -42,6 +48,13 @@ void c_main()
 {
 	// do sanity check: check if the board (Spin3 or Spin5) and app-id are correct
 	initCheck();
+
+	// create signature
+#if(DEBUG_LEVEL==0)
+	io_printf(signature, "[SpiNNVid]");
+#else
+	io_printf(signature, "[SpiNNVid-dbg-%d]", DEBUG_LEVEL);
+#endif
 
 	// first thing: am I a profiler or a SpiNNVid?
 	myCoreID = sark_core_id();
@@ -52,7 +65,8 @@ void c_main()
 	}
 
 #if (DESTINATION==DEST_FPGA)
-	rtr_fr_set(1 << 4);	// send to link-4, where FPGA is connected to
+	if(sv->p2p_addr==0)
+		rtr_fr_set(1 << 4);	// send to link-4, where FPGA is connected to
 #endif
 
 	/*  allocate ?pxbuf

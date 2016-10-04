@@ -14,6 +14,7 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	edgeRenderingInProgress(false),
 	decoderIsActive(false),
 	tictoc(0),
+	currDir("../../../../Graceful_VidPro_Media/images"),
     ui(new Ui::vidStreamer)
 {
     ui->setupUi(this);
@@ -67,9 +68,9 @@ vidStreamer::vidStreamer(QWidget *parent) :
 
 	//refresh->setInterval(20);   // which produces roughly 50fps
 	//refresh->setInterval(40);   // which produces roughly 25fps
-	//refresh->setInterval(100);   // which produces roughly 10fps
+	refresh->setInterval(100);   // which produces roughly 10fps
 	//refresh->setInterval(1000);   // which produces roughly 1fps
-	refresh->setInterval(500);   // which produces roughly 2fps
+	//refresh->setInterval(500);   // which produces roughly 2fps
 	//refresh->setInterval(250);   // which produces roughly 4fps
 	//refresh->setInterval(50);   // which produces roughly 20fps
 	//refresh->setInterval(2000);   // which produces roughly 0.5fps
@@ -250,7 +251,7 @@ void vidStreamer::refreshUpdate()
 	// to the video decoder
 
 	// debugging: bypassing edgeRenderingInProgress:
-	//edgeRenderingInProgress = false;
+	edgeRenderingInProgress = false;
 
 	timespec temp;
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &temp);
@@ -315,10 +316,11 @@ void vidStreamer::pbImageClicked()
 
     /* Test-1: Send QImage-frame to SpiNNaker and display the result */
     if(experiment == 0) {
-        imgFilename = QFileDialog::getOpenFileName(this, "Open Image File", "../../../images", "*");
+        imgFilename = QFileDialog::getOpenFileName(this, "Open Image File", currDir, "*");
         if(imgFilename.isEmpty())
             return;
     }
+    currDir = QFileInfo(imgFilename).path(); // store path for next time
 
 	if(experiment == 0)
 		screen->show();
@@ -400,21 +402,21 @@ void vidStreamer::frameSent()
 
 void vidStreamer::edgeRenderingDone()
 {
-		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &toc);
-		timespec temp;
-		quint64 df_ns;
-		double fps;
-		if ((toc.tv_nsec-tic.tv_nsec)<0) {
-			temp.tv_sec = toc.tv_sec-tic.tv_sec-1;
-			temp.tv_nsec = 1000000000+toc.tv_nsec-tic.tv_nsec;
-		} else {
-			temp.tv_sec = toc.tv_sec-tic.tv_sec;
-			temp.tv_nsec = toc.tv_nsec-tic.tv_nsec;
-		}
-		// difference in nanosecond
-		df_ns = temp.tv_sec*1000000000+temp.tv_nsec;
-		fps = 1000000000.0/(double)df_ns;
-		qDebug() << QString("fps = %1").arg((int)round(fps));
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &toc);
+	timespec temp;
+	quint64 df_ns;
+	double fps;
+	if ((toc.tv_nsec-tic.tv_nsec)<0) {
+		temp.tv_sec = toc.tv_sec-tic.tv_sec-1;
+		temp.tv_nsec = 1000000000+toc.tv_nsec-tic.tv_nsec;
+	} else {
+		temp.tv_sec = toc.tv_sec-tic.tv_sec;
+		temp.tv_nsec = toc.tv_nsec-tic.tv_nsec;
+	}
+	// difference in nanosecond
+	df_ns = temp.tv_sec*1000000000+temp.tv_nsec;
+	fps = 1000000000.0/(double)df_ns;
+	qDebug() << QString("fps = %1").arg((int)round(fps));
 
 
 	// indicate that the "edge" widget is finish in rendering a frame

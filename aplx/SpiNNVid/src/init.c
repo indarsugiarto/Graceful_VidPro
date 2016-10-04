@@ -48,14 +48,17 @@ void releaseImgBuf()
 {
 	if(blkInfo->imgRIn != NULL) {
 #if(DEBUG_LEVEL>1)
-		io_printf(IO_BUF, "[IMGBUF] Releasing SDRAM heap...\n");
+		if(sv->p2p_addr==0)
+			io_printf(IO_STD, "[IMGBUF] Releasing SDRAM heap...\n");
+		else
+			io_printf(IO_BUF, "[IMGBUF] Releasing SDRAM heap...\n");
 #endif
-		sark_free(blkInfo->imgRIn);
-		sark_free(blkInfo->imgGIn);
-		sark_free(blkInfo->imgBIn);
-		sark_free(blkInfo->imgOut1);
-		//sark_free(blkInfo->imgOut2);
-		//sark_free(blkInfo->imgOut3);
+		sark_xfree(sv->sdram_heap, blkInfo->imgRIn, ALLOC_LOCK);
+		sark_xfree(sv->sdram_heap, blkInfo->imgGIn, ALLOC_LOCK);
+		sark_xfree(sv->sdram_heap, blkInfo->imgBIn, ALLOC_LOCK);
+		sark_xfree(sv->sdram_heap, blkInfo->imgOut1, ALLOC_LOCK);
+		//sark_xfree(sv->sdram_heap, blkInfo->imgOut2, ALLOC_LOCK);
+		//sark_xfree(sv->sdram_heap, blkInfo->imgOut3, ALLOC_LOCK);
 	}
 }
 
@@ -64,6 +67,9 @@ void releaseImgBuf()
 void allocateImgBuf()
 {
 #if(DEBUG_LEVEL>1)
+	if(sv->p2p_addr==0)
+		io_printf(IO_STD, "[IMGBUF] Allocating SDRAM heap...\n");
+	else
 		io_printf(IO_BUF, "[IMGBUF] Allocating SDRAM heap...\n");
 #endif
 
@@ -460,6 +466,10 @@ void initIPTag()
 		// set the debug tag
 		iptag.arg1 = (1 << 16) + SDP_TAG_DEBUG;
 		iptag.arg2 = SDP_UDP_DEBUG_PORT;
+		spin1_send_sdp_msg(&iptag, 10);
+		// set the profiler tag
+		iptag.arg1 = (1 << 16) + SDP_TAG_PROFILER;
+		iptag.arg2 = SDP_UDP_PROFILER_PORT;
 		spin1_send_sdp_msg(&iptag, 10);
 	}
 }

@@ -12,14 +12,17 @@
 
 void c_main()
 {
-	if(sark_core_id() != PROF_CORE) {
+	myCoreID = sark_core_id();
+	if(myCoreID != PROF_CORE) {
 		io_printf(IO_STD, "Invalid core! Put me in core-%d!\n", PROF_CORE);
 	} else {
 		initProfiler();
+		initProfilerSDP();
 
 		/*----------------------------------------------------------------------------*/
 		/*--------------------------- register callbacks -----------------------------*/
-		spin1_callback_on(MCPL_PACKET_RECEIVED, hMCPL_profiler, PRIORITY_PROCESSING);
+		spin1_callback_on(MCPL_PACKET_RECEIVED, hMCPL_profiler, PRIORITY_URGENT);
+		spin1_callback_on(SDP_PACKET_RX, hSDP_profiler, PRIORITY_SDP);
 
 		spin1_start(SYNC_NOWAIT);	// timer2-nya jadi ndak jalan!!!
 		// cpu_sleep();	// nah, kalo pakai timer-2, apakah hMCPL_profiler bisa jalan?
@@ -34,6 +37,37 @@ void c_main()
 /*----------------------------------------------------------------*/
 /*------------------- function implementations -------------------*/
 
+
+void initProfilerSDP()
+{
+	// prepare the reply message
+	reportMsg.flags = 0x07;	//no reply
+	reportMsg.tag = SDP_TAG_PROFILER;
+	reportMsg.srce_port = (SDP_PORT_PROFILER_RPT << 5) + myCoreID;
+	reportMsg.srce_addr = sv->p2p_addr;
+	reportMsg.dest_port = PORT_ETH;
+	reportMsg.dest_addr = sv->eth_addr;
+	reportMsg.length = sizeof(sdp_hdr_t) + sizeof(cmd_hdr_t) + 18;	// it's fix, 18-cores!
+}
+
+void hSDP_profiler(uint mBox, uint port)
+{
+
+}
+
+void collectReport()
+{
+	// read the temperature
+	readTemp();
+
+	// send via sdp
+
+	// reset the counters
+	for(_idleCntr=0; _idleCntr<18; _idleCntr++)
+		cpuIdleCntr[_idleCntr] = 0;
+	idle_collect_cntr = 0;
+}
+
 // use timer2 to handle idle processing. Prepare timer2:
 void idle(uint tick, uint arg1)
 {
@@ -46,10 +80,7 @@ void idle(uint tick, uint arg1)
 	//myOwnIdleCntr++;
 
 	if(idle_collect_cntr >= IDLE_COLLECT_PERIOD) {
-	  for(_idleCntr=0; _idleCntr<18; _idleCntr++)
-		  cpuIdleCntr[_idleCntr] = 0;
-	  idle_collect_cntr = 0;
-
+		collectReport();
 	}
 	else {
 	  idle_collect_cntr++;
@@ -120,7 +151,7 @@ uint initProfiler()
 	normIdleCntr = 100.0/maxIdleCntr;
 
 
-	// setup timer-2 to handle the idle process
+	// setup the timer to handle the idle process
 	// Due to spin1_start() and cpu_sleep() problem, we use Timer-1
 	setup_Timer_for_idle_proc();
 
@@ -438,15 +469,14 @@ void readPLL(uint chip_addr, uint null)
 /*----------------------------------------------------------------------*/
 /*----------------------- Temperature Measurement -----------------------*/
 // in readTemp(), read the sensors and put the result in tempVal[]
-#define MY_CODE			1
-#define PATRICK_CODE	2
-#define READING_VERSION	MY_CODE	// 1 = mine, 2 = patrick's
-void readTemp()
+REAL readTemp()
 {
+	REAL result;
 #if (READING_VERSION==1)
 	uint i, done, S[] = {SC_TS0, SC_TS1, SC_TS2};
 
-	for(i=0; i<3; i++) {
+	// in this version, we'll use only sensor-2
+	for(i=2; i<3; i++) {
 		done = 0;
 		// set S-flag to 1 and wait until F-flag change to 1
 		sc[S[i]] = 0x80000000;
@@ -457,6 +487,9 @@ void readTemp()
 		sc[S[i]] = sc[S[i]] & 0x0FFFFFFF;
 		tempVal[i] = sc[S[i]] & 0x00FFFFFF;
 	}
+
+	// then convert from uint to REAL value
+
 
 #elif (READING_VERSION==2)
 	uint k, temp1, temp2, temp3;
@@ -497,6 +530,8 @@ void readTemp()
 	tempVal[1] = temp2;
 	tempVal[2] = temp3;
 #endif
+
+	return result;
 }
 
 /*____________________________________________ Temperature Measurement __*/

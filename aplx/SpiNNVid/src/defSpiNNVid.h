@@ -75,7 +75,7 @@
 /*-----------------------------------------------------------------------------------*/
 /*--------------------- Debugging and reporting definition --------------------------*/
 //#define DEBUG_LEVEL				0	// no debugging message at all
-#define DEBUG_LEVEL                 1
+#define DEBUG_LEVEL                 0
 // various report for debugging (send by host):
 #define DEBUG_REPORT_NWORKERS       1		// only leadAp (in all nodes)
 #define DEBUG_REPORT_WID            2		// only leadAp (in all nodes)
@@ -122,6 +122,8 @@
 #define SDP_UDP_RESULT_PORT        	20002
 #define SDP_TAG_DEBUG				3
 #define SDP_UDP_DEBUG_PORT			20003
+#define SDP_TAG_PROFILER			4
+#define SDP_UDP_PROFILER_PORT		20004
 
 #define SDP_PORT_R_IMG_DATA			1	// port for sending R-channel
 #define SDP_PORT_G_IMG_DATA			2	// port for sending G-channel
@@ -131,6 +133,7 @@
 #define SDP_PORT_FPGA_OUT			5
 #define SDP_PORT_HISTO				6
 #define SDP_PORT_CONFIG				7	// for sending image/frame info
+#define SDP_PORT_PROFILER_RPT		7
 
 // special for sending result and notification, srce_port can be used for chunk counter
 // while srce_addr can be used as line number of the image
@@ -158,8 +161,9 @@
 #define DEF_QT_WAIT_VAL				200	// in nanosecond
 #define DEF_PY_WAIT_VAL				200
 // for sending chunks from spinnaker:
-#define DEF_DEL_VAL					900  // perfect, up to 5.7MBps
-//#define DEF_DEL_VAL					1800
+#define DEF_DEL_VAL					300  // ok for image, not for video
+//#define DEF_DEL_VAL					900  // perfect, up to 5.7MBps
+//#define DEF_DEL_VAL					1200
 #define DEF_FR_DELAY				200
 
 #define DEF_PXLEN_IN_CHUNK	272

@@ -52,6 +52,5 @@
 *.pyc
 *.pro.user*
 *.aplx
-run*
 *.jpg*
 *.png*

@@ -5,6 +5,7 @@
 /*------------------------------------------------------------------------------*/
 /*------------------- Sub functions called by main handler ---------------------*/
 
+
 void build_task_list()
 {
 	uchar n = 0;
@@ -382,6 +383,11 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 
 	// MCPL_EDGE_DONE is sent by every core to leadAp within a node
 	else if(key==MCPL_EDGE_DONE) {
+
+
+		// so, what if we ignore it?
+		return;	// so that we can proceed with the next task
+
 		// the payload carries information about timing
 		//nEdgeJobDone++; --> deprecated!!!
 		nWorkerDone++;
@@ -409,6 +415,10 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 
 	// MCPL_FILT_DONE is sent by every core to leadAp in the node
 	else if(key==MCPL_FILT_DONE) {
+
+		// the same, what if we ignore it?
+		return;
+
 		nWorkerDone++;
 		perf.tNode += payload;
 		if(nWorkerDone==workers.tRunning) {
@@ -424,6 +434,10 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	// MCPL_BLOCK_DONE_TEDGE is sent by each node to <0,0,LEAD_CORE>,
 	// which contains node-ID and perf
 	else if(key_hdr == MCPL_BLOCK_DONE_TEDGE) {
+
+		// what if we ignore it?
+		return;
+
 		nBlockDone++;
 
 		// collect measurement for each processing
@@ -443,6 +457,9 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 
 	// MCPL_BLOCK_DONE_TFILT is sent by each node to root-leadAp
 	else if(key_hdr == MCPL_BLOCK_DONE_TFILT) {
+
+		// the same here, what if we ignore it?
+		return;
 
 		// collect measurement for each processing
 		nBlockDone++;
