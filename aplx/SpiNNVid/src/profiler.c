@@ -19,6 +19,22 @@ void c_main()
 		initProfiler();
 		initProfilerSDP();
 
+
+		// experiment: let's use 250MHz for the root-node:
+		if(sv->p2p_addr==0){
+			io_printf(IO_STD, "[PROFILER] Set freq to 235MHz!\n");
+			changeFreq(235);
+		}
+		spin1_schedule_callback(readPLL, 1, 0, PRIORITY_PROCESSING);
+		/* Result:
+		 * 1 with 240MHz, root-node seems work just fine: BUT just once!
+		 *   next image load, the node dies!
+		 *   by setting delay factor 500 (in my laptop), we got 8.2MBps with perfect result
+		 * 2 with 235MHz, root-node alives and work well!
+		 *   by setting delaz factor 500 (in my laptop), we got 8MBps with perfect result
+		 *   (with or without edge detection)
+		 * */
+
 		/*----------------------------------------------------------------------------*/
 		/*--------------------------- register callbacks -----------------------------*/
 		spin1_callback_on(MCPL_PACKET_RECEIVED, hMCPL_profiler, PRIORITY_URGENT);
@@ -63,6 +79,7 @@ void collectReport()
 	// send via sdp
 
 	// reset the counters
+	uint _idleCntr;
 	for(_idleCntr=0; _idleCntr<18; _idleCntr++)
 		cpuIdleCntr[_idleCntr] = 0;
 	idle_collect_cntr = 0;

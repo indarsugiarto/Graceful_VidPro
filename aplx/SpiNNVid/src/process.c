@@ -1091,7 +1091,9 @@ void sendImgChunkViaSDP(uint line, uchar * pxbuf, uint alternativeDelay)
 
 		spin1_send_sdp_msg(&resultMsg, 10);
 		if(alternativeDelay==0)
-			giveDelay(DEF_DEL_VAL);	// if 900, this should produce 5.7MBps in 200MHz
+			//giveDelay(DEF_DEL_VAL);	// if 900, this should produce 5.7MBps in 200MHz
+			//experimen: jika hanya root-node yang kirim gray result
+			giveDelay(1200);	// if 900, this should produce 5.7MBps in 200MHz
 		else
 			giveDelay(alternativeDelay);
 
@@ -1136,7 +1138,13 @@ void sendResultToTargetFromRoot()
 	// io_printf(IO_BUF, "imgOut = 0x%x\n", imgOut);
 
 	uint dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
-	for(ushort lines=workers.blkStart; lines<=workers.blkEnd; lines++) {
+
+
+
+	//for(ushort lines=workers.blkStart; lines<=workers.blkEnd; lines++) {
+
+	//experiment: berapa cepat jika semua dikirim dari node-1
+	for(ushort lines=0; lines<=workers.hImg; lines++) {
 		// get the line from sdram
 		//imgOut += l*workers.wImg;
 
@@ -1338,6 +1346,10 @@ void sendResult(uint unused, uint arg1)
 	io_printf(IO_STD, "sendResultToTargetFromRoot()\n");
 #endif
 	sendResultToTargetFromRoot();
+
+	//experiment: seberapa cepat jika semua dikirim dari node-1
+	spin1_schedule_callback(notifyDestDone,0,0,PRIORITY_PROCESSING);
+	return;
 
 	// then the remaining nodes should execute sendResultToTarget()
 	sendResultInfo.nRemaining_MCPL_SEND_PIXELS = blkInfo->wImg % 4;

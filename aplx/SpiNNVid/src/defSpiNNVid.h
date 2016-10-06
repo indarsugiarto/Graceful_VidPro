@@ -161,8 +161,8 @@
 #define DEF_QT_WAIT_VAL				200	// in nanosecond
 #define DEF_PY_WAIT_VAL				200
 // for sending chunks from spinnaker:
-#define DEF_DEL_VAL					300  // ok for image, not for video
-//#define DEF_DEL_VAL					900  // perfect, up to 5.7MBps
+//#define DEF_DEL_VAL					300  // ok for image, not for video
+#define DEF_DEL_VAL					900  // perfect, up to 5.7MBps
 //#define DEF_DEL_VAL					1200
 #define DEF_FR_DELAY				200
 

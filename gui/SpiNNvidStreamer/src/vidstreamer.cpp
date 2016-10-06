@@ -68,10 +68,10 @@ vidStreamer::vidStreamer(QWidget *parent) :
 
 	//refresh->setInterval(20);   // which produces roughly 50fps
 	//refresh->setInterval(40);   // which produces roughly 25fps
-	refresh->setInterval(100);   // which produces roughly 10fps
+	//refresh->setInterval(100);   // which produces roughly 10fps
 	//refresh->setInterval(1000);   // which produces roughly 1fps
 	//refresh->setInterval(500);   // which produces roughly 2fps
-	//refresh->setInterval(250);   // which produces roughly 4fps
+	refresh->setInterval(250);   // which produces roughly 4fps
 	//refresh->setInterval(50);   // which produces roughly 20fps
 	//refresh->setInterval(2000);   // which produces roughly 0.5fps
 	refresh->start();

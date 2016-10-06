@@ -415,7 +415,7 @@
      </rect>
     </property>
     <property name="minimum">
-     <number>600</number>
+     <number>1</number>
     </property>
     <property name="maximum">
      <number>10000</number>
@@ -424,7 +424,7 @@
      <number>50</number>
     </property>
     <property name="value">
-     <number>600</number>
+     <number>500</number>
     </property>
    </widget>
   </widget>

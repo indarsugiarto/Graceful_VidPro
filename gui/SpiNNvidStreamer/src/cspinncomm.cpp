@@ -464,7 +464,7 @@ void cSpiNNcomm::frameIn(const QImage &f)
 	//int delVal = 600;	// just OK with single image
 	//int delVal = 1000;	// have distorted image on video
 	int delVal = sdpDelayFactor;	// can be configured from gui
-
+	qDebug() << QString("Using delay factor %1").arg(delVal);
 	// we work only with color images!!! No gray video :)
 	// NOTE: we cannot alter srce_addr, hence we encode the pxSeq into tag + srce_port
 	//		 so: tag==pxSeq.high and srce_port==pxSeq.low
