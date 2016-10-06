@@ -9,7 +9,8 @@ SOURCES += main.c \
     util.c \
     process.c \
     profiler.c \
-    isr.c
+    isr.c \
+    frameio.c
 
 INCLUDEPATH += /opt/spinnaker_tools_134/include
 
