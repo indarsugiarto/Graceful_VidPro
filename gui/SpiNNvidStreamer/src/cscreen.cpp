@@ -9,8 +9,8 @@ cScreen::cScreen(QWidget *parent) : QWidget(parent)
 	scene = new QGraphicsScene();
 
 	viewPort->setScene(scene);
-	viewPort->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	viewPort->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	//viewPort->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	//viewPort->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	viewPort->setBackgroundBrush(QBrush(Qt::black));
 	layout.addWidget(viewPort);
 	this->setLayout(&layout);

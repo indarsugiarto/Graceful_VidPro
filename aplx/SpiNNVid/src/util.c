@@ -40,6 +40,10 @@ void give_report(uint reportType, uint target)
 			io_printf(dest, "\n--- Network configuration ---\n");
 			io_printf(dest, "Node-ID  = %d\n", blkInfo->nodeBlockID);
 			io_printf(dest, "MaxBlock = %d\n", blkInfo->maxBlock);
+			io_printf(dest, "opType = %d\n", blkInfo->opType);
+			io_printf(dest, "opFilter = %d\n", blkInfo->opFilter);
+			io_printf(dest, "opSharpen = %d\n", blkInfo->opSharpen);
+			io_printf(dest, "SDPdelFac = %d\n", sdpDelayFactorSpin);
 			io_printf(dest, "-----------------------------\n");
 		}
 		else if(reportType==DEBUG_REPORT_PLL_INFO) {

@@ -171,9 +171,11 @@ void vidStreamer::pbConfigureClicked()
 
 	quint8 nCorePreProc = ui->sbPixelWorkers->value();
 
-	int delF = ui->delFactor->text().toInt();
+	int delHost = ui->delFactorHost->text().toInt();
+	int delSpin = ui->delFactorSpin->text().toInt();
 
-	spinn->configSpin(spinIdx, nNodes, opType, wFilter, wHist, freq, nCorePreProc, delF);
+
+	spinn->configSpin(spinIdx, nNodes, opType, wFilter, wHist, freq, nCorePreProc, delHost, delSpin);
 
     // just for the experiment: it's boring...
     if(experiment > 0) {

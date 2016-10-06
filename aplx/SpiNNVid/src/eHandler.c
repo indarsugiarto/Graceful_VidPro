@@ -39,28 +39,33 @@ void configure_network(uint mBox)
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
 
 	// NOTE: encoding strategy:
-	//		 seq = (opType << 8) | (wFilter << 4) | wHistEq;
+	//       seq = (freq << 8) | (opType << 4) | (wFilter << 2) | wHistEq;
+	//		 srce_port = sdp_del_factor (i.e., sdpDelayFactorSpin)
 
 	// for safety, reset the network:
 	spin1_send_mc_packet(MCPL_BCAST_RESET_NET, 0, WITH_PAYLOAD);
 
-	uint payload;   // also for broadcasting
+	uint payload, freq;   // also for broadcasting
 
 	// then apply frequency requirement
 	// if the freq is 0, then use adaptive mechanism:
 	// initially, it runs at 200MHz, but change to 250 during processing
 	// setFreq(msg->srce_port, NULL); --> obsolete!
-	payload = (msg->srce_port << 16) | PROF_MSG_SET_FREQ;
-	spin1_send_mc_packet(MCPL_TO_ALL_PROFILER, payload, WITH_PAYLOAD);
+	freq = (msg->seq >> 8) | PROF_MSG_SET_FREQ;
+	spin1_send_mc_packet(MCPL_TO_ALL_PROFILER, freq, WITH_PAYLOAD);
 
 	// then tell the other nodes about this op-freq info
 
-	blkInfo->opType = msg->seq >> 8;
-	blkInfo->opFilter = (msg->seq >> 4) & 0xF;
-	blkInfo->opSharpen = msg->seq & 0xF;
+	blkInfo->opType = msg->seq >> 4;
+	blkInfo->opFilter = (msg->seq >> 2) & 0x3;
+	blkInfo->opSharpen = msg->seq & 0x3;
 
 	payload = msg->seq;
 	spin1_send_mc_packet(MCPL_BCAST_OP_INFO, payload, WITH_PAYLOAD);
+
+	// only root-node needs info about sdpDelayFactorSpin:
+	sdpDelayFactorSpin = msg->srce_port * DEF_DEL_VAL;
+	// io_printf(IO_STD, "delVal = %d --> %d\n", msg->srce_port, sdpDelayFactorSpin);
 
 	// broadcasting for nodes configuration
 	// convention: chip<0,0> must be root, it has the ETH

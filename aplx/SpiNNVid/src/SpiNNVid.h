@@ -302,11 +302,12 @@ uint child2hist[256];
 btree_t histPropTree;
 
 
-// SDP containers
+// SDP containers and related stuffs
 sdp_msg_t replyMsg;				// prepare the reply message
 sdp_msg_t resultMsg;			// prepare the result data
 sdp_msg_t debugMsg;				// and the debug data
 sdp_msg_t histMsg;              // for propagating histogram data
+uint sdpDelayFactorSpin;
 
 //ushort nodeCntr;				// to count, how many non-root nodes are present/active
 chain_t chips[MAX_NODES];		// the value of MAX_NODES depends on whether Spin3(4) or Spin5(48)
@@ -392,6 +393,8 @@ void sendResultToTarget(uint line, uint null);
 void sendResultToTargetFromRoot();
 void sendResultChain(uint nextLine, uint unused);
 void notifyDestDone(uint arg0, uint arg1);
+uint getSdramResultAddr();
+void sendImgChunkViaSDP(uint sz, uint alternativeDelay);
 
 // debugging and reporting
 void give_report(uint reportType, uint target);

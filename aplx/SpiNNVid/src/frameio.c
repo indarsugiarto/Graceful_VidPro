@@ -102,17 +102,15 @@ void sendResultToTargetFromRoot()
 	uint dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
 
 
-	uint rem, sz; // remaining part
-	uchar *ptrBuf;
-	uchar chunkID = 0;
-	ptrBuf = &resultMsg.cmd_rc;
+	uchar *ptrBuf = (uchar *)&resultMsg.cmd_rc;
 
 	//experiment: berapa cepat jika semua dikirim dari node-1
 	//for(ushort lines=workers.blkStart; lines<=workers.blkEnd; lines++) {
-	for(ushort lines=0; lines<=workers.hImg; lines++) {
+	//for(ushort lines=0; lines<=workers.hImg; lines++) {
+		uchar chunkID = 0;
+		uint rem, sz;
 		//rem = (workers.blkEnd - workers.blkStart + 1) * workers.wImg;
-		rem = workers.hImg * workers.wImg;
-		sampai disini dulu, aku pusing....
+		rem = workers.hImg * workers.wImg;	// kirim semuanya!
 		do {
 			sz = rem > 272 ? 272 : rem;
 			dmaImgFromSDRAMdone = 0;	// will be altered in hDMA
@@ -128,7 +126,7 @@ void sendResultToTargetFromRoot()
 			}
 
 			// then sequentially copy & send via sdp. We use srce_addr and srce_port as well:
-			sendImgChunkViaSDP(lines, chunkID, sz, 0);
+			sendImgChunkViaSDP(sz, 0);
 
 			chunkID++;
 
@@ -137,7 +135,7 @@ void sendResultToTargetFromRoot()
 			rem -= sz;
 
 		} while(rem > 0);
-	}
+	//}
 }
 #endif
 
@@ -240,7 +238,9 @@ void sendResultToTarget(uint line, uint null)
 		*/
 
 		// send to target via sdp
-		sendImgChunkViaSDP(line, sendResultInfo.pxBuf, 0);
+		// Indar: batalkan dulu yang dibawah ini sampai experimen dengan
+		// single node output selesai.............!!!!!!
+		// sendImgChunkViaSDP(line, sendResultInfo.pxBuf, 0);
 
 		// then continue the chain with the next line
 		sendResultInfo.lineToSend++;
@@ -414,28 +414,27 @@ void debugSDP(ushort line, uchar chunkID, ushort nData)
  * */
 // If alternativeDelay==0, then the delay is based on DEF_DEL_VAL, otherwise
 // the delay is set to alternativeDelay.
-inline void sendImgChunkViaSDP(uint line, uchar chunkID, ushort sz, uint alternativeDelay)
+inline void sendImgChunkViaSDP(uint sz, uint alternativeDelay)
 {
 
 #if (DEBUG_LEVEL > 0)
-	io_printf(IO_STD, "sending line-%d via sdp...", line);
+	// io_printf(IO_STD, "sending line-%d via sdp...", line);
 #endif
 
 	//sendResultInfo.sdpReady = FALSE;
 
 	// use full sdp (scp_segment + data_segment) for pixel values
 
-	// then sequentially copy & send via sdp. We use srce_addr and srce_port as well:
-	// scre_addr contains line number
-	// srce_port contains pixel chunk number in the current line
-
-	resultMsg.srce_addr = line;	// is it useful??? for debugging!!!
-	resultMsg.srce_port = chunkID;	// is it useful???
+	/* Formerly, srce_addr contains line number and srce_port...
+	 * contains chunkID.
+	resultMsg.srce_addr = line;
+	resultMsg.srce_port = chunkID;
+	*/
 	resultMsg.length = sizeof(sdp_hdr_t) + sz;
 
 	spin1_send_sdp_msg(&resultMsg, 10);
 	if(alternativeDelay==0)
-		giveDelay(DEF_DEL_VAL);	// if 900, this should produce 5.7MBps in 200MHz
+		giveDelay(sdpDelayFactorSpin);
 	//experimen: jika hanya root-node yang kirim gray result
 	//giveDelay(1200);	// if 900, this should produce 5.7MBps in 200MHz
 	else
@@ -443,10 +442,37 @@ inline void sendImgChunkViaSDP(uint line, uchar chunkID, ushort sz, uint alterna
 
 	//sendResultInfo.sdpReady = TRUE;
 #if (DEBUG_LEVEL > 0)
-	io_printf(IO_STD, "done!\n", line);
+	io_printf(IO_STD, "done!\n");
 #endif
 }
 
+
+// getSdramResultAddr() determines the address of final output by reading taskList
+// it is intended only for leadAp in each node (not all worker cores)
+// it is similar to getSdramImgAddr(), but processed differently: it uses
+// workers.blkImg??? instead of workers.img???
+uint getSdramResultAddr()
+{
+	uint imgAddr;
+	// by default, it might send gray scale image
+	imgAddr = (uint)workers.blkImgOut1;
+
+	// Now iterate: if opType>0, then the output is imgBIn
+	if(blkInfo->opType > 0) {
+		imgAddr = (uint)workers.blkImgBIn;
+	}
+	// if not, it depends on opSharpen and opFilter
+	else {
+		if(blkInfo->opSharpen==1) {
+			imgAddr = (uint)workers.blkImgGIn;
+		} else {
+			if(blkInfo->opFilter==1) {
+				imgAddr = (uint)workers.blkImgRIn;
+			}
+		}
+	}
+	return imgAddr;
+}
 
 
 

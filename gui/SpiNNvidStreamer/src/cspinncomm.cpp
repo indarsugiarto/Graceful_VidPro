@@ -164,7 +164,7 @@ sdp_hdr_t cSpiNNcomm::get_hdr(QByteArray const &ba)
 void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
                             quint8 edgeOperator, quint8 withFiltering,
 							quint8 withSharping, quint8 freq, quint8 nCorePreProc,
-							int delF)
+							int delHost, int delSpin)
 {
 	/*
 	// first, send notification to reset the network to spinnaker
@@ -185,7 +185,8 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
 	wFilter = withFiltering;		// with Gaussian filtering?
 	wHistEq = withSharping;			// with Histogram Equalization?
 	nCore4PxProc = nCorePreProc;	// will be used in frameIn()
-	sdpDelayFactor = delF;
+	sdpDelayFactorHost = delHost;
+	sdpDelayFactorSpin = delSpin;
 
 	// collect the parameters
 	if(SpinIdx==SPIN3) {
@@ -197,15 +198,16 @@ void cSpiNNcomm::configSpin(quint8 SpinIdx, quint8 nodesNum,
 		qDebug() << QString("Will use SpiN-5 with %1 nodes").arg(N_nodes);
 	}
 
-	qDebug() << QString("opType = %1, wFilter = %2, wHistEq = %3, freq = %4")
-				.arg(opType).arg(wFilter).arg(wHistEq).arg(freq);
+	qDebug() << QString("opType = %1, wFilter = %2, wHistEq = %3, freq = %4, HostDel = %5, SpinDel = %6")
+				.arg(opType).arg(wFilter).arg(wHistEq).arg(freq).arg(delHost).arg(delSpin);
 
 
     // send to spinnaker
-	hdrc.srce_port = freq;
+	// Note: we cannot modify srce_addr
+	hdrc.srce_port = (uchar)sdpDelayFactorSpin;
 	cmd_hdr_t c;
 	c.cmd_rc = SDP_CMD_CONFIG_NETWORK;
-    c.seq = (opType << 8) | (wFilter << 4) | wHistEq;
+	c.seq = (freq << 8) | (opType << 4) | (wFilter << 2) | wHistEq;
 
     // node-0 should be in chip<0,0>
     // node-1 is contained in arg1, node-2 is in arg2, and node-3 is in arg3
@@ -365,14 +367,18 @@ void cSpiNNcomm::readResult()
 
 	} else {
 		// for debugging:
-		int ln = (int)h.srce_addr;
+
+		// we don't send "line" information anymore!
+		// int ln = (int)h.srce_addr;
 		int cID = (int)h.srce_port;
+
+		/*
 		// counting, how many lines has been received so far
 		if(ln != recvLine) {
 			recvLine = ln;	// toggle the flag, indicating a new line has arrive
 			recvLineCntr++;
 		}
-
+		*/
 
 		// remove header
 		ba.remove(0, 10);
@@ -463,8 +469,8 @@ void cSpiNNcomm::frameIn(const QImage &f)
 
 	//int delVal = 600;	// just OK with single image
 	//int delVal = 1000;	// have distorted image on video
-	int delVal = sdpDelayFactor;	// can be configured from gui
-	qDebug() << QString("Using delay factor %1").arg(delVal);
+	int delVal = sdpDelayFactorHost;	// can be configured from gui
+	// qDebug() << QString("Using delay factor %1").arg(delVal);
 	// we work only with color images!!! No gray video :)
 	// NOTE: we cannot alter srce_addr, hence we encode the pxSeq into tag + srce_port
 	//		 so: tag==pxSeq.high and srce_port==pxSeq.low

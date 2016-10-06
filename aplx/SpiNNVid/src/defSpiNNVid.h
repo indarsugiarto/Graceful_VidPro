@@ -162,8 +162,9 @@
 #define DEF_PY_WAIT_VAL				200
 // for sending chunks from spinnaker:
 //#define DEF_DEL_VAL					300  // ok for image, not for video
-#define DEF_DEL_VAL					900  // perfect, up to 5.7MBps
+//#define DEF_DEL_VAL					900  // perfect, up to 5.7MBps in 200MHz
 //#define DEF_DEL_VAL					1200
+#define DEF_DEL_VAL					25	// now we can configure delay factor from GUI
 #define DEF_FR_DELAY				200
 
 #define DEF_PXLEN_IN_CHUNK	272

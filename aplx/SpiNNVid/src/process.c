@@ -736,33 +736,6 @@ void getSdramImgAddr(proc_t proc)
 	}
 }
 
-// getSdramResultAddr() determines the address of final output by reading taskList
-// it is intended only for leadAp in each node (not all worker cores)
-// it is similar to getSdramImgAddr(), but processed differently: it uses
-// workers.blkImg??? instead of workers.img???
-uint getSdramResultAddr()
-{
-	uint imgAddr;
-	// by default, it might send gray scale image
-	imgAddr = (uint)workers.blkImgOut1;
-
-	// Now iterate: if opType>0, then the output is imgBIn
-	if(blkInfo->opType > 0) {
-		imgAddr = (uint)workers.blkImgBIn;
-	}
-	// if not, it depends on opSharpen and opFilter
-	else {
-		if(blkInfo->opSharpen==1) {
-			imgAddr = (uint)workers.blkImgGIn;
-		} else {
-			if(blkInfo->opFilter==1) {
-				imgAddr = (uint)workers.blkImgRIn;
-			}
-		}
-	}
-	return imgAddr;
-}
-
 void imgSharpening(uint arg0, uint arg1)
 {
 	if(workers.active==FALSE) {
