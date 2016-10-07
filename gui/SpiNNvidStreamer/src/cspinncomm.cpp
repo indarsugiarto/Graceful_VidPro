@@ -347,7 +347,9 @@ void cSpiNNcomm::readResult()
 	sdp_hdr_t h = get_hdr(ba);
 	// spinnaker finish sending the result?
 	if(h.srce_port == SDP_SRCE_NOTIFY_PORT) {
-
+#if (DEBUG_LEVEL > 0)
+		qDebug() << "Got SDP_SRCE_NOTIFY_PORT...";
+#endif
 		// then assemble the image from pxBuff (copy to frResult)
 		int cntr = 0;
 		QRgb value;

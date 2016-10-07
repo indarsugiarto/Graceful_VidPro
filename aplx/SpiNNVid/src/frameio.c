@@ -111,6 +111,8 @@ void sendResultToTargetFromRoot()
 		uint rem, sz;
 		//rem = (workers.blkEnd - workers.blkStart + 1) * workers.wImg;
 		rem = workers.hImg * workers.wImg;	// kirim semuanya!
+		// since we don't use srce_port anymore, we have to fill it with something...
+		resultMsg.srce_port = (SDP_PORT_FRAME_END << 5) | myCoreID;
 		do {
 			sz = rem > 272 ? 272 : rem;
 			dmaImgFromSDRAMdone = 0;	// will be altered in hDMA
@@ -429,6 +431,7 @@ inline void sendImgChunkViaSDP(uint sz, uint alternativeDelay)
 	 * contains chunkID.
 	resultMsg.srce_addr = line;
 	resultMsg.srce_port = chunkID;
+
 	*/
 	resultMsg.length = sizeof(sdp_hdr_t) + sz;
 
