@@ -92,9 +92,6 @@ void c_main()
 	// which is fixed 5 times the image width
 	dtcmImgFilt = NULL;
 
-	// this buffer also needs to be initialized:
-	sendResultInfo.pxBuf = NULL;
-
 	/*  pre-processing: grayscaling and histogram counting
 		by default, we assign NUM_CORES_FOR_BCAST_PIXEL cores for pre-processing
 		(i.e. grayscaling and histogram counting) */

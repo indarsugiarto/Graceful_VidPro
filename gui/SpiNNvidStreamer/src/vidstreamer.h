@@ -11,6 +11,7 @@
 #include "cdecoder.h"
 #include "cscreen.h"
 #include "cspinncomm.h"
+#include "defSpiNNVid.h"
 
 namespace Ui {
 class vidStreamer;
@@ -53,6 +54,7 @@ public slots:
 	void frameSent();
 	void spinnSendFrame();
 	void edgeRenderingDone();		// useful only for video, not image processing
+	void pbAnimClicked();
 
 private:
     bool isPaused;

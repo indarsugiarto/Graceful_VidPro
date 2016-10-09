@@ -74,8 +74,8 @@
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
 /*--------------------- Debugging and reporting definition --------------------------*/
-//#define DEBUG_LEVEL				0	// no debugging message at all
-#define DEBUG_LEVEL                 0
+#define DEBUG_LEVEL				0	// no debugging message at all
+//#define DEBUG_LEVEL                 3
 // various report for debugging (send by host):
 #define DEBUG_REPORT_NWORKERS       1		// only leadAp (in all nodes)
 #define DEBUG_REPORT_WID            2		// only leadAp (in all nodes)
@@ -247,8 +247,13 @@
 // but the root node has throughput 5.7MBps
 // Hence, we create a new mechanism for sending result via MCPL to root, and then
 // convert it into sdp
-#define MCPL_SEND_PIXELS_CMD		0x12345678	// root broadcast this first
-#define MCPL_SEND_PIXELS_DATA		0x87654321	// node reply with this
+#define MCPL_SEND_PIXELS_INFO		0x2e510000	// to root-leadAp
+#define MCPL_SEND_PIXELS_DATA		0x2e520000	// to root-leadAp
+#define MCPL_SEND_PIXELS_DONE		0x2e530000	// to root-leadAp
+#define MCPL_SEND_PIXELS_CMD		0x2e5a0000	// to all leadAps NOT in the root-node
+#define MCPL_SEND_PIXELS_NEXT		0x2e5b0000	// to all leadAps NOT in the root-node
+#define MCPL_SEND_PIXELS_MASK		0xFFFF0000
+
 // The lower part of the key is the line that is expected to be sent. The node which has
 // that line will then respond by sending the pixels.
 

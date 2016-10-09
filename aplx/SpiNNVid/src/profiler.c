@@ -157,6 +157,10 @@ uint initProfiler()
 	io_printf(IO_BUF, "[PROFILER] Switch PLL so that all cores use the same source from PLL-1!\n");
 	changePLL(1);
 
+	// experiment: router is set to 260MHz or 200MHz -> result: corrupted packets!!!
+	//changeRtrFreq(0, 2);
+	//changeRtrFreq(1, 1);
+
 	// read the current spiNNaker frequency
 	_freq = readSpinFreqVal();
 	io_printf(IO_BUF, "[PROFILER] Current frequency = %d-MHz!\n", _freq);
@@ -330,7 +334,8 @@ void changePLL(uint flag)
 	else if(flag==1) {
 		r24 = sc[SC_CLKMUX];
 		/* Let's change so that System AHB and Router use PLL2. Hence, system
-		 * AHB and Router divisor will be changed to 2 instead of 3.*/
+		 * AHB and Router divisor will be changed to 2 instead of 3.
+		 * Mem by default already uses PLL-2*/
 		// the System AHB:
 		r24 &= 0xFF0FFFFF; //clear "Sdiv" and "Sys"
 		r24 |= 0x00600000; //set Sdiv = 2 and "Sys" = 2
@@ -356,6 +361,27 @@ void changePLL(uint flag)
 	}
 }
 
+/* changeRtrFreq() change the freq of the Router.
+ * Arguments:
+ *   divisor = [0-3] will yield 1-4
+ *   src = [0-3], 1 for pll-1, and 2 for pll-2
+ *
+ * Normally, pll-1 is set to 400Mhz and pll-2 is set to 260MHz
+ *
+ * Example:
+ * - to configure router to use 260MHz from pll-2:
+ *   changeRtrFreq(0, 2);
+ * - to configure router to use 200Mhz from pll-1:
+ *   changeRtrFreq(1, 1);
+ * */
+void changeRtrFreq(uint divisor, uint src)
+{
+	r24 = sc[SC_CLKMUX];
+	r24 &= 0xFFF87FFF; //clear "Rdiv" and "Rtr"
+	r24 |= ((divisor << 17) | (src << 15)); //set Rdiv and Rtr
+	// Apply, so that system AHB and Router is set to PLL2
+	sc[SC_CLKMUX] = r24;
+}
 
 REAL getFreq(uchar sel, uchar dv, uchar MS1, uchar NS1, uchar MS2, uchar NS2)
 {

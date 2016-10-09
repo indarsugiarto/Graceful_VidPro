@@ -58,7 +58,6 @@ void allocateDtcmImgBuf()
 		sark_free(dtcmImgBuf); //dtcmImgBuf = NULL;
 		sark_free(resImgBuf); //resImgBuf = NULL;
 		sark_free(dtcmImgFilt); //dtcmImgFilt = NULL;
-		sark_free(sendResultInfo.pxBuf); //--> somehow, it produces corrupt line at the end
 	}
 #if(DEBUG_LEVEL>1)
 		io_printf(IO_BUF, "[IMGBUF] Allocating DTCM heap...\n");
@@ -84,8 +83,6 @@ void allocateDtcmImgBuf()
 	dtcmImgBuf = sark_alloc(workers.szDtcmImgBuf, sizeof(uchar));
 	resImgBuf = sark_alloc(workers.wImg, sizeof(uchar));	// just one line!
 	dtcmImgFilt = sark_alloc(workers.szDtcmImgFilt, sizeof(uchar));
-	// sendResultInfo.pxBuf may not 4-pixel aligned, so we add extra pixels:
-	sendResultInfo.pxBuf = sark_alloc(workers.wImg + 4, sizeof(uchar));
 }
 
 // computeWLoad will be executed by all cores (including leadAps) in all chips

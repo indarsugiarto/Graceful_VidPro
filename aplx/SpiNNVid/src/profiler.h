@@ -153,6 +153,7 @@ REAL readTemp();
 // frequency-related
 void getFreqParams(uint f, uint *ms, uint *ns);
 void changeFreq(uint f);					// we use uchar to limit the frequency to 255
+void changeRtrFreq(uint divisor, uint src);
 void changePLL(uint flag);
 uint readSpinFreqVal();
 void readPLL(uint chip_addr, uint null);

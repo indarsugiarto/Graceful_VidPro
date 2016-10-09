@@ -548,6 +548,9 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		spin1_schedule_callback(give_report, payload, 0, PRIORITY_PROCESSING);
 	}
 
+
+
+
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
 	/*----------------------- new Send result mechanism --------------------------*/
@@ -555,18 +558,37 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		// the payload contains the line number of the resulting image
 		spin1_schedule_callback(sendResultProcessCmd, payload, NULL, PRIORITY_PROCESSING);
 	}
+	else if(key==MCPL_SEND_PIXELS_INFO) {
+		sendResultInfo.szBlock = payload;
+	}
 	else if(key==MCPL_SEND_PIXELS_DATA) {
-		// put the pixels in a buffer
+#if(DESTINATION==DEST_HOST)
+		// put the pixels in the sdp buffer directly
 		sark_mem_cpy(sendResultInfo.pxBufPtr, &payload, 4);
-		sendResultInfo.pxBufPtr +=4;
+		sendResultInfo.pxBufPtr += 4;
 		sendResultInfo.nReceived_MCPL_SEND_PIXELS++;
-		// check if nReceived==nExpected
-		if(sendResultInfo.nReceived_MCPL_SEND_PIXELS==sendResultInfo.nExpected_MCPL_SEND_PIXELS) {
-			//io_printf(IO_STD, "Root-node got enough data!\n"); sark_delay_us(1000);
-			//sendResultToTarget(sendResultInfo.lineToSend, 0);
-			spin1_schedule_callback(sendResultToTarget, sendResultInfo.lineToSend,
-									NULL, PRIORITY_PROCESSING);
+		// if all pixels in the chunk have been received (68*4=272)
+#if(DEBUG_LEVEL>1)
+		io_printf(IO_STD, "Got %d chunks so far...\n", sendResultInfo.nReceived_MCPL_SEND_PIXELS);
+#endif
+		if(sendResultInfo.nReceived_MCPL_SEND_PIXELS==68) {
+			spin1_schedule_callback(sendResultToTarget, 0, 0, PRIORITY_PROCESSING);
 		}
+		/* experiment: use handshaking mechanism, result: SLOW!!!!
+		else {
+			spin1_send_mc_packet(MCPL_SEND_PIXELS_NEXT, 0, WITH_PAYLOAD);
+		}
+		*/
+
+#else
+	// TODO: for FPGA, send directly as FR packet
+#endif
+	}
+	else if(key==MCPL_SEND_PIXELS_NEXT) {
+		flag_SendResultCont = TRUE;
+	}
+	else if(key==MCPL_SEND_PIXELS_DONE) {
+		spin1_schedule_callback(sendResultToTarget, 0, 0, PRIORITY_PROCESSING);
 	}
 }
 

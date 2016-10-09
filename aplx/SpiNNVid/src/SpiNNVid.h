@@ -264,15 +264,10 @@ task_list_t taskList;
 //#define MCPL_DELAY_FACTOR		1	// works OK with small image
 #define MCPL_DELAY_FACTOR		1
 typedef struct send_result_info {
-	ushort lineToSend;				// it used in sendResult()
+	ushort blockToSend;					// it is used in sendResult()
+	int szBlock;
 	ushort nReceived_MCPL_SEND_PIXELS;
-	ushort nExpected_MCPL_SEND_PIXELS;
-	ushort nRemaining_MCPL_SEND_PIXELS;
-	uchar *pxBuf;
 	uchar *pxBufPtr;
-	uchar sdpReady;
-	//uint adaptiveDelay;
-	//uint delayCntr;
 } send_result_info_t;
 send_result_info_t sendResultInfo;
 
@@ -287,6 +282,8 @@ char signature[15];	// Will display [SpiNNVid] or [SpiNNVid-dbg-x]
 uint nChipAlive;
 ushort aliveNodeAddr[MAX_NODES];
 
+// flags for communication between nodes
+volatile uchar flag_SendResultCont;			// wait the "continue" signal from root-node
 
 // newImageFlag will be set on in the beginning or when the host send something via
 // SDP_PORT_FRAME_END, and it will be set off when any pixel arrives.
@@ -391,7 +388,7 @@ void sendResult(uint blkID, uint arg1);		// blkID is the expected node to send
 void sendResultProcessCmd(uint line, uint null);
 void sendResultToTarget(uint line, uint null);
 void sendResultToTargetFromRoot();
-void sendResultChain(uint nextLine, uint unused);
+void sendResultChain(uint nextBlock, uint unused);
 void notifyDestDone(uint arg0, uint arg1);
 uint getSdramResultAddr();
 void sendImgChunkViaSDP(uint sz, uint alternativeDelay);

@@ -55,6 +55,7 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	connect(ui->pbImage, SIGNAL(pressed()), this, SLOT(pbImageClicked()));
 	connect(ui->pbSendImage, SIGNAL(pressed()), this, SLOT(pbSendImageClicked()));
 	connect(ui->pbConfigure, SIGNAL(pressed()), this, SLOT(pbConfigureClicked()));
+	connect(ui->pbAnim, SIGNAL(pressed()), this, SLOT(pbAnimClicked()));
 
 	connect(ui->sbNchips, SIGNAL(editingFinished()), this, SLOT(newChipsNum()));
 	connect(ui->pbTest, SIGNAL(pressed()), this, SLOT(pbTestClicked()));
@@ -69,9 +70,9 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	//refresh->setInterval(20);   // which produces roughly 50fps
 	//refresh->setInterval(40);   // which produces roughly 25fps
 	//refresh->setInterval(100);   // which produces roughly 10fps
-	//refresh->setInterval(1000);   // which produces roughly 1fps
+	refresh->setInterval(1000);   // which produces roughly 1fps
 	//refresh->setInterval(500);   // which produces roughly 2fps
-	refresh->setInterval(250);   // which produces roughly 4fps
+	//refresh->setInterval(250);   // which produces roughly 4fps
 	//refresh->setInterval(50);   // which produces roughly 20fps
 	//refresh->setInterval(2000);   // which produces roughly 0.5fps
 	refresh->start();
@@ -110,6 +111,11 @@ vidStreamer::vidStreamer(QWidget *parent) :
 		}
 
 	}
+
+#if(DEBUG_LEVEL>1)
+	ui->delFactorHost->setValue(10000);
+	ui->delFactorSpin->setValue(250);
+#endif
 }
 
 void vidStreamer::cbSpiNNchanged(int idx)
@@ -436,3 +442,9 @@ void vidStreamer::spinnSendFrame()
 	qDebug() << "SpiNNVid send the frame";
 #endif
 }
+
+void vidStreamer::pbAnimClicked()
+{
+
+}
+
