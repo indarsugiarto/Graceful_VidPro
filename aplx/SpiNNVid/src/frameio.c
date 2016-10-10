@@ -37,7 +37,7 @@ void sendResult(uint unused, uint arg1)
 	io_printf(IO_STD, "sendResultToTargetFromRoot()\n");
 #endif
 
-#if(DESTINATIO==DEST_HOST)
+#if(DESTINATION==DEST_HOST)
 	sendResultToTargetFromRoot();
 	nBlockDone = 1;		// the root part is done
 #else
