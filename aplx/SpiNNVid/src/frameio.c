@@ -47,10 +47,6 @@ void sendResult(uint unused, uint arg1)
 
 #endif
 
-	//experiment: seberapa cepat jika semua dikirim dari node-1
-	//spin1_schedule_callback(notifyDestDone,0,0,PRIORITY_PROCESSING);
-	//return;
-
 	// then the remaining nodes should execute sendResultToTarget()
 #if(DEBUG_LEVEL>0)
 	io_printf(IO_STD, "sendResultToTarget()\n");
@@ -197,7 +193,6 @@ void sendImgChunkViaFR(ushort y, uchar * pxbuf)
 {
 	uint key;
 	uchar px;
-
 	ushort x;
 
 	for(x=0; x<workers.wImg; x++) {
@@ -239,6 +234,7 @@ void sendResultToTargetFromRoot()
 		// move to the next address
 		lines++;
 		imgOut += workers.wImg;
+		rem -= workers.wImg;
 	} while(rem > 0);}
 #endif
 

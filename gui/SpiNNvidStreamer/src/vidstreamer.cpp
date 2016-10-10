@@ -68,9 +68,9 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	connect(refresh, SIGNAL(timeout()), this, SLOT(refreshUpdate()));
 
 	//refresh->setInterval(20);   // which produces roughly 50fps
-	//refresh->setInterval(40);   // which produces roughly 25fps
+	refresh->setInterval(40);   // which produces roughly 25fps
 	//refresh->setInterval(100);   // which produces roughly 10fps
-	refresh->setInterval(1000);   // which produces roughly 1fps
+	//refresh->setInterval(1000);   // which produces roughly 1fps
 	//refresh->setInterval(500);   // which produces roughly 2fps
 	//refresh->setInterval(250);   // which produces roughly 4fps
 	//refresh->setInterval(50);   // which produces roughly 20fps
@@ -115,6 +115,15 @@ vidStreamer::vidStreamer(QWidget *parent) :
 #if(DEBUG_LEVEL>1)
 	ui->delFactorHost->setValue(10000);
 	ui->delFactorSpin->setValue(250);
+#endif
+
+// also for target FPGA, disable the SDP parameters
+#if(DESTINATION==DEST_FPGA)
+	ui->delFactorHost->setEnabled(false);
+	ui->delFactorSpin->setEnabled(false);
+	ui->rbNone->setChecked(true);
+	ui->rbSobel->setEnabled(false);
+	ui->rbLaplace->setEnabled(false);
 #endif
 }
 
@@ -252,7 +261,7 @@ void vidStreamer::pbVideoClicked()
 
 void vidStreamer::refreshUpdate()
 {
-
+	_bRefresherUpdated = true;
 	// vidstreamer manage the refreshing to create "centralized" update
 
 	// if edge-widget finish rendering, then send the refresh signal
@@ -410,6 +419,7 @@ void vidStreamer::frameSent()
 
 void vidStreamer::edgeRenderingDone()
 {
+	_bEdgeRenderingDone = true;
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &toc);
 	timespec temp;
 	quint64 df_ns;
@@ -445,6 +455,33 @@ void vidStreamer::spinnSendFrame()
 
 void vidStreamer::pbAnimClicked()
 {
+	QString dir = QFileDialog::getExistingDirectory(this,
+													"Open Anim Folder", currDir,
+													QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+	if(dir.isNull() || dir.isEmpty()) return;
+	currDir = dir;
+	QString fName;
+	int i=1;
 
+	fName = QString("%1/%2.jpg").arg(dir).arg(i);
+	loadedImage.load(fName);
+	setSize(loadedImage.width(), loadedImage.height());
+	screen->putFrame(loadedImage);
+
+	for(i=2; i<=99; i++) {
+		//edge->clear();
+		_bEdgeRenderingDone = false;
+		_bRefresherUpdated = false;
+		//edge->putFrame(loadedImage);
+		spinn->frameIn(loadedImage);
+		while (1) {
+			qApp->processEvents();
+			if(_bEdgeRenderingDone && _bRefresherUpdated) break;
+			//if(_bEdgeRenderingDone) break;
+		}
+		fName = QString("%1/%2.jpg").arg(dir).arg(i);
+		loadedImage.load(fName);
+		screen->putFrame(loadedImage);
+	}
 }
 

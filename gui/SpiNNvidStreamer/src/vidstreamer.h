@@ -67,6 +67,9 @@ private:
 
 	QString currDir;
 
+	bool _bEdgeRenderingDone;
+	bool _bRefresherUpdated;
+
 protected:
 	void closeEvent(QCloseEvent *event);
 };

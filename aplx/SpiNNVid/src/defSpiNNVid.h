@@ -74,8 +74,8 @@
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
 /*--------------------- Debugging and reporting definition --------------------------*/
-//#define DEBUG_LEVEL				0	// no debugging message at all
-#define DEBUG_LEVEL                 3
+#define DEBUG_LEVEL				0	// no debugging message at all
+//#define DEBUG_LEVEL                 3
 // various report for debugging (send by host):
 #define DEBUG_REPORT_NWORKERS       1		// only leadAp (in all nodes)
 #define DEBUG_REPORT_WID            2		// only leadAp (in all nodes)
