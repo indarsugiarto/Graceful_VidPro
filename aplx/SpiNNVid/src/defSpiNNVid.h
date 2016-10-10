@@ -69,7 +69,7 @@
 // where will the result be sent? To Host or to FPGA board
 #define DEST_HOST                   1
 #define DEST_FPGA                   2
-#define DESTINATION                 DEST_HOST
+#define DESTINATION                 DEST_FPGA
 
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
@@ -252,7 +252,7 @@
 #define MCPL_SEND_PIXELS_DONE		0x2e530000	// to root-leadAp
 #define MCPL_SEND_PIXELS_CMD		0x2e5a0000	// to all leadAps NOT in the root-node
 #define MCPL_SEND_PIXELS_NEXT		0x2e5b0000	// to all leadAps NOT in the root-node
-#define MCPL_SEND_PIXELS_MASK		0xFFFF0000
+#define MCPL_SEND_PIXELS_MASK		0xFFFFFFFF
 
 // The lower part of the key is the line that is expected to be sent. The node which has
 // that line will then respond by sending the pixels.

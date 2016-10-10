@@ -36,8 +36,16 @@ void sendResult(uint unused, uint arg1)
 #if(DEBUG_LEVEL>0)
 	io_printf(IO_STD, "sendResultToTargetFromRoot()\n");
 #endif
+
+#if(DESTINATIO==DEST_HOST)
 	sendResultToTargetFromRoot();
 	nBlockDone = 1;		// the root part is done
+#else
+	// experiment: just send from one node and see the FR throughput!
+	sendResultToTargetFromRoot();
+	nBlockDone = blkInfo->maxBlock;
+
+#endif
 
 	//experiment: seberapa cepat jika semua dikirim dari node-1
 	//spin1_schedule_callback(notifyDestDone,0,0,PRIORITY_PROCESSING);
@@ -182,20 +190,15 @@ void sendResultToTargetFromRoot()
 	} while(rem > 0);
 	//}
 }
-#endif
 
-#if(DESTINATION==DEST_FPGA)
+#else
 
-void sendImgChunkViaFR(ushort line, uchar * pxbuf)
+void sendImgChunkViaFR(ushort y, uchar * pxbuf)
 {
-	sendResultInfo.sdpReady = FALSE;
-
 	uint key;
 	uchar px;
 
-	ushort x,y;
-
-	y = line;
+	ushort x;
 
 	for(x=0; x<workers.wImg; x++) {
 		px = *(pxbuf+x);
@@ -203,9 +206,6 @@ void sendImgChunkViaFR(ushort line, uchar * pxbuf)
 		spin1_send_fr_packet(key, px, WITH_PAYLOAD);
 		//giveDelay(DEF_FR_DELAY);
 	}
-
-	sendResultInfo.sdpReady = TRUE;
-
 }
 
 // will use fixed-route packet
@@ -215,15 +215,20 @@ void sendResultToTargetFromRoot()
 	uchar *imgOut;
 	imgOut  = (uchar *)getSdramResultAddr();
 
-	uint dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
-	for(ushort lines=workers.blkStart; lines<=workers.blkEnd; lines++) {
+	uint rem, sz;
+	//experiment: how fast the FR link?
+	rem = workers.hImg * workers.wImg;	// send them all!
 
+	// process line by line
+	uint dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
+
+	ushort lines = 0;
+	do {
 		dmaImgFromSDRAMdone = 0;	// will be altered in hDMA
 		do {
 			dmaTID = spin1_dma_transfer(dmatag, (void *)imgOut,
 										(void *)resImgBuf, DMA_READ, workers.wImg);
 		} while(dmaTID==0);
-
 		// wait until dma is completed
 		while(dmaImgFromSDRAMdone==0) {
 		}
@@ -232,9 +237,9 @@ void sendResultToTargetFromRoot()
 		sendImgChunkViaFR(lines, resImgBuf);
 
 		// move to the next address
+		lines++;
 		imgOut += workers.wImg;
-	}
-}
+	} while(rem > 0);}
 #endif
 
 /*----------------------------------------------------------------------------------*/
@@ -304,21 +309,7 @@ void sendResultToTarget(uint none, uint null)
 
 void sendResultToTarget(uint line, uint null)
 {
-	// if sdp is not ready, then go to wait state (in recursion-like mechanism)
-	if(sendResultInfo.sdpReady==FALSE) {
-		// then call again
-		spin1_schedule_callback(sendResultToTarget, line, NULL, PRIORITY_PROCESSING);
-	}
-	else {
-
-		// send to target via sdp
-		sendImgChunkViaFR(line, sendResultInfo.pxBuf);
-
-		// then continue the chain with the next line
-		sendResultInfo.lineToSend++;
-		spin1_schedule_callback(sendResultChain, sendResultInfo.lineToSend, NULL, PRIORITY_PROCESSING);
-	}
-
+	// at the moment, we just check the throughput of one chip only
 }
 #endif
 /*----------------------------------------------------------------------------------*/
