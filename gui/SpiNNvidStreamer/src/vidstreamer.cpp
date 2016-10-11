@@ -1,3 +1,12 @@
+/* LOG:
+ * - Somehow, the ethernet at Spin3 seems a bit "faster" than Spin5. Hence, we found
+ *   the following values are appropriate:
+ * 		ui->delFactorHost->setValue(475); for Spin3
+ * 		ui->delFactorHost->setValue(550); for Spin5
+ * - Also, the newest scamp version (3.xx) seems to work better than 1.34. Less (or no)
+ *   MCPL drops...
+ * */
+
 #include "vidstreamer.h"
 #include "ui_vidstreamer.h"
 
@@ -33,6 +42,7 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	ui->pbPause->setEnabled(false);
 	ui->cbTest->setEnabled(false);
 	ui->pbTest->setEnabled(false);
+	ui->pbAnim->setEnabled(false);
 
 
     refresh = new QTimer(this);
@@ -56,6 +66,7 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	connect(ui->pbSendImage, SIGNAL(pressed()), this, SLOT(pbSendImageClicked()));
 	connect(ui->pbConfigure, SIGNAL(pressed()), this, SLOT(pbConfigureClicked()));
 	connect(ui->pbAnim, SIGNAL(pressed()), this, SLOT(pbAnimClicked()));
+	connect(ui->exFPS, SIGNAL(valueChanged(int)), this, SLOT(exFPSChanged(int)));
 
 	connect(ui->sbNchips, SIGNAL(editingFinished()), this, SLOT(newChipsNum()));
 	connect(ui->pbTest, SIGNAL(pressed()), this, SLOT(pbTestClicked()));
@@ -67,8 +78,12 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	connect(edge, SIGNAL(renderDone()), this, SLOT(edgeRenderingDone()));
 	connect(refresh, SIGNAL(timeout()), this, SLOT(refreshUpdate()));
 
+	_exFPS = ui->exFPS->value();
+
+	refresh->setInterval(1000/_exFPS);
+
 	//refresh->setInterval(20);   // which produces roughly 50fps
-	refresh->setInterval(40);   // which produces roughly 25fps
+	//refresh->setInterval(40);   // which produces roughly 25fps
 	//refresh->setInterval(100);   // which produces roughly 10fps
 	//refresh->setInterval(1000);   // which produces roughly 1fps
 	//refresh->setInterval(500);   // which produces roughly 2fps
@@ -133,9 +148,11 @@ void vidStreamer::cbSpiNNchanged(int idx)
 		ui->sbNchips->setValue(4);
 		ui->sbNchips->setEnabled(false);
 		ui->ipAddr->setText("192.168.240.253");
+		ui->delFactorHost->setValue(475);
 	} else {
 		ui->sbNchips->setEnabled(true);
 		ui->ipAddr->setText("192.168.240.1");
+		ui->delFactorHost->setValue(550);
 	}
 
 }
@@ -165,6 +182,7 @@ void vidStreamer::pbConfigureClicked()
     //ui->pbPause->setEnabled(true);
     ui->cbTest->setEnabled(true);
     ui->pbTest->setEnabled(true);
+	ui->pbAnim->setEnabled(true);
 
     // then send information to spinn
     quint8 spinIdx = ui->cbSpiNN->currentIndex();
@@ -434,7 +452,9 @@ void vidStreamer::edgeRenderingDone()
 	// difference in nanosecond
 	df_ns = temp.tv_sec*1000000000+temp.tv_nsec;
 	fps = 1000000000.0/(double)df_ns;
+#if(DEBUG_LEVEL>1)
 	qDebug() << QString("fps = %1").arg((int)round(fps));
+#endif
 
 
 	// indicate that the "edge" widget is finish in rendering a frame
@@ -483,5 +503,13 @@ void vidStreamer::pbAnimClicked()
 		loadedImage.load(fName);
 		screen->putFrame(loadedImage);
 	}
+	spinn->frameIn(loadedImage);
 }
 
+void vidStreamer::exFPSChanged(int val)
+{
+	_exFPS = val;
+	refresh->stop();
+	refresh->setInterval(1000/val);
+	refresh->start();
+}

@@ -264,7 +264,7 @@ void sendResultToTarget(uint none, uint null)
 			nBlockDone++;
 #if(DEBUG_LEVEL>1)
 			io_printf(IO_STD, "Sendresult by block-%d done!\n", sendResultInfo.blockToSend);
-			sark_delay_us(10);
+			sark_delay_us(100);
 #endif
 			sendResultInfo.blockToSend++;
 			spin1_schedule_callback(sendResultChain,
@@ -274,7 +274,7 @@ void sendResultToTarget(uint none, uint null)
 		else {
 #if(DEBUG_LEVEL>1)
 			io_printf(IO_STD, "Preparing to send MCPL_SEND_PIXELS_NEXT for block-%d\n", sendResultInfo.blockToSend);
-			sark_delay_us(10);
+			sark_delay_us(100);
 #endif
 			// reset to the beginning of resultMsg.cmd_rc
 			sendResultInfo.pxBufPtr = (uchar *)&resultMsg.cmd_rc;
@@ -289,7 +289,7 @@ void sendResultToTarget(uint none, uint null)
 		nBlockDone++;
 #if(DEBUG_LEVEL>1)
 			io_printf(IO_STD, "Sendresult by block-%d done!\n", sendResultInfo.blockToSend);
-			sark_delay_us(10);
+			sark_delay_us(100);
 #endif
 		int rem = 0-sendResultInfo.szBlock;
 		sendImgChunkViaSDP((uint)rem, alternativeDelay);
@@ -375,6 +375,7 @@ void sendResultProcessCmd(uint blockID, uint null)
 
 #if(DEBUG_LEVEL>1)
 			io_printf(IO_STD, "Receiving request for Sendresult for block-%d!\n", blockID);
+			sark_delay_us(100);
 #endif
 	uchar *imgOut;
 	imgOut = (uchar *)getSdramResultAddr();
@@ -476,15 +477,15 @@ void sendResultProcessCmd(uint blockID, uint null)
 void notifyDestDone(uint arg0, uint arg1)
 {
 	perf.tTotal /= blkInfo->maxBlock;
-#if (DEBUG_LEVEL > 1)
-	io_printf(IO_STD, "Processing with %d-nodes is done. Elapse %d-ms, tclk = %u\n",
-			  blkInfo->maxBlock, elapse, perf.tTotal);
-#endif
 #if (DESTINATION==DEST_HOST)
 	resultMsg.srce_addr = elapse;
 	resultMsg.srce_port = SDP_SRCE_NOTIFY_PORT;
 	resultMsg.length = sizeof(sdp_hdr_t);
 	spin1_send_sdp_msg(&resultMsg, 10);
+#if (DEBUG_LEVEL > 1)
+	io_printf(IO_STD, "SDP_SRCE_NOTIFY_PORT is sent!\nProcessing with %d-nodes is done. Elapse %d-ms, tclk = %u\n",
+			  blkInfo->maxBlock, elapse, perf.tTotal);
+#endif
 #elif (DESTINATION==DEST_FPGA)
 
 #endif
@@ -557,7 +558,7 @@ inline void sendImgChunkViaSDP(uint sz, uint alternativeDelay)
 
 	//sendResultInfo.sdpReady = TRUE;
 #if (DEBUG_LEVEL > 0)
-	io_printf(IO_STD, "[sendImgChunkViaSDP] done!\n");
+	io_printf(IO_STD, "[sendImgChunkViaSDP] done!\n"); sark_delay_us(100);
 #endif
 }
 

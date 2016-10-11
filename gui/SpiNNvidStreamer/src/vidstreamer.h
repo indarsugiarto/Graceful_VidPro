@@ -55,6 +55,7 @@ public slots:
 	void spinnSendFrame();
 	void edgeRenderingDone();		// useful only for video, not image processing
 	void pbAnimClicked();
+	void exFPSChanged(int val);
 
 private:
     bool isPaused;
@@ -69,6 +70,7 @@ private:
 
 	bool _bEdgeRenderingDone;
 	bool _bRefresherUpdated;
+	int _exFPS;
 
 protected:
 	void closeEvent(QCloseEvent *event);

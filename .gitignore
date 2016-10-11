@@ -46,6 +46,7 @@
 **/local
 **/.metadata
 **/RemoteSystemsTempFiles
+**/museum
 
 # Yang lain
 *.json

@@ -52,16 +52,13 @@ void configure_network(uint mBox)
 	// initially, it runs at 200MHz, but change to 250 during processing
 	// setFreq(msg->srce_port, NULL); --> obsolete!
 	freq = (msg->seq >> 8) | PROF_MSG_SET_FREQ;
-	spin1_send_mc_packet(MCPL_TO_ALL_PROFILER, freq, WITH_PAYLOAD);
-
-	// then tell the other nodes about this op-freq info
-
-	blkInfo->opType = msg->seq >> 4;
+	blkInfo->opType = (msg->seq >> 4) & 0xF;
 	blkInfo->opFilter = (msg->seq >> 2) & 0x3;
 	blkInfo->opSharpen = msg->seq & 0x3;
 
-	payload = msg->seq;
-	spin1_send_mc_packet(MCPL_BCAST_OP_INFO, payload, WITH_PAYLOAD);
+	// then tell the other nodes about this op-freq info
+	spin1_send_mc_packet(MCPL_TO_ALL_PROFILER, freq, WITH_PAYLOAD);
+	spin1_send_mc_packet(MCPL_BCAST_OP_INFO, msg->seq, WITH_PAYLOAD);
 
 	// only root-node needs info about sdpDelayFactorSpin:
 	sdpDelayFactorSpin = msg->srce_port * DEF_DEL_VAL;
@@ -324,9 +321,9 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	/*---------------------------------------------------------------------------*/
 	/*------------------ Regarding network and task configuration ---------------*/
 	else if(key==MCPL_BCAST_OP_INFO) {
-		blkInfo->opType = payload >> 8;
-		blkInfo->opFilter = (payload >> 4) & 0xF;
-		blkInfo->opSharpen = payload & 0xF;
+		blkInfo->opType = (payload >> 4) & 0xF;
+		blkInfo->opFilter = (payload >> 2) & 0x3;
+		blkInfo->opSharpen = payload & 0x3;
 		//we remove setFreq, because now profiler runs on its own:
 		//spin1_schedule_callback(setFreq, (payload >> 16), NULL, PRIORITY_PROCESSING);
 	}
