@@ -138,13 +138,13 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>0</y>
+      <y>70</y>
       <width>231</width>
       <height>81</height>
      </rect>
     </property>
     <property name="title">
-     <string>Operator Type</string>
+     <string>Step-2: Convolution</string>
     </property>
     <widget class="QRadioButton" name="rbSobel">
      <property name="geometry">
@@ -212,13 +212,13 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>90</y>
+      <y>160</y>
       <width>231</width>
       <height>51</height>
      </rect>
     </property>
     <property name="title">
-     <string>Filtering Option</string>
+     <string>Step-3: Filtering</string>
     </property>
     <widget class="QRadioButton" name="rbFilterOff">
      <property name="geometry">
@@ -237,51 +237,6 @@
      </property>
     </widget>
     <widget class="QRadioButton" name="rbFilterOn">
-     <property name="geometry">
-      <rect>
-       <x>140</x>
-       <y>30</y>
-       <width>81</width>
-       <height>22</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>On</string>
-     </property>
-     <property name="checked">
-      <bool>false</bool>
-     </property>
-    </widget>
-   </widget>
-   <widget class="QGroupBox" name="groupBox_3">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>150</y>
-      <width>231</width>
-      <height>51</height>
-     </rect>
-    </property>
-    <property name="title">
-     <string>Sharpening Option</string>
-    </property>
-    <widget class="QRadioButton" name="rbSharpOff">
-     <property name="geometry">
-      <rect>
-       <x>30</x>
-       <y>30</y>
-       <width>81</width>
-       <height>22</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Off</string>
-     </property>
-     <property name="checked">
-      <bool>true</bool>
-     </property>
-    </widget>
-    <widget class="QRadioButton" name="rbSharpOn">
      <property name="geometry">
       <rect>
        <x>140</x>
@@ -496,6 +451,51 @@
     <property name="value">
      <number>1</number>
     </property>
+   </widget>
+   <widget class="QGroupBox" name="groupBox_3">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>231</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string>Step-1: Sharpening</string>
+    </property>
+    <widget class="QRadioButton" name="rbSharpOff">
+     <property name="geometry">
+      <rect>
+       <x>30</x>
+       <y>30</y>
+       <width>81</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Off</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QRadioButton" name="rbSharpOn">
+     <property name="geometry">
+      <rect>
+       <x>140</x>
+       <y>30</y>
+       <width>81</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>On</string>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+    </widget>
    </widget>
   </widget>
   <widget class="QPushButton" name="pbImage">

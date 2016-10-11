@@ -148,11 +148,23 @@ void vidStreamer::cbSpiNNchanged(int idx)
 		ui->sbNchips->setValue(4);
 		ui->sbNchips->setEnabled(false);
 		ui->ipAddr->setText("192.168.240.253");
+#if(DEBUG_LEVEL>1)
+		ui->delFactorHost->setValue(10000);
+		ui->delFactorSpin->setValue(250);
+#else
 		ui->delFactorHost->setValue(475);
+		ui->delFactorSpin->setValue(25);
+#endif
 	} else {
 		ui->sbNchips->setEnabled(true);
 		ui->ipAddr->setText("192.168.240.1");
+#if(DEBUG_LEVEL>1)
+		ui->delFactorHost->setValue(10000);
+		ui->delFactorSpin->setValue(250);
+#else
 		ui->delFactorHost->setValue(550);
+		ui->delFactorSpin->setValue(25);
+#endif
 	}
 
 }

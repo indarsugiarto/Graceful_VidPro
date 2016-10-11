@@ -750,18 +750,23 @@ void imgFiltering(uint arg0, uint arg1)
 	}
 	*/
 
+
 	START_TIMER();
 
 	uint offset = 2 * workers.wImg;	// if using 5x5 Gaussian kernel
 
 	short l,c,n;
-	uchar i,j;
+	int i,j;
 	uchar *dtcmLine;
 	uint dmatag;
 	int sumXY;
 
 	// how many lines this worker has?
 	n = workers.endLine - workers.startLine + 1;
+
+#if(DEBUG_LEVEL>0)
+	io_printf(IO_BUF, "Core-%d doing filtering %d-lines...\n", myCoreID,n);
+#endif
 
 	// prepare the correct line address in sdram
 	getSdramImgAddr(PROC_FILTERING);
@@ -786,24 +791,39 @@ void imgFiltering(uint arg0, uint arg1)
 
 		// scan for all column in the line
 		for(c=0; c<workers.wImg; c++) {
+			//sumXY = *(dtcmLine + c);
+
 			sumXY = 0;
 			if((workers.startLine+l) < 2 || (workers.hImg-workers.startLine+l) <= 2)
 				//sumXY = 0;
-				sumXY = *(dtcmLine + c + i + j*workers.wImg);
+				sumXY = *(dtcmLine + c);
 			else if(c<2 || (workers.wImg-c)<=2)
 				//sumXY = 0;
-				sumXY = *(dtcmLine + c + i + j*workers.wImg);
+				sumXY = *(dtcmLine + c);
 			else {
-				for(i=-2; i<=2; i++)
+				for(i=-2; i<=2; i++) {
 					for(j=-2; j<=2; j++) {
+						//int px = (int)((*(dtcmLine + c + j + i*workers.wImg)));
+						//int ke = FILT[i+2][j+2];
+						//int pxke = px*ke;
+						//sumXY += pxke;
 						//sumXY += (int)((*(dtcmLine + c + i + j*workers.wImg)) * LAP[i+2][j+2]);
 						sumXY += (int)((*(dtcmLine + c + j + i*workers.wImg)) * FILT[i+2][j+2]);
 						//sumXY += (int)(FILT[i+2][j+2] * (*(dtcmLine + c + i + j*workers.wImg)));
+#if(DEBUG_LEVEL>2)
+						if(sv->p2p_addr==0)
+							io_printf(IO_STD, "px = %d, ke = %d, pxke = %d, sumXY = %d\n",
+									  px, ke, pxke, sumXY);
+						else
+							io_printf(IO_BUF, "px = %d, ke = %d, pxke = %d, sumXY = %d\n",
+									  px, ke, pxke, sumXY);
+						sark_delay_us(100);
+#endif
+					}
 				}
+				sumXY /= FILT_DENOM;
 			}
 
-			sumXY /= FILT_DENOM;
-			//io_printf(IO_BUF, "%d\n",sumXY);
 			// make necessary correction
 			if(sumXY>255) sumXY = 255;
 			//if(sumXY<0) sumXY = 0;
@@ -829,6 +849,9 @@ void imgFiltering(uint arg0, uint arg1)
 
 	perf.tCore = READ_TIMER();
 
+#if(DEBUG_LEVEL>0)
+	io_printf(IO_BUF, "Core-%d done with filtering...\n", myCoreID);
+#endif
 
 	// EXPERIMENT: what if we just proceed with the next task?
 	notifyTaskDone();
