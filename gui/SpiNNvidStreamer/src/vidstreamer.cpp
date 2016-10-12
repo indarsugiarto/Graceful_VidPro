@@ -50,7 +50,7 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	screen->setWindowTitle("Original Image/Frame");
     edge = new cScreen();       // this is for displaying result
 	edge->setWindowTitle("Result Image/Frame");
-    spinn = new cSpiNNcomm();
+	spinn = new cSpiNNcomm(this);
 
 	// let's "tile" the widgets
 	QRect rec = QApplication::desktop()->screenGeometry();
@@ -258,13 +258,13 @@ void vidStreamer::errorString(QString err)
 
 void vidStreamer::pbVideoClicked()
 {
-    QString fName = QFileDialog::getOpenFileName(this, "Open Video File", "../../../../videos", "*");
+	QString fName = QFileDialog::getOpenFileName(this, "Open Video File", currDir, "*");
     if(fName.isEmpty())
         return;
     ui->pbPause->setEnabled(true);
 
-	worker = new QThread();
-	decoder = new cDecoder();
+	worker = new QThread(this);
+	decoder = new cDecoder(this);
 
 	decoder->moveToThread(worker);
 	connect(decoder, SIGNAL(error(QString)), this, SLOT(errorString(QString)));
@@ -272,6 +272,7 @@ void vidStreamer::pbVideoClicked()
 	connect(decoder, SIGNAL(finished()), worker, SLOT(quit()));
 	connect(decoder, SIGNAL(finished()), decoder, SLOT(deleteLater()));
 	connect(worker, SIGNAL(finished()), worker, SLOT(deleteLater()));
+	connect(worker, SIGNAL(finished()), decoder, SLOT(deleteLater()));
 	connect(decoder, SIGNAL(newFrame(const QImage &)), screen, SLOT(putFrame(const QImage &)));
 
 	// use the following to send the image from decoder to spinnaker
@@ -298,7 +299,7 @@ void vidStreamer::refreshUpdate()
 	// to the video decoder
 
 	// debugging: bypassing edgeRenderingInProgress:
-	edgeRenderingInProgress = false;
+	// edgeRenderingInProgress = false;
 
 	timespec temp;
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &temp);
@@ -306,8 +307,12 @@ void vidStreamer::refreshUpdate()
 #if(DESTINATION==DEST_HOST)
 
 	if(!edgeRenderingInProgress && decoderIsActive) {
-		qDebug() << QString("Refresh encoder at-%1").arg(temp.tv_sec);
+		//qDebug() << QString("Refresh encoder at-%1").arg(temp.tv_sec);
+		// clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &toc);
+		get_fps();
+		// clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tic);
 		decoder->refresh();
+		// qDebug() << QString("timer interval = %1").arg(refresh->interval());
 	}
 #else
 	if(decoderIsActive) {
@@ -397,7 +402,8 @@ void vidStreamer::pbSendImageClicked()
 
     // send the frame to spinn
 	frameReady(loadedImage);
-    spinn->frameIn(loadedImage);
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tic);
+	spinn->frameIn(loadedImage);
 }
 
 // frameReady() is called when the decoder has a new frame ready to be sent to spinn
@@ -450,23 +456,7 @@ void vidStreamer::frameSent()
 void vidStreamer::edgeRenderingDone()
 {
 	_bEdgeRenderingDone = true;
-	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &toc);
-	timespec temp;
-	quint64 df_ns;
-	double fps;
-	if ((toc.tv_nsec-tic.tv_nsec)<0) {
-		temp.tv_sec = toc.tv_sec-tic.tv_sec-1;
-		temp.tv_nsec = 1000000000+toc.tv_nsec-tic.tv_nsec;
-	} else {
-		temp.tv_sec = toc.tv_sec-tic.tv_sec;
-		temp.tv_nsec = toc.tv_nsec-tic.tv_nsec;
-	}
-	// difference in nanosecond
-	df_ns = temp.tv_sec*1000000000+temp.tv_nsec;
-	fps = 1000000000.0/(double)df_ns;
-#if(DEBUG_LEVEL>1)
-	qDebug() << QString("fps = %1").arg((int)round(fps));
-#endif
+	//clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &toc);
 
 
 	// indicate that the "edge" widget is finish in rendering a frame
@@ -495,6 +485,8 @@ void vidStreamer::pbAnimClicked()
 	QString fName;
 	int i=1;
 
+	//double fps;
+
 	fName = QString("%1/%2.jpg").arg(dir).arg(i);
 	loadedImage.load(fName);
 	setSize(loadedImage.width(), loadedImage.height());
@@ -504,13 +496,17 @@ void vidStreamer::pbAnimClicked()
 		//edge->clear();
 		_bEdgeRenderingDone = false;
 		_bRefresherUpdated = false;
+		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tic);
 		//edge->putFrame(loadedImage);
+		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tic);
 		spinn->frameIn(loadedImage);
 		while (1) {
 			qApp->processEvents();
 			if(_bEdgeRenderingDone && _bRefresherUpdated) break;
 			//if(_bEdgeRenderingDone) break;
 		}
+		//clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &toc);
+		get_fps();
 		fName = QString("%1/%2.jpg").arg(dir).arg(i);
 		loadedImage.load(fName);
 		screen->putFrame(loadedImage);
@@ -524,4 +520,30 @@ void vidStreamer::exFPSChanged(int val)
 	refresh->stop();
 	refresh->setInterval(1000/val);
 	refresh->start();
+}
+
+quint64 vidStreamer::getElapse_ns()
+{
+	timespec temp;
+	quint64 df_ns;
+	if ((toc.tv_nsec-tic.tv_nsec)<0) {
+		temp.tv_sec = toc.tv_sec-tic.tv_sec-1;
+		temp.tv_nsec = 1000000000+toc.tv_nsec-tic.tv_nsec;
+	} else {
+		temp.tv_sec = toc.tv_sec-tic.tv_sec;
+		temp.tv_nsec = toc.tv_nsec-tic.tv_nsec;
+	}
+	// difference in nanosecond
+	df_ns = temp.tv_sec*1000000000+temp.tv_nsec;
+	return df_ns;
+}
+
+double vidStreamer::get_fps()
+{
+	double fps;
+	// note: tic must be collected when sending frame to spinnaker
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &toc);
+	fps = 1000000000.0/(double)getElapse_ns();
+	qDebug() << QString("fps = %1").arg(fps);
+	return fps;
 }

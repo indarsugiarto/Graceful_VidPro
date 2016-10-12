@@ -431,7 +431,13 @@ void sendResultProcessCmd(uint blockID, uint null)
 			else
 				giveDelay(2);
 			*/
+#if(USING_SPIN==5)
+			// TODO: Solve this:
+			// Why using Spin5 we need to give delay in order to avoid
+			// packet drop while in Spin3, we don't need it?
+			// Ans: it must be the BUG in the code...
 			giveDelay(3);
+#endif
 			ptrBuf++;
 		}
 #else

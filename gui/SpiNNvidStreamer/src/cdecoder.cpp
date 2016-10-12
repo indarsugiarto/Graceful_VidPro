@@ -140,9 +140,8 @@ void cDecoder::started()
 						// Publish the result
 						frame = getFrame();
 						emit newFrame(frame);
-						go = false;
+						go = false; // wait until refresh timer fire-up
 
-						// wait until refresh timer fire-up
 					}
 				}
 			}
@@ -153,9 +152,13 @@ void cDecoder::started()
 		}
 		else {
 			// nothing todo!
+			/* Just to check if the decoder is still running...
 			cntr++;
-//			if(cntr==99999999)
-//				qDebug() << "tick...";	// am I alive?
+			if(cntr>=99999999) {
+				qDebug() << "tick...";	// am I alive?
+				cntr = 0;
+			}
+			*/
 			QCoreApplication::processEvents();
 		}
 	}
@@ -190,5 +193,4 @@ QImage cDecoder::getFrame() {
 void cDecoder::refresh()
 {
 	go = true;
-	//qDebug() << "go...";
 }

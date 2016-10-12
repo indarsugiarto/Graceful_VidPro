@@ -1,16 +1,27 @@
 #include "cscreen.h"
 #include <QVBoxLayout>
 #include <QDebug>
+#include <QtGui>
+#include <QtCore>
 
 cScreen::cScreen(QWidget *parent) : QWidget(parent)
 {
+
+	 QRect rec = QApplication::desktop()->screenGeometry();
+	 screenH = rec.height();
+	 screenW = rec.width();
+
+	//QApplication is defined in QtGui
+	//QRect is defined in QtCore
+
+
 	QVBoxLayout layout;
 	viewPort = new QGraphicsView();
 	scene = new QGraphicsScene();
 
 	viewPort->setScene(scene);
-	//viewPort->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	//viewPort->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	//viewPort->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	//viewPort->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 	viewPort->setBackgroundBrush(QBrush(Qt::black));
 	layout.addWidget(viewPort);
 	this->setLayout(&layout);
@@ -48,11 +59,22 @@ void cScreen::putFrame(const QImage &frameku)
 }
 
 void cScreen::setSize(int w, int h){
+	bool resz = false;
+	if(h > screenH) {h = screenH; resz = true;}
+	if(w > screenW) {w = screenW; resz = true;}
 	viewPort->setGeometry(0,0,w,h);
 	this->setGeometry(x(), y(), w, h);
 	this->show();
 	imgW = w;
 	imgH = h;
+	if(!resz) {
+		viewPort->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		viewPort->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	}
+	else {
+		viewPort->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+		viewPort->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	}
 }
 
 void cScreen::getImgSpiNN(const QByteArray &data)

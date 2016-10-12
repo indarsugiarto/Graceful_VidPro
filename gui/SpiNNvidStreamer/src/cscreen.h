@@ -27,6 +27,9 @@ public slots:
 private:
 	int imgW;
 	int imgH;
+	int screenW, screenH;
 };
 
 #endif // CSCREEN_H
+
+

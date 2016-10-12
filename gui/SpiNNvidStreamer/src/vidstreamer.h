@@ -56,6 +56,8 @@ public slots:
 	void edgeRenderingDone();		// useful only for video, not image processing
 	void pbAnimClicked();
 	void exFPSChanged(int val);
+	quint64 getElapse_ns();
+	double get_fps();
 
 private:
     bool isPaused;
