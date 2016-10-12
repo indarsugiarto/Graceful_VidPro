@@ -53,5 +53,5 @@
 *.pyc
 *.pro.user*
 *.aplx
-*.jpg*
-*.png*
+#*.jpg*
+#*.png*
