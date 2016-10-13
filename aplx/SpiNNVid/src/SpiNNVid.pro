@@ -28,7 +28,8 @@ DISTFILES += \
     museum \
     ../../../HOW.DOES.IT.WORK \
     Makefile.common \
-    Makefile.profiler
+    Makefile.profiler \
+    ../../Logs/Buffering_mechanism.log
 
 HEADERS += \
     SpiNNVid.h \

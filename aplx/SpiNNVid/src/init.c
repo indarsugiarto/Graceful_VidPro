@@ -128,8 +128,8 @@ void initRouter()
 	uint workers = allRoute & ~leader;	// for other workers in the chip
 	workers &= (~profiler);				// exclude profiler
 	allRoute &= (~profiler);				// exclude profiler
-	uint dest;
-	ushort x, y, d;
+	uint key, dest;
+	uint x, y, d;
 
 
 
@@ -345,6 +345,50 @@ void initRouter()
 	rtr_mc_set(e, MCPL_SEND_PIXELS_DATA, MCPL_SEND_PIXELS_MASK, dest); e++;
 	rtr_mc_set(e, MCPL_SEND_PIXELS_INFO, MCPL_SEND_PIXELS_MASK, dest); e++;
 	rtr_mc_set(e, MCPL_SEND_PIXELS_DONE, MCPL_SEND_PIXELS_MASK, dest); e++;
+
+
+
+	/*----------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------*/
+	/*----------------- keys for sending result using buffering ------------------*/
+	// key type-1: from the leadAp-root to other leadAps
+	e = rtr_alloc(1);
+	dest = leader;
+#if(USING_SPIN==5)
+	if(x==y) {
+		if(x==0)
+			dest = 1 + (1 << 1) + (1 << 2);
+		else if(x<7)
+			dest += 1 + (1 << 1) + (1 << 2);
+	}
+	else if(x>y) {
+		d = x - y;
+		if(x<7 && d<4)
+			dest += 1;
+	}
+	else if(x<y) {
+		d = y - x;
+		if(d<3 && y<7)
+			dest += (1 << 2);
+	}
+#elif(USING_SPIN==3)
+	if(sv->p2p_addr==0)
+		dest = 1 + (1<<1) + (1<<2);
+#endif
+	rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
+
+	// key type-2: from the leadAp to workers
+	e = rtr_alloc(1);
+	dest = allRoute;
+	rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_CORES, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
+
+	// key type-3: from non-root-cores to root-cores
+	e = rtr_alloc(16);
+	for(d=2; d<=17; d++) {
+		key = MCPL_SEND_PIXELS_BLOCK_CORES_DATA | (d << 16);
+	}
+
+
 
 
 

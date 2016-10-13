@@ -254,6 +254,48 @@
 #define MCPL_SEND_PIXELS_NEXT		0x2e5b0000	// to all leadAps NOT in the root-node
 #define MCPL_SEND_PIXELS_MASK		0xFFFFFFFF
 
+// with buffering technique:
+#define MCPL_SEND_PIXELS_BLOCK		0x3a010000	// to all leadAps NOT in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES 0x3a020000	// to all workers in a chip
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA	0x3b000000	// the base key
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA02	0x3b020000	// to core-2 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA03 0x3b030000	// to core-3 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA04 0x3b040000	// to core-4 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA05	0x3b050000	// to core-5 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA06 0x3b060000	// to core-6 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA07 0x3b070000	// to core-7 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA08 0x3b080000	// to core-8 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA09 0x3b090000	// to core-9 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA0A 0x3b0A0000	// to core-10 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA0B 0x3b0B0000	// to core-11 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA0C 0x3b0C0000	// to core-12 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA0D 0x3b0D0000	// to core-13 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA0E 0x3b0E0000	// to core-14 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA0F 0x3b0F0000	// to core-15 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA10 0x3b100000	// to core-16 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DATA11 0x3b110000	// to core-17 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT	0x3c000000	// the base key
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT02	0x3c020000	// to core-2 in other nodes
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT03 0x3c030000	// to core-3 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT04 0x3c040000	// to core-4 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT05	0x3c050000	// to core-5 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT06 0x3c060000	// to core-6 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT07 0x3c070000	// to core-7 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT08 0x3c080000	// to core-8 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT09 0x3c090000	// to core-9 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT0A 0x3c0A0000	// to core-10 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT0B 0x3c0B0000	// to core-11 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT0C 0x3c0C0000	// to core-12 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT0D 0x3c0D0000	// to core-13 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT0E 0x3c0E0000	// to core-14 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT0F 0x3c0F0000	// to core-15 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT10 0x3c100000	// to core-16 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_NEXT11 0x3c110000	// to core-17 in the root-node
+#define MCPL_SEND_PIXELS_BLOCK_CORES_DONE	0x3dff0000	// from workers to its leadAp
+#define MCPL_SEND_PIXELS_BLOCK_DONE	0x3a030000	// to leadAp-root from other leadAps
+#define MCPL_SEND_PIXELS_BLOCK_MASK	0xFFFF0000
+
+
 // The lower part of the key is the line that is expected to be sent. The node which has
 // that line will then respond by sending the pixels.
 
