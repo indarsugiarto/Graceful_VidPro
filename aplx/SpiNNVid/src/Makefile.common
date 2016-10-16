@@ -1,18 +1,20 @@
-APP = SpiNNVid$(SPINN_ID)
 
 # First, define SPINN_DIRS and the correct library
 SPINN_DIRS := /opt/spinnaker_tools_134
+#SPINN_DIRS := /opt/spinnaker_tools_3.0.1
 SPINN_TOOLS := $(SPINN_DIRS)/tools
 
 LIBRARY := $(SPINN_DIRS)/lib/libspin1_api.a
+
+#In old version, doesn't support C++:
 SCRIPT = $(SPINN_DIRS)/lib/sark.lnk
 
-# List of objects making up the application. If there are other files
-# in the application, add their object file names to this variable.
-OBJECTS = main.o init.o eHandler.o process.o util.o frameio.o
+#Now, it seems it supports C++:
+#SCRIPT = $(SPINN_DIRS)/tools/sark.lnk
 
 ifndef GNUBIN
-    GNUBIN := /opt/arm-2013.05/bin
+    #GNUBIN := /opt/arm-2013.05/bin
+    GNUBIN := /opt/gcc-arm-none-eabi-5_4-2016q3/bin
 endif
 
 # We mainly use GNU toolchain
@@ -89,6 +91,12 @@ main.o: main.c SpiNNVid.h
 
 frameio.o: frameio.c SpiNNVid.h
 	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)$@
+
+profiler.o: profiler.c profiler.h defSpiNNVid.h
+	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)$@
+
+isr.o: isr.c profiler.h defSpiNNVid.h
+	$(CA) $(CFLAGS) $< -o $(BUILD_DIR)$@
 
 #-------------------------------------------------------------------------------
 

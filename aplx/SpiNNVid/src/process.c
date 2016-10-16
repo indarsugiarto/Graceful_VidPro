@@ -80,8 +80,12 @@ void allocateDtcmImgBuf()
 	 * dtcmImgBuf can be 3 or 5 times the image width
 	 * dtcmImgFilt is fixed 5 times
 	*/
+	ushort sz4BResImgBuf = workers.wImg;	// to make sure 4 pixels aligned to avoid corruption
+	while(sz4BResImgBuf%4 != 0) {
+		sz4BResImgBuf++;
+	}
 	dtcmImgBuf = sark_alloc(workers.szDtcmImgBuf, sizeof(uchar));
-	resImgBuf = sark_alloc(workers.wImg, sizeof(uchar));	// just one line!
+	resImgBuf = sark_alloc(sz4BResImgBuf, sizeof(uchar));	// just "aligned" one line!
 	dtcmImgFilt = sark_alloc(workers.szDtcmImgFilt, sizeof(uchar));
 }
 
@@ -803,22 +807,7 @@ void imgFiltering(uint arg0, uint arg1)
 			else {
 				for(i=-2; i<=2; i++) {
 					for(j=-2; j<=2; j++) {
-						//int px = (int)((*(dtcmLine + c + j + i*workers.wImg)));
-						//int ke = FILT[i+2][j+2];
-						//int pxke = px*ke;
-						//sumXY += pxke;
-						//sumXY += (int)((*(dtcmLine + c + i + j*workers.wImg)) * LAP[i+2][j+2]);
 						sumXY += (int)((*(dtcmLine + c + j + i*workers.wImg)) * FILT[i+2][j+2]);
-						//sumXY += (int)(FILT[i+2][j+2] * (*(dtcmLine + c + i + j*workers.wImg)));
-#if(DEBUG_LEVEL>2)
-						if(sv->p2p_addr==0)
-							io_printf(IO_STD, "px = %d, ke = %d, pxke = %d, sumXY = %d\n",
-									  px, ke, pxke, sumXY);
-						else
-							io_printf(IO_BUF, "px = %d, ke = %d, pxke = %d, sumXY = %d\n",
-									  px, ke, pxke, sumXY);
-						sark_delay_us(100);
-#endif
 					}
 				}
 				sumXY /= FILT_DENOM;

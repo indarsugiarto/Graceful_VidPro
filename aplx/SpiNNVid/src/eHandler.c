@@ -587,6 +587,50 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	else if(key==MCPL_SEND_PIXELS_DONE) {
 		spin1_schedule_callback(sendResultToTarget, 0, 0, PRIORITY_PROCESSING);
 	}
+
+
+
+	/* This is the sendResult using buffering mechanism */
+	// MCPL_SEND_PIXELS_BLOCK is sent by root-leadAp to other leadAps
+	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK && payload == blkInfo->nodeBlockID) {
+		nWorkerDone = 0;
+		spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_CORES, 0, WITH_PAYLOAD);
+	}
+	// MCPL_SEND_PIXELS_BLOCK_CORES is  sent from leadAp to its workers
+	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK_CORES) {
+		spin1_schedule_callback(worker_send_result, 0, 0, PRIORITY_PROCESSING);
+	}
+	// MCPL_SEND_PIXELS_BLOCK_CORES_DONEs are sent from workers to leadAp
+	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK_CORES_DONE) {
+		nWorkerDone++;
+		// Note: not all workers runs, especially if nLines << nWorker
+		if(nWorkerDone==workers.tRunning) {
+			spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_DONE, 0, WITH_PAYLOAD);
+		}
+	}
+	// if a block has sent all its part, it notify the root-leadAp, which
+	// restart the sendResultChain again
+	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK_DONE) {
+		nBlockDone++;
+		spin1_schedule_callback(sendResultChain, blkInfo->nodeBlockID + 1, 0, PRIORITY_PROCESSING);
+	}
+	// MCPL_SEND_PIXELS_BLOCK_PREP is sent by root-leadAp to prepare its workers
+	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK_PREP) {
+		sendResultInfo.nReceived_MCPL_SEND_PIXELS = 0;
+		sendResultInfo.pxBufPtr = resImgBuf;
+		// at this point, 4-byte aligned resImgBuf should already exist
+	}
+	// if the core receives pixels data from other nodes with the same coreID
+	else if((key_hdr & 0x3) == MCPL_SEND_PIXELS_BLOCK_CORES_DATA) {
+		sark_mem_cpy(sendResultInfo.pxBufPtr, &payload, 4);
+		sendResultInfo.pxBufPtr += 4;
+		sendResultInfo.nReceived_MCPL_SEND_PIXELS += 4;
+		if(sendResultInfo.nReceived_MCPL_SEND_PIXELS >= workers.wImg)
+			spin1_schedule_callback(worker_recv_result, key_arg, 0, PRIORITY_PROCESSING);
+	}
+	else if((key_hdr & 0x3) == MCPL_SEND_PIXELS_BLOCK_CORES_NEXT) {
+		flag_SendResultCont = TRUE;
+	}
 }
 
 void hSDP(uint mBox, uint port)

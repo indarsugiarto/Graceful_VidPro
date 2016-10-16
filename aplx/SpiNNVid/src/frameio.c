@@ -21,8 +21,8 @@
  * sendResultChain(). The sendResultChain() will be re-scheduled everytime
  * until all blocks have sent their part.
  *
- * In this version, the root-node will collect the pixel from other nodes, assemble
- * the sdp, and send to the target (host-pc or fpga).
+ * In this version, the root-node will buffer all pixel before sending out to the
+ * target (host-pc or fpga).
  *
  * There are two similar subroutine sendResultToTarget and sendResultToTargetFromRoot:
  * - sendResultToTargetFromRoot is dedicated for the root-node and is executed before:
@@ -32,6 +32,18 @@
  *------------------------------------------------------------------------------*/
 void sendResult(uint unused, uint arg1)
 {
+
+	// start buffering mechanism
+
+	// first, tell workers in the root-node to prepare receiving pixels
+	spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_PREP, 0, WITH_PAYLOAD);
+
+	// second, start the chain
+	nBlockDone = 1;	// root node has finished its part
+	spin1_schedule_callback(sendResultChain, 1, 0, PRIORITY_PROCESSING);
+
+	/* The following works in the fixingFilt branch...
+
 	// as the root, we have the first chance to send the result
 #if(DEBUG_LEVEL>0)
 	io_printf(IO_STD, "sendResultToTargetFromRoot()\n");
@@ -58,6 +70,7 @@ void sendResult(uint unused, uint arg1)
 
 	sendResultInfo.blockToSend = 1;
 	spin1_schedule_callback(sendResultChain, 1, 0, PRIORITY_PROCESSING);
+	*/
 }
 
 
@@ -72,16 +85,23 @@ void sendResultChain(uint nextBlock, uint unused)
 #if(DEBUG_LEVEL>1)
 		io_printf(IO_STD, "Notify host and set taskList...\n");
 #endif
-		notifyDestDone(0,0);
-		notifyTaskDone();
+		// wBuffering debugging: disable host temporary
+		// notifyDestDone(0,0);
+		// notifyTaskDone();
 	}
 	else {
 #if(DEBUG_LEVEL>1)
 		io_printf(IO_STD, "sendResultChain for block-%d\n", nextBlock);
 #endif
+
+		sendResultInfo.blockToSend = nextBlock; // the next block to send is block-1
+		spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK, sendResultInfo.blockToSend, WITH_PAYLOAD);
+
+		/* This is the working fixingFilt branch...
 		sendResultInfo.nReceived_MCPL_SEND_PIXELS = 0;
 		sendResultInfo.pxBufPtr = (uchar *)&resultMsg.cmd_rc;
 		spin1_send_mc_packet(MCPL_SEND_PIXELS_CMD, nextBlock, WITH_PAYLOAD);
+		*/
 	}
 
 	/* deprecated method: using nextLine parameter...
@@ -113,6 +133,67 @@ void sendResultChain(uint nextBlock, uint unused)
 	*/
 }
 
+// worker_send_result() is called if worker receives MCPL_SEND_PIXELS_BLOCK_CORES
+// from its leadAp, and iterate until all its part is completed
+void worker_send_result(uint arg0, uint arg1)
+{
+	ushort l, sz;
+	uchar *imgOut;
+	uint dmatag;
+	uint key;
+	uint *ptrPx;
+	int rem;	// might goes into negative region
+
+	imgOut = (uchar *)getSdramResultAddr();
+	dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
+
+	for(l = workers.startLine; l <= workers.endLine; l++) {
+#if(DEBUG_LEVEL>1)
+		io_printf(IO_BUF, "Sending line-%d...\n", l);
+#endif
+		key = MCPL_SEND_PIXELS_BLOCK_CORES_DATA | (myCoreID << 16) | l;
+		dmaImgFromSDRAMdone = 0;
+		do {
+			dmaTID = spin1_dma_transfer(dmatag, imgOut, resImgBuf, DMA_READ, workers.wImg);
+		} while(dmaTID==0);
+		while(dmaImgFromSDRAMdone==0);
+
+		ptrPx = (uint *)resImgBuf;
+		flag_SendResultCont = FALSE;
+		rem = workers.wImg;
+		do {
+			spin1_send_mc_packet(key, *ptrPx, WITH_PAYLOAD);
+			ptrPx++;
+			rem -= 4;
+		} while(rem > 0);
+		while(flag_SendResultCont == FALSE);
+	}
+	spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_CORES_DONE, 0, WITH_PAYLOAD);
+}
+
+// worker_recv_result() is called when a worker in the root-node receives the complete
+// line from other node and it will send MCPL_SEND_PIXELS_BLOCK_CORES_NEXT
+void worker_recv_result(uint line, uint arg1)
+{
+	// step-0: determine the address of the line
+	uchar *lineAddr = (uchar *)getSdramResultAddr();
+	lineAddr += line*workers.wImg;
+
+	// step-1: put into sdram
+	uint dmatag = DMA_STORE_IMG_TAG | (myCoreID << 16);
+	do {
+		dmaTID = spin1_dma_transfer(dmatag, lineAddr, resImgBuf,
+									DMA_WRITE, workers.wImg);
+	} while(dmaTID==0);
+
+	// step-2: reset counter
+	sendResultInfo.nReceived_MCPL_SEND_PIXELS = 0;
+	sendResultInfo.pxBufPtr = resImgBuf;
+
+	// step-3: send "next" signal
+	uint key = MCPL_SEND_PIXELS_BLOCK_CORES_NEXT | (myCoreID << 16);
+	spin1_send_mc_packet(key, 0, WITH_PAYLOAD);
+}
 
 // we cannot use workers.imgROut, because workers.imgROut differs from core to core
 // use workers.blkImgROut instead!

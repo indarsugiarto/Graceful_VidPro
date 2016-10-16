@@ -1,3 +1,6 @@
 # We need to suply the program with this information: -DUSING_SPIN=3 or -DUSING_SPIN=5
 SPINN_ID := 3
+APP = SpiNNVid$(SPINN_ID)
+OBJECTS = main.o init.o eHandler.o process.o util.o frameio.o
+
 include Makefile.common

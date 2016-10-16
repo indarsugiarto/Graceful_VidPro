@@ -266,8 +266,9 @@ task_list_t taskList;
 typedef struct send_result_info {
 	ushort blockToSend;					// it is used in sendResult()
 	int szBlock;
-	ushort nReceived_MCPL_SEND_PIXELS;
+	uint nReceived_MCPL_SEND_PIXELS;
 	uchar *pxBufPtr;
+	// regarding buffering mechanism
 } send_result_info_t;
 send_result_info_t sendResultInfo;
 
@@ -324,7 +325,7 @@ volatile uchar nBlockDone;
 
 // to speed up, let's allocate these two buffers in computeWLoad()
 uchar *dtcmImgBuf;
-uchar *resImgBuf;
+uchar *resImgBuf;				// CHECK: make sure this is 4-byte aligned to avoid corruption!
 ushort pixelCntr;				// how many pixel has been processed?
 uchar *dtcmImgFilt;				// similar with dtcmImgBuf, but fixed to 5 block instead of 3 block
 								// in dtcmImgBuf, the block might be 3 (SOBEL) or 5 (LAPLACE)
@@ -378,10 +379,13 @@ void computeHist(uint arg0, uint arg1);     // will use ypxbuf to compute the hi
 
 void triggerProcessing(uint taskID, uint arg1);
 
+
+
 // core image processing:
 void imgFiltering(uint arg0, uint arg1);
 void imgSharpening(uint arg0, uint arg1);
 void imgDetection(uint arg0, uint arg1);
+
 
 // sending result
 void sendResult(uint blkID, uint arg1);		// blkID is the expected node to send
@@ -392,6 +396,10 @@ void sendResultChain(uint nextBlock, uint unused);
 void notifyDestDone(uint arg0, uint arg1);
 uint getSdramResultAddr();
 void sendImgChunkViaSDP(uint sz, uint alternativeDelay);
+void worker_send_result(uint arg0, uint arg1);
+void worker_recv_result(uint line, uint arg1);
+
+
 
 // debugging and reporting
 void give_report(uint reportType, uint target);

@@ -129,7 +129,7 @@ void initRouter()
 	workers &= (~profiler);				// exclude profiler
 	allRoute &= (~profiler);				// exclude profiler
 	uint key, dest;
-	uint x, y, d;
+	uint x, y, d, c;
 
 
 
@@ -351,7 +351,15 @@ void initRouter()
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
 	/*----------------- keys for sending result using buffering ------------------*/
-	// key type-1: from the leadAp-root to other leadAps
+
+	// key type-1: from leadAp-root to its own workers
+	if(blkInfo->nodeBlockID == 0) {
+		e = rtr_alloc(1);
+		dest = allRoute;
+		rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_PREP, MCPL_SEND_PIXELS_BLOCK_MASK, dest);
+	}
+
+	// key type-2: from the leadAp-root to other leadAps
 	e = rtr_alloc(1);
 	dest = leader;
 #if(USING_SPIN==5)
@@ -377,17 +385,56 @@ void initRouter()
 #endif
 	rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
 
-	// key type-2: from the leadAp to workers
+	// key type-3: from the leadAp to workers
 	e = rtr_alloc(1);
 	dest = allRoute;
 	rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_CORES, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
 
-	// key type-3: from non-root-cores to root-cores
+	// key type-4: from worker to its leadAp
+	e = rtr_alloc(1);
+	dest = (1 << LEAD_CORE+6);	// equal to dest = leader;
+	rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_CORES_DONE, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
+
+	// key type-5: from non-root-cores to root-cores
 	e = rtr_alloc(16);
-	for(d=2; d<=17; d++) {
-		key = MCPL_SEND_PIXELS_BLOCK_CORES_DATA | (d << 16);
+	for(c=2; c<=17; c++) {
+		key = MCPL_SEND_PIXELS_BLOCK_CORES_DATA | (c << 16);
+		// this is for sending toward core <0,0,leadAp>
+		if (x>0 && y>0)			dest = (1 << 4);	// south-west
+		else if(x>0 && y==0)	dest = (1 << 3);	// west
+		else if(x==0 && y>0)	dest = (1 << 5);	// south
+		else					dest = c << 8;
+		rtr_mc_set(e, key, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
 	}
 
+	// key type-6: from root-cores to non-root-cores
+	e = rtr_alloc(16);
+	for(c=2; c<17; c++) {
+		dest = c << 8;
+#if(USING_SPIN==5)
+		if(x==y) {
+			if(x==0)
+				dest = 1 + (1 << 1) + (1 << 2);
+			else if(x<7)
+				dest += 1 + (1 << 1) + (1 << 2);
+		}
+		else if(x>y) {
+			d = x - y;
+			if(x<7 && d<4)
+				dest += 1;
+		}
+		else if(x<y) {
+			d = y - x;
+			if(d<3 && y<7)
+				dest += (1 << 2);
+		}
+#elif(USING_SPIN==3)
+		if(sv->p2p_addr==0)
+			dest = 1 + (1<<1) + (1<<2);
+#endif
+		key = MCPL_SEND_PIXELS_BLOCK_CORES_NEXT | (c << 16);
+		rtr_mc_set(e, key, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
+	}
 
 
 

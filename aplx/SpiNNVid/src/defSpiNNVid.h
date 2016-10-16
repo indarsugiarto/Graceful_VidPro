@@ -6,7 +6,7 @@
 #ifndef DEFSPINNVID_H
 #define DEFSPINNVID_H
 
-#define MAJOR_VERSION               1
+#define MAJOR_VERSION               2
 #define MINOR_VERSION               1
 
 // Version log
@@ -16,6 +16,7 @@
 // 1.0 Implement video processing (filtering & sharpening are excluded)
 // 1.1 Send to FPGA via FR directly (without SDP)
 // 2.0 Implement task scheduling and DVS emulation
+// 2.1 Implement buffering
 
 
 #define ADAPTIVE_FREQ               FALSE
@@ -74,8 +75,8 @@
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
 /*--------------------- Debugging and reporting definition --------------------------*/
-#define DEBUG_LEVEL				0	// no debugging message at all
-//#define DEBUG_LEVEL                 3
+//#define DEBUG_LEVEL				0	// no debugging message at all
+#define DEBUG_LEVEL                 3
 // various report for debugging (send by host):
 #define DEBUG_REPORT_NWORKERS       1		// only leadAp (in all nodes)
 #define DEBUG_REPORT_WID            2		// only leadAp (in all nodes)
@@ -294,7 +295,7 @@
 #define MCPL_SEND_PIXELS_BLOCK_CORES_DONE	0x3dff0000	// from workers to its leadAp
 #define MCPL_SEND_PIXELS_BLOCK_DONE	0x3a030000	// to leadAp-root from other leadAps
 #define MCPL_SEND_PIXELS_BLOCK_MASK	0xFFFF0000
-
+#define MCPL_SEND_PIXELS_BLOCK_PREP	0x3a040000	// leadAp-root prepares its workers
 
 // The lower part of the key is the line that is expected to be sent. The node which has
 // that line will then respond by sending the pixels.
