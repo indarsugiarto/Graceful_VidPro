@@ -15,9 +15,6 @@ void initIDcollection(uint withBlkInfo, uint Unused)
 #endif
 
 
-#if(DEBUG_LEVEL > 0)
-	io_printf(IO_BUF, "[SpiNNVid] initIDcollection...\n");
-#endif
 	spin1_send_mc_packet(MCPL_BCAST_INFO_KEY, 0, WITH_PAYLOAD);
 
 	// if withBlkInfo is True, then we need to broadcast blkInfo
@@ -34,9 +31,6 @@ void initIDcollection(uint withBlkInfo, uint Unused)
 // all ID from other cores
 void bcastWID(uint Unused, uint null)
 {
-#if(DEBUG_LEVEL > 0)
-	io_printf(IO_BUF, "[SpiNNVid] Distributing wIDs...\n");
-#endif
 	// payload.high = tAvailable, payload.low = wID
 	for(uint i= 1; i<workers.tAvailable; i++)	// excluding leadAp
 		spin1_send_mc_packet(workers.wID[i], (workers.tAvailable << 16) + i, WITH_PAYLOAD);
@@ -52,14 +46,14 @@ void bcastWID(uint Unused, uint null)
 void allocateDtcmImgBuf()
 {
 	if(dtcmImgBuf != NULL) {
-#if(DEBUG_LEVEL>1)
+#if(DEBUG_LEVEL>3)
 		io_printf(IO_BUF, "[IMGBUF] Releasing DTCM heap...\n");
 #endif
 		sark_free(dtcmImgBuf); //dtcmImgBuf = NULL;
 		sark_free(resImgBuf); //resImgBuf = NULL;
 		sark_free(dtcmImgFilt); //dtcmImgFilt = NULL;
 	}
-#if(DEBUG_LEVEL>1)
+#if(DEBUG_LEVEL>3)
 		io_printf(IO_BUF, "[IMGBUF] Allocating DTCM heap...\n");
 #endif
 	// prepare the pixel buffers
@@ -214,6 +208,7 @@ void computeWLoad(uint withReport, uint arg1)
 	//workers.imgOut3 = blkInfo->imgOut3 + w*workers.startLine;
 	// so, each work has different value of those workers.img*
 
+	/*
 	// leadAp needs to know, the address of image block
 	// it will be used for sending result to host-PC
 	if(myCoreID == LEAD_CORE) {
@@ -226,6 +221,15 @@ void computeWLoad(uint withReport, uint arg1)
 		//workers.blkImgOut2 = blkInfo->imgOut2 + offset;
 		//workers.blkImgOut3 = blkInfo->imgOut3 + offset;
 	}
+	*/
+	// all cores in IOnode needs to know the address of image block
+	uint szBlk = (workers.blkEnd - workers.blkStart + 1) * workers.wImg;
+	uint offset = blkInfo->nodeBlockID * szBlk;
+	workers.blkImgRIn = blkInfo->imgRIn + offset;
+	workers.blkImgGIn = blkInfo->imgGIn + offset;
+	workers.blkImgBIn = blkInfo->imgBIn + offset;
+	workers.blkImgOut1 = blkInfo->imgOut1 + offset;
+
 
 	// other locally copied data (in DTCM, rather than in SysRam)
 	workers.opFilter = blkInfo->opFilter;

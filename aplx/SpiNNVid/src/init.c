@@ -203,7 +203,7 @@ void initRouter()
 		rtr_mc_set(e, MCPL_BCAST_NODES_INFO,	0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_OP_INFO,		0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_FRAME_INFO,	0xFFFFFFFF, dest); e++;
-		rtr_mc_set(e, MCPL_BCAST_SEND_RESULT,	0xFFFFFFFF, dest); e++;
+		//rtr_mc_set(e, MCPL_BCAST_SEND_RESULT,	0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_RESET_NET,		0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_NET_DISCOVERY, 0xFFFFFFFF, dest); e++;
 	}
@@ -353,10 +353,11 @@ void initRouter()
 	/*----------------- keys for sending result using buffering ------------------*/
 
 	// key type-1: from leadAp-root to its own workers
-	if(blkInfo->nodeBlockID == 0) {
+	//if(blkInfo->nodeBlockID == 0) { // -> nodeBlockID is not available during this init()!!!!
+	if(sv->p2p_addr == 0) {
 		e = rtr_alloc(1);
 		dest = allRoute;
-		rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_PREP, MCPL_SEND_PIXELS_BLOCK_MASK, dest);
+		rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_PREP, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
 	}
 
 	// key type-2: from the leadAp-root to other leadAps
@@ -403,14 +404,14 @@ void initRouter()
 		if (x>0 && y>0)			dest = (1 << 4);	// south-west
 		else if(x>0 && y==0)	dest = (1 << 3);	// west
 		else if(x==0 && y>0)	dest = (1 << 5);	// south
-		else					dest = c << 8;
+		else					dest = 1 << (6+c);
 		rtr_mc_set(e, key, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
 	}
 
 	// key type-6: from root-cores to non-root-cores
 	e = rtr_alloc(16);
-	for(c=2; c<17; c++) {
-		dest = c << 8;
+	for(c=2; c<=17; c++) {
+		dest = 1 << (6+c);
 #if(USING_SPIN==5)
 		if(x==y) {
 			if(x==0)
@@ -436,8 +437,14 @@ void initRouter()
 		rtr_mc_set(e, key, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
 	}
 
-
-
+	// key type-7: from node-leadAp to root-leadAp
+	e = rtr_alloc(1);
+	// this is for sending toward core <0,0,leadAp>
+	if (x>0 && y>0)			dest = (1 << 4);	// south-west
+	else if(x>0 && y==0)	dest = (1 << 3);	// west
+	else if(x==0 && y>0)	dest = (1 << 5);	// south
+	else					dest = leader;
+	rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_DONE, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
 
 
 	/*----------------------------------------------------------------------------*/

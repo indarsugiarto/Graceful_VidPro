@@ -395,6 +395,7 @@ void sendResultToTargetFromRoot();
 void sendResultChain(uint nextBlock, uint unused);
 void notifyDestDone(uint arg0, uint arg1);
 uint getSdramResultAddr();
+uint getSdramBlockResultAddr();	// similar to getSdramResultAddr but used ONLY by root-node
 void sendImgChunkViaSDP(uint sz, uint alternativeDelay);
 void worker_send_result(uint arg0, uint arg1);
 void worker_recv_result(uint line, uint arg1);
@@ -405,8 +406,10 @@ void worker_recv_result(uint line, uint arg1);
 void give_report(uint reportType, uint target);
 volatile uint giveDelay(uint delVal);	// delVal is the number of clock step
 void hTimer(uint tick, uint Unused);
+/*
 void seePxBuffer(char *stream);
 void peekPxBufferInSDRAM(char *stream);
+*/
 void getTaskName(proc_t proc, char strBuf[]);
 
 REAL roundr(REAL inVal);

@@ -184,6 +184,7 @@ void give_report(uint reportType, uint target)
 #endif
 }
 
+/*
 void seePxBuffer(char *stream)
 {
 	if(sv->p2p_addr != 0) return;
@@ -255,7 +256,7 @@ void peekPxBufferInSDRAM(char *stream)
 	io_printf(stream, "\n---------------------------------\n");
 
 }
-
+*/
 
 inline REAL roundr(REAL inVal)
 {

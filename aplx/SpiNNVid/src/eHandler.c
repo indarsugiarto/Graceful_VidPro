@@ -499,12 +499,14 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 											// but not fully used
 	}
 
+	/*
 	// the following MCPL_BCAST_SEND_RESULT will trigger a chain in it:
 	else if(key==MCPL_BCAST_SEND_RESULT) {
 		// if my block is enable, then proceed:
 		if(blkInfo->maxBlock!=0)
 			spin1_schedule_callback(sendResult, payload, NULL, PRIORITY_PROCESSING);
 	}
+	*/
 
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
@@ -603,34 +605,51 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	// MCPL_SEND_PIXELS_BLOCK_CORES_DONEs are sent from workers to leadAp
 	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK_CORES_DONE) {
 		nWorkerDone++;
-		// Note: not all workers runs, especially if nLines << nWorker
+		// Note: not all workers might running, especially if nLines << nWorker
 		if(nWorkerDone==workers.tRunning) {
+#if(DEBUG_LEVEL>2)
+			io_printf(IO_STD, "Block-%d done!\n", blkInfo->nodeBlockID);
+#endif
 			spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_DONE, 0, WITH_PAYLOAD);
 		}
 	}
-	// if a block has sent all its part, it notify the root-leadAp, which
+	// if a block has sent all its part, it notifies the root-leadAp, which
 	// restart the sendResultChain again
 	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK_DONE) {
 		nBlockDone++;
-		spin1_schedule_callback(sendResultChain, blkInfo->nodeBlockID + 1, 0, PRIORITY_PROCESSING);
+		spin1_schedule_callback(sendResultChain, nBlockDone, 0, PRIORITY_PROCESSING);
 	}
 	// MCPL_SEND_PIXELS_BLOCK_PREP is sent by root-leadAp to prepare its workers
 	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK_PREP) {
+#if(DEBUG_LEVEL>1)
+		//io_printf(IO_BUF, "Worker is preparing sendResult...\n");
+#endif
 		sendResultInfo.nReceived_MCPL_SEND_PIXELS = 0;
 		sendResultInfo.pxBufPtr = resImgBuf;
 		// at this point, 4-byte aligned resImgBuf should already exist
 	}
 	// if the core receives pixels data from other nodes with the same coreID
-	else if((key_hdr & 0x3) == MCPL_SEND_PIXELS_BLOCK_CORES_DATA) {
+	else if((key_hdr & 0xFF000000) == MCPL_SEND_PIXELS_BLOCK_CORES_DATA) {
+//#if(DEBUG_LEVEL > 1)
+//		io_printf(IO_BUF, "Got key-0x%x, pay-0x%x\n", key, payload);
+//#endif
 		sark_mem_cpy(sendResultInfo.pxBufPtr, &payload, 4);
 		sendResultInfo.pxBufPtr += 4;
 		sendResultInfo.nReceived_MCPL_SEND_PIXELS += 4;
 		if(sendResultInfo.nReceived_MCPL_SEND_PIXELS >= workers.wImg)
+			//io_printf(IO_BUF, "Got the line!\n");
 			spin1_schedule_callback(worker_recv_result, key_arg, 0, PRIORITY_PROCESSING);
 	}
-	else if((key_hdr & 0x3) == MCPL_SEND_PIXELS_BLOCK_CORES_NEXT) {
+	else if((key_hdr & 0xFF000000) == MCPL_SEND_PIXELS_BLOCK_CORES_NEXT) {
 		flag_SendResultCont = TRUE;
 	}
+/*
+#if(DEBUG_LEVEL > 1)
+	else {
+		io_printf(IO_BUF, "Got key-0x%x, pay-0x%x\n", key, payload);
+	}
+#endif
+*/
 }
 
 void hSDP(uint mBox, uint port)
@@ -640,10 +659,8 @@ void hSDP(uint mBox, uint port)
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
 
 #if (DEBUG_LEVEL>1)
-	io_printf(IO_STD, "got sdp tag = 0x%x, srce_port = 0x%x, srce_addr = 0x%x, dest_port = 0x%x\n",
-			  msg->tag, msg->srce_port, msg->srce_addr, msg->dest_port);
-#elif (DEBUG_LEVEL>2)
-	io_printf(IO_STD, "got sdp on port = %d\n", port);
+	io_printf(IO_STD, "got sdp on port-%d, tag = 0x%x, srce_port = 0x%x, srce_addr = 0x%x, dest_port = 0x%x\n",
+			  port, msg->tag, msg->srce_port, msg->srce_addr, msg->dest_port);
 #endif
 
 	if(port==SDP_PORT_CONFIG) {

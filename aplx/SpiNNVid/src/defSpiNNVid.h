@@ -75,8 +75,8 @@
 /*-----------------------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------------------*/
 /*--------------------- Debugging and reporting definition --------------------------*/
-//#define DEBUG_LEVEL				0	// no debugging message at all
-#define DEBUG_LEVEL                 3
+#define DEBUG_LEVEL				0	// no debugging message at all
+//#define DEBUG_LEVEL                 3
 // various report for debugging (send by host):
 #define DEBUG_REPORT_NWORKERS       1		// only leadAp (in all nodes)
 #define DEBUG_REPORT_WID            2		// only leadAp (in all nodes)
@@ -210,7 +210,7 @@
 #define MCPL_BCAST_FRAME_INFO		0xbca50005
 #define MCPL_BCAST_ALL_REPORT		0xbca50006	// the payload might contain specific reportType
 #define MCPL_BCAST_START_PROC		0xbca50007
-#define MCPL_BCAST_SEND_RESULT		0xbca50008	// trigger the node to send the result to dest
+//#define MCPL_BCAST_SEND_RESULT		0xbca50008	// trigger the node to send the result to dest
 #define MCPL_BCAST_RESET_NET        0xbca50009  // reset the network
 
 // mechanism for controlling the image processing
@@ -296,6 +296,9 @@
 #define MCPL_SEND_PIXELS_BLOCK_DONE	0x3a030000	// to leadAp-root from other leadAps
 #define MCPL_SEND_PIXELS_BLOCK_MASK	0xFFFF0000
 #define MCPL_SEND_PIXELS_BLOCK_PREP	0x3a040000	// leadAp-root prepares its workers
+
+//#define MCPL_SEND_PIXELS_BLOCK_DELAY	40		// works great with 320x240
+#define MCPL_SEND_PIXELS_BLOCK_DELAY	60		// works for all
 
 // The lower part of the key is the line that is expected to be sent. The node which has
 // that line will then respond by sending the pixels.

@@ -33,9 +33,19 @@
 void sendResult(uint unused, uint arg1)
 {
 
+	/* Test by sending only from root-node...
+	sendResultToTargetFromRoot();
+	notifyDestDone(0,0);
+	notifyTaskDone();
+	return;
+	*/
+
 	// start buffering mechanism
 
 	// first, tell workers in the root-node to prepare receiving pixels
+#if(DEBUG_LEVEL>1)
+	io_printf(IO_STD, "Tell root-workers to prepare sendResult...\n");
+#endif
 	spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_PREP, 0, WITH_PAYLOAD);
 
 	// second, start the chain
@@ -76,7 +86,8 @@ void sendResult(uint unused, uint arg1)
 
 /* sendResultChain() is the second after the main sendResult()
  * This is to iterate the block other than the root-node.
- *
+ * It is called for the first time from sendResult(), then
+ * consequtively from hMCPL_SpiNNVid()
  * */
 void sendResultChain(uint nextBlock, uint unused)
 {
@@ -85,9 +96,12 @@ void sendResultChain(uint nextBlock, uint unused)
 #if(DEBUG_LEVEL>1)
 		io_printf(IO_STD, "Notify host and set taskList...\n");
 #endif
+		// TODO: streaming!!!
+		sendResultToTargetFromRoot();
+
 		// wBuffering debugging: disable host temporary
-		// notifyDestDone(0,0);
-		// notifyTaskDone();
+		notifyDestDone(0,0);
+		notifyTaskDone();
 	}
 	else {
 #if(DEBUG_LEVEL>1)
@@ -137,7 +151,7 @@ void sendResultChain(uint nextBlock, uint unused)
 // from its leadAp, and iterate until all its part is completed
 void worker_send_result(uint arg0, uint arg1)
 {
-	ushort l, sz;
+	ushort l, cntr;
 	uchar *imgOut;
 	uint dmatag;
 	uint key;
@@ -149,7 +163,7 @@ void worker_send_result(uint arg0, uint arg1)
 
 	for(l = workers.startLine; l <= workers.endLine; l++) {
 #if(DEBUG_LEVEL>1)
-		io_printf(IO_BUF, "Sending line-%d...\n", l);
+		io_printf(IO_BUF, "Sending line-%d from addr-0x%x...\n", l, (uint)imgOut);
 #endif
 		key = MCPL_SEND_PIXELS_BLOCK_CORES_DATA | (myCoreID << 16) | l;
 		dmaImgFromSDRAMdone = 0;
@@ -162,11 +176,17 @@ void worker_send_result(uint arg0, uint arg1)
 		flag_SendResultCont = FALSE;
 		rem = workers.wImg;
 		do {
+#if(DEBUG_LEVEL > 0)
+			// io_printf(IO_BUF, "Sending key-0x%x, pay-0x%x\n", key, *ptrPx);
+#endif
+			//sark_delay_us(MCPL_SEND_PIXELS_BLOCK_DELAY);
+			giveDelay(MCPL_SEND_PIXELS_BLOCK_DELAY);
 			spin1_send_mc_packet(key, *ptrPx, WITH_PAYLOAD);
 			ptrPx++;
 			rem -= 4;
 		} while(rem > 0);
 		while(flag_SendResultCont == FALSE);
+		imgOut += workers.wImg;
 	}
 	spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_CORES_DONE, 0, WITH_PAYLOAD);
 }
@@ -176,21 +196,35 @@ void worker_send_result(uint arg0, uint arg1)
 void worker_recv_result(uint line, uint arg1)
 {
 	// step-0: determine the address of the line
-	uchar *lineAddr = (uchar *)getSdramResultAddr();
-	lineAddr += line*workers.wImg;
+	uchar *imgAddr = (uchar *)getSdramBlockResultAddr();
+	uchar *lineAddr = imgAddr + line*workers.wImg;
+
+	// pause di sini, mau lihat apakah alamatnya sama:
+	io_printf(IO_BUF, "imgAddr = 0x%x, lineAddr = 0x%x\n", imgAddr, lineAddr);
+	// return; // --> OK!, after revising the computeWLoad() in process.c
 
 	// step-1: put into sdram
 	uint dmatag = DMA_STORE_IMG_TAG | (myCoreID << 16);
 	do {
 		dmaTID = spin1_dma_transfer(dmatag, lineAddr, resImgBuf,
 									DMA_WRITE, workers.wImg);
+		if(dmaTID==0)
+			io_printf(IO_BUF, "Dma full! Retry...\n");
 	} while(dmaTID==0);
 
 	// step-2: reset counter
 	sendResultInfo.nReceived_MCPL_SEND_PIXELS = 0;
 	sendResultInfo.pxBufPtr = resImgBuf;
 
+
 	// step-3: send "next" signal
+#if(DEBUG_LEVEL > 2)
+	//io_printf(IO_BUF, "Sending NEXT to core-%d\n", myCoreID);
+	io_printf(IO_BUF, "DMA done! Ready to send NEXT to core-%d\n", myCoreID);
+#endif
+	// Indar: debugging, stop dulu di sini:
+	// return;
+
 	uint key = MCPL_SEND_PIXELS_BLOCK_CORES_NEXT | (myCoreID << 16);
 	spin1_send_mc_packet(key, 0, WITH_PAYLOAD);
 }
@@ -221,10 +255,10 @@ void sendResultToTargetFromRoot()
 	*/
 
 	uchar *imgOut;
-	imgOut  = (uchar *)getSdramResultAddr();
+	imgOut  = (uchar *)getSdramBlockResultAddr();
 
 	// debugging: OK
-	// io_printf(IO_BUF, "imgOut = 0x%x\n", imgOut);
+	io_printf(IO_BUF, "imgOut = 0x%x\n", imgOut);
 
 	uint dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
 
@@ -235,10 +269,10 @@ void sendResultToTargetFromRoot()
 	uint rem, sz;
 
 	//experiment: berapa cepat jika semua dikirim dari node-1 --> hasil: 8.6 & 5.6 MBps
-	//rem = workers.hImg * workers.wImg;	// kirim semuanya!
+	rem = workers.hImg * workers.wImg;	// kirim semuanya!
 
 	//for normal run, just do my part:
-	rem = (workers.blkEnd - workers.blkStart + 1) * workers.wImg;
+	//rem = (workers.blkEnd - workers.blkStart + 1) * workers.wImg;
 	// since we don't use srce_port anymore, we have to fill it with something...
 	resultMsg.srce_port = (SDP_PORT_FRAME_END << 5) | myCoreID;
 	do {
@@ -650,14 +684,10 @@ inline void sendImgChunkViaSDP(uint sz, uint alternativeDelay)
 }
 
 
-// getSdramResultAddr() determines the address of final output by reading taskList
-// it is intended only for leadAp in each node (not all worker cores)
-// it is similar to getSdramImgAddr(), but processed differently: it uses
-// workers.blkImg??? instead of workers.img???
-uint getSdramResultAddr()
+uint getSdramBlockResultAddr()
 {
 	uint imgAddr;
-	// by default, it might send gray scale image
+	// by default (ie. dvs is not activated yet), it might send gray scale image
 	imgAddr = (uint)workers.blkImgOut1;
 
 	// Now iterate: if opType>0, then the output is imgBIn
@@ -671,6 +701,54 @@ uint getSdramResultAddr()
 		} else {
 			if(blkInfo->opFilter==1) {
 				imgAddr = (uint)workers.blkImgRIn;
+			}
+		}
+	}
+	return imgAddr;
+}
+
+// getSdramResultAddr() determines the address of final output by reading taskList
+// it is intended only for leadAp in each node (not all worker cores)
+// it is similar to getSdramImgAddr(), but processed differently: it uses
+// workers.blkImg??? instead of workers.img???
+uint getSdramResultAddr()
+{
+	/* The following will result in the same line over and over...
+	uint imgAddr;
+	// by default (ie. dvs is not activated yet), it might send gray scale image
+	imgAddr = (uint)workers.blkImgOut1;
+
+	// Now iterate: if opType>0, then the output is imgBIn
+	if(blkInfo->opType > 0) {
+		imgAddr = (uint)workers.blkImgBIn;
+	}
+	// if not, it depends on opSharpen and opFilter
+	else {
+		if(blkInfo->opSharpen==1) {
+			imgAddr = (uint)workers.blkImgGIn;
+		} else {
+			if(blkInfo->opFilter==1) {
+				imgAddr = (uint)workers.blkImgRIn;
+			}
+		}
+	}
+	*/
+
+	uint imgAddr;
+	// by default (ie. dvs is not activated yet), it might send gray scale image
+	imgAddr = (uint)workers.imgOut1;
+
+	// Now iterate: if opType>0, then the output is imgBIn
+	if(blkInfo->opType > 0) {
+		imgAddr = (uint)workers.imgBIn;
+	}
+	// if not, it depends on opSharpen and opFilter
+	else {
+		if(blkInfo->opSharpen==1) {
+			imgAddr = (uint)workers.imgGIn;
+		} else {
+			if(blkInfo->opFilter==1) {
+				imgAddr = (uint)workers.imgRIn;
 			}
 		}
 	}

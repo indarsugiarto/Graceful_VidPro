@@ -13,8 +13,8 @@ SCRIPT = $(SPINN_DIRS)/lib/sark.lnk
 #SCRIPT = $(SPINN_DIRS)/tools/sark.lnk
 
 ifndef GNUBIN
-    #GNUBIN := /opt/arm-2013.05/bin
-    GNUBIN := /opt/gcc-arm-none-eabi-5_4-2016q3/bin
+    GNUBIN := /opt/arm-2013.05/bin
+    #GNUBIN := /opt/gcc-arm-none-eabi-5_4-2016q3/bin
 endif
 
 # We mainly use GNU toolchain
