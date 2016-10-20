@@ -346,6 +346,7 @@ void initHistData(uint arg0, uint arg1);    // will be called by computeWLoad(),
 void terminate_SpiNNVid(char *stream, char *msg, uint exitCode);
 
 // Event handlers
+void hMC_SpiNNVid(uint key, uint None);
 void hMCPL_SpiNNVid(uint key, uint payload);
 void hDMA(uint tag, uint tid);
 void hSDP(uint mBox, uint port);
@@ -381,22 +382,17 @@ void triggerProcessing(uint taskID, uint arg1);
 
 
 
-// core image processing:
+// core image processing: see process.c
 void imgFiltering(uint arg0, uint arg1);
 void imgSharpening(uint arg0, uint arg1);
 void imgDetection(uint arg0, uint arg1);
 
 
-// sending result
+// sending result: see frameio.c
 void sendResult(uint blkID, uint arg1);		// blkID is the expected node to send
-void sendResultProcessCmd(uint line, uint null);
-void sendResultToTarget(uint line, uint null);
-void sendResultToTargetFromRoot();
 void sendResultChain(uint nextBlock, uint unused);
-void notifyDestDone(uint arg0, uint arg1);
 uint getSdramResultAddr();
 uint getSdramBlockResultAddr();	// similar to getSdramResultAddr but used ONLY by root-node
-void sendImgChunkViaSDP(uint sz, uint alternativeDelay);
 void worker_send_result(uint arg0, uint arg1);
 void worker_recv_result(uint line, uint arg1);
 

@@ -153,7 +153,7 @@ void vidStreamer::cbSpiNNchanged(int idx)
 		ui->delFactorSpin->setValue(250);
 #else
 		ui->delFactorHost->setValue(475);
-		ui->delFactorSpin->setValue(25);
+		ui->delFactorSpin->setValue(20);
 #endif
 	} else {
 		ui->sbNchips->setEnabled(true);

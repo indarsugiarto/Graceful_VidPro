@@ -205,7 +205,15 @@ void hDMA(uint tid, uint tag)
 	}
 }
 
+void hMC_SpiNNVid(uint key, uint None)
+{
+	uint key_hdr = 0xFFFF0000 & key;
+	uint key_arg = 0xFFFF & key;
+	/*------------------------------------------------------------------------------------*/
+	/*------------------------------- Whole key section ----------------------------------*/
 
+
+}
 
 void hMCPL_SpiNNVid(uint key, uint payload)
 {
@@ -227,7 +235,6 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		workers.subBlockID = payload & 0xFFFF;
 		spin1_schedule_callback(give_report, DEBUG_REPORT_MYWID, 0, PRIORITY_PROCESSING);
 	}
-
 	// MCPL_BCAST_GET_WLOAD is broadcasted when new frame info arrives
 	else if(key==MCPL_BCAST_GET_WLOAD) {
 		spin1_schedule_callback(computeWLoad, 0, 0, PRIORITY_PROCESSING);
@@ -353,9 +360,6 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		}
 	}
 	else if(key==MCPL_BCAST_RESET_NET) {
-#if (DEBUG_LEVEL>2)
-		io_printf(IO_BUF, "Got net reset cmd\n");
-#endif
 		blkInfo->maxBlock = 0;
 		blkInfo->nodeBlockID = 0xFF;
 	}
@@ -440,8 +444,8 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	// which contains node-ID and perf
 	else if(key_hdr == MCPL_BLOCK_DONE_TEDGE) {
 
-		// what if we ignore it?
-		return;
+		// what if we ignore it? we don't need again
+		return;	// below this is for measurement per block
 
 		nBlockDone++;
 
@@ -463,7 +467,7 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	// MCPL_BLOCK_DONE_TFILT is sent by each node to root-leadAp
 	else if(key_hdr == MCPL_BLOCK_DONE_TFILT) {
 
-		// the same here, what if we ignore it?
+		// the same here, what if we ignore it? no need for measurement...
 		return;
 
 		// collect measurement for each processing
@@ -502,14 +506,6 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 											// but not fully used
 	}
 
-	/*
-	// the following MCPL_BCAST_SEND_RESULT will trigger a chain in it:
-	else if(key==MCPL_BCAST_SEND_RESULT) {
-		// if my block is enable, then proceed:
-		if(blkInfo->maxBlock!=0)
-			spin1_schedule_callback(sendResult, payload, NULL, PRIORITY_PROCESSING);
-	}
-	*/
 
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
@@ -521,8 +517,7 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	//    one unified histogram of the node
 	// 3. the leadAp then forward this unified histogram if it is a leaf node
 	//    Otherwise, it will wait the children nodes to send their histrogram
-	//MCPL_BCAST_REPORT_HIST
-
+	//see MCPL_BCAST_REPORT_HIST in hMC_SpiNNVid
 	else if(key == MCPL_BCAST_REPORT_HIST) {
 		// each core, EXCEPT the leadAP, needs to report its histogram to leadAp:
 		spin1_schedule_callback(reportHistToLeader, 0, 0, PRIORITY_PROCESSING);
@@ -556,50 +551,24 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
 	/*----------------------- new Send result mechanism --------------------------*/
-	else if(key==MCPL_SEND_PIXELS_CMD) {
-		// the payload contains the line number of the resulting image
-		spin1_schedule_callback(sendResultProcessCmd, payload, NULL, PRIORITY_PROCESSING);
-	}
-	else if(key==MCPL_SEND_PIXELS_INFO) {
-		sendResultInfo.szBlock = payload;
-	}
-	else if(key==MCPL_SEND_PIXELS_DATA) {
-#if(DESTINATION==DEST_HOST)
-		// put the pixels in the sdp buffer directly
-		sark_mem_cpy(sendResultInfo.pxBufPtr, &payload, 4);
-		sendResultInfo.pxBufPtr += 4;
-		sendResultInfo.nReceived_MCPL_SEND_PIXELS++;
-		// if all pixels in the chunk have been received (68*4=272)
-#if(DEBUG_LEVEL>1)
-		io_printf(IO_STD, "Got %d chunks so far...\n", sendResultInfo.nReceived_MCPL_SEND_PIXELS);
-#endif
-		if(sendResultInfo.nReceived_MCPL_SEND_PIXELS==68) {
-			spin1_schedule_callback(sendResultToTarget, 0, 0, PRIORITY_PROCESSING);
-		}
-		/* experiment: use handshaking mechanism, result: SLOW!!!!
-		else {
-			spin1_send_mc_packet(MCPL_SEND_PIXELS_NEXT, 0, WITH_PAYLOAD);
-		}
-		*/
-
-#else
-	// TODO: for FPGA, send directly as FR packet
-#endif
-	}
-	else if(key==MCPL_SEND_PIXELS_NEXT) {
-		flag_SendResultCont = TRUE;
-	}
-	else if(key==MCPL_SEND_PIXELS_DONE) {
-		spin1_schedule_callback(sendResultToTarget, 0, 0, PRIORITY_PROCESSING);
-	}
-
-
-
 	/* This is the sendResult using buffering mechanism */
 	// MCPL_SEND_PIXELS_BLOCK is sent by root-leadAp to other leadAps
 	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK && payload == blkInfo->nodeBlockID) {
 		nWorkerDone = 0;
+		// then notify the workers:
 		spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_CORES, 0, WITH_PAYLOAD);
+	}
+	// if the core receives pixels data from other nodes with the same coreID
+	else if((key_hdr & 0xFF000000) == MCPL_SEND_PIXELS_BLOCK_CORES_DATA) {
+//#if(DEBUG_LEVEL > 1)
+//		io_printf(IO_BUF, "Got key-0x%x, pay-0x%x\n", key, payload);
+//#endif
+		sark_mem_cpy(sendResultInfo.pxBufPtr, &payload, 4);
+		sendResultInfo.pxBufPtr += 4;
+		sendResultInfo.nReceived_MCPL_SEND_PIXELS += 4;
+		if(sendResultInfo.nReceived_MCPL_SEND_PIXELS >= workers.wImg)
+			//io_printf(IO_BUF, "Got the line!\n");
+			spin1_schedule_callback(worker_recv_result, key_arg, 0, PRIORITY_PROCESSING);
 	}
 	// MCPL_SEND_PIXELS_BLOCK_CORES is  sent from leadAp to its workers
 	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK_CORES) {
@@ -624,24 +593,9 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	}
 	// MCPL_SEND_PIXELS_BLOCK_PREP is sent by root-leadAp to prepare its workers
 	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK_PREP) {
-#if(DEBUG_LEVEL>1)
-		//io_printf(IO_BUF, "Worker is preparing sendResult...\n");
-#endif
 		sendResultInfo.nReceived_MCPL_SEND_PIXELS = 0;
 		sendResultInfo.pxBufPtr = resImgBuf;
 		// at this point, 4-byte aligned resImgBuf should already exist
-	}
-	// if the core receives pixels data from other nodes with the same coreID
-	else if((key_hdr & 0xFF000000) == MCPL_SEND_PIXELS_BLOCK_CORES_DATA) {
-//#if(DEBUG_LEVEL > 1)
-//		io_printf(IO_BUF, "Got key-0x%x, pay-0x%x\n", key, payload);
-//#endif
-		sark_mem_cpy(sendResultInfo.pxBufPtr, &payload, 4);
-		sendResultInfo.pxBufPtr += 4;
-		sendResultInfo.nReceived_MCPL_SEND_PIXELS += 4;
-		if(sendResultInfo.nReceived_MCPL_SEND_PIXELS >= workers.wImg)
-			//io_printf(IO_BUF, "Got the line!\n");
-			spin1_schedule_callback(worker_recv_result, key_arg, 0, PRIORITY_PROCESSING);
 	}
 	else if((key_hdr & 0xFF000000) == MCPL_SEND_PIXELS_BLOCK_CORES_NEXT) {
 		flag_SendResultCont = TRUE;

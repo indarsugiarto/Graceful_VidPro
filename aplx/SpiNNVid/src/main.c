@@ -109,6 +109,7 @@ void c_main()
 	/*----------------------------------------------------------------------------*/
 	/*--------------------------- register callbacks -----------------------------*/
 	spin1_callback_on(MCPL_PACKET_RECEIVED, hMCPL_SpiNNVid, PRIORITY_MCPL);
+	spin1_callback_on(MC_PACKET_RECEIVED, hMC_SpiNNVid, PRIORITY_MC);
 	spin1_callback_on(DMA_TRANSFER_DONE, hDMA, PRIORITY_DMA);
 
 	// main revision: all cores in chip<0,0> may receive frames directly via sdp

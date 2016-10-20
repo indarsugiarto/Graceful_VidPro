@@ -309,47 +309,6 @@ void initRouter()
 
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
-	/*------------------------ keys for sending result ---------------------------*/
-	// key type-1: from the root to other nodes
-	e = rtr_alloc(5);
-	dest = leader;
-#if(USING_SPIN==5)
-	if(x==y) {
-		if(x==0)
-			dest = 1 + (1 << 1) + (1 << 2);
-		else if(x<7)
-			dest += 1 + (1 << 1) + (1 << 2);
-	}
-	else if(x>y) {
-		d = x - y;
-		if(x<7 && d<4)
-			dest += 1;
-	}
-	else if(x<y) {
-		d = y - x;
-		if(d<3 && y<7)
-			dest += (1 << 2);
-	}
-#elif(USING_SPIN==3)
-	if(sv->p2p_addr==0)
-		dest = 1 + (1<<1) + (1<<2);
-#endif
-	rtr_mc_set(e, MCPL_SEND_PIXELS_CMD, MCPL_SEND_PIXELS_MASK, dest); e++;
-	rtr_mc_set(e, MCPL_SEND_PIXELS_NEXT, MCPL_SEND_PIXELS_MASK, dest); e++;
-
-	// key type-2: from other nodes to the root
-	if (x>0 && y>0)			dest = (1 << 4);	// south-west
-	else if(x>0 && y==0)	dest = (1 << 3);	// west
-	else if(x==0 && y>0)	dest = (1 << 5);	// south
-	else					dest = leader;
-	rtr_mc_set(e, MCPL_SEND_PIXELS_DATA, MCPL_SEND_PIXELS_MASK, dest); e++;
-	rtr_mc_set(e, MCPL_SEND_PIXELS_INFO, MCPL_SEND_PIXELS_MASK, dest); e++;
-	rtr_mc_set(e, MCPL_SEND_PIXELS_DONE, MCPL_SEND_PIXELS_MASK, dest); e++;
-
-
-
-	/*----------------------------------------------------------------------------*/
-	/*----------------------------------------------------------------------------*/
 	/*----------------- keys for sending result using buffering ------------------*/
 	// key type-1: from leadAp-root to its own workers
 	//if(blkInfo->nodeBlockID == 0) { // -> nodeBlockID is not available during this init()!!!!

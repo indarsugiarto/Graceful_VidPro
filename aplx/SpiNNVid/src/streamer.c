@@ -65,6 +65,9 @@ void hMCPL_streamer(uint key, uint pl)
 		io_printf(IO_BUF, "[STREAMER] sdpDelay = %d\n", pl);
 		sdpDelay = pl;
 	}
+	else {
+		io_printf(IO_BUF, "Got key-0x%x, pl-0x%x\n", key,pl);
+	}
 }
 
 void hDMA_streamer(uint tid, uint tag)
@@ -166,6 +169,36 @@ void sendImgChunkViaFR(ushort y, uchar * pxbuf)
 
 void streamout(uint startAddr, uint None)
 {
+	// Note: the SpiNN-link is connected to chip<0,0>
+	uchar *imgOut;
+	imgOut  = (uchar *)getSdramResultAddr();
+
+	uint rem, sz;
+	//experiment: how fast the FR link?
+	rem = workers.hImg * workers.wImg;	// send them all!
+
+	// process line by line
+	uint dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
+
+	ushort lines = 0;
+	do {
+		dmaImgFromSDRAMdone = 0;	// will be altered in hDMA
+		do {
+			dmaTID = spin1_dma_transfer(dmatag, (void *)imgOut,
+										(void *)resImgBuf, DMA_READ, workers.wImg);
+		} while(dmaTID==0);
+		// wait until dma is completed
+		while(dmaImgFromSDRAMdone==0) {
+		}
+
+		// then sequentially copy & send via fr
+		sendImgChunkViaFR(lines, resImgBuf);
+
+		// move to the next address
+		lines++;
+		imgOut += workers.wImg;
+		rem -= workers.wImg;
+	} while(rem > 0);}
 
 }
 #endif	// if(DESTINATION==DEST_FPGA)

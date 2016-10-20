@@ -2,15 +2,17 @@
 
 ybug spin3 << EOF
 app_stop 18
-app_stop 17
+#app_stop 17
 app_stop 16
 sp root
 iptag 1 set . 20001
 iptag 2 set . 20002
 iptag 3 set . 20003
 iptag 4 set . 20004
-app_load streamer.aplx . 17 18
-app_load profiler.aplx all 1 17
+#app_load profiler.aplx all 1 17
+sleep 1
 app_load SpiNNVid3.aplx all 2-16 16
+sleep 1
+app_load streamer.aplx . 17 18
 EOF
 

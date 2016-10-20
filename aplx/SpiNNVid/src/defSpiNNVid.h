@@ -104,9 +104,10 @@
 /*-----------------------------------------------------------------------------------*/
 /*----------------------------- Basic spin1_api related -----------------------------*/
 #define PRIORITY_FIQ				-1
-#define PRIORITY_MCPL               PRIORITY_FIQ
-#define PRIORITY_DMA                0
 #define PRIORITY_URGENT				0
+#define PRIORITY_MCPL               PRIORITY_FIQ
+#define PRIORITY_MC					PRIORITY_MCPL
+#define PRIORITY_DMA                PRIORITY_URGENT
 #define PRIORITY_SDP                1
 #define PRIORITY_PROCESSING         2
 #define PRIORITY_TIMER              3
@@ -247,14 +248,6 @@
 
 // we found that using sdp, the max. throughput for other-than-root-node is 1.1MBps
 // but the root node has throughput 5.7MBps
-// Hence, we create a new mechanism for sending result via MCPL to root, and then
-// convert it into sdp
-#define MCPL_SEND_PIXELS_INFO		0x2e510000	// to root-leadAp
-#define MCPL_SEND_PIXELS_DATA		0x2e520000	// to root-leadAp
-#define MCPL_SEND_PIXELS_DONE		0x2e530000	// to root-leadAp
-#define MCPL_SEND_PIXELS_CMD		0x2e5a0000	// to all leadAps NOT in the root-node
-#define MCPL_SEND_PIXELS_NEXT		0x2e5b0000	// to all leadAps NOT in the root-node
-#define MCPL_SEND_PIXELS_MASK		0xFFFFFFFF
 
 // with buffering technique:
 #define MCPL_SEND_PIXELS_BLOCK		0x3a010000	// to all leadAps NOT in the root-node
