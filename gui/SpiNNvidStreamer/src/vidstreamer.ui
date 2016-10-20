@@ -582,11 +582,6 @@
     </item>
     <item>
      <property name="text">
-      <string>Release Mem (warning!!!)</string>
-     </property>
-    </item>
-    <item>
-     <property name="text">
       <string>Edge Done Report</string>
      </property>
     </item>

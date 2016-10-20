@@ -695,7 +695,7 @@ void hSDP(uint mBox, uint port)
 			blkInfo->hImg = msg->arg1 & 0xFFFF;
 
 			// and tell streamer about it:
-			spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER, msg->arg1, WITH_PAYLOAD);
+			spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_SZIMG, msg->arg1, WITH_PAYLOAD);
 
 #if (DEBUG_LEVEL>0)
 		io_printf(IO_STD, "[SpiNNVid] Frame: %d x %d\n", blkInfo->wImg, blkInfo->hImg);

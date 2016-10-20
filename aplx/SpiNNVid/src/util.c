@@ -95,9 +95,6 @@ void give_report(uint reportType, uint target)
 				}
 			}
 		}
-		else if(reportType==DEBUG_REPORT_CLEAR_MEM) {
-			releaseImgBuf();
-		}
 		else if(reportType==DEBUG_REPORT_EDGE_DONE) {
 			if(sv->p2p_addr==0) dest=IO_STD; else dest=IO_BUF;
 			io_printf(dest, "\nworkers.tRunning = %d\n", workers.tRunning);

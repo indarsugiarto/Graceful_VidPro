@@ -1,0 +1,14 @@
+#!/bin/bash
+
+ybug spin3 << EOF
+app_stop 18
+app_stop 17
+app_stop 16
+EOF
+
+ybug spin5 << EOF
+app_stop 18
+app_stop 17
+app_stop 16
+EOF
+

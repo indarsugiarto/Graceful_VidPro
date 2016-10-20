@@ -56,6 +56,14 @@ void sendResult(uint unused, uint arg1)
 	nBlockDone = 1;	// root node has finished its part
 	spin1_schedule_callback(sendResultChain, 1, 0, PRIORITY_PROCESSING);
 
+	// third, tell streamer to start the streaming
+	// at this point, streamer should have received
+	// MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_DEL (when config received) and
+	// MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_SZIMG (when frame info received)
+	uint addr = getSdramBlockResultAddr();
+	spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_GO_STREAMER, addr, WITH_PAYLOAD);
+
+
 	/* The following works in the fixingFilt branch...
 
 	// as the root, we have the first chance to send the result
@@ -101,10 +109,15 @@ void sendResultChain(uint nextBlock, uint unused)
 		io_printf(IO_STD, "Notify host and set taskList...\n");
 #endif
 		// TODO: streaming!!!
-		sendResultToTargetFromRoot();
+
+		// uint addr = getSdramBlockResultAddr();
+		// spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_GO_STREAMER, addr, WITH_PAYLOAD);
+
+
+		// sendResultToTargetFromRoot();
 
 		// wBuffering debugging: disable host temporary
-		notifyDestDone(0,0);
+		// notifyDestDone(0,0); --> its done by streamer!!!
 		notifyTaskDone();
 	}
 	else {
@@ -152,7 +165,8 @@ void sendResultChain(uint nextBlock, uint unused)
 }
 
 // worker_send_result() is called if worker receives MCPL_SEND_PIXELS_BLOCK_CORES
-// from its leadAp, and iterate until all its part is completed
+// from its leadAp, and iterate until all its part is completed. It sends its part
+// to root-node (with corresponding core)
 void worker_send_result(uint arg0, uint arg1)
 {
 	ushort l, cntr;
@@ -432,59 +446,6 @@ void sendResultToTarget(uint line, uint null)
 
 
 
-/* sendResultProcessCmd() will be called when we receive MCPL_SEND_PIXELS_CMD
- * from root-node. This sendResultProcessCmd() should be executed ONLY by nodes
- * other than the root-node.
- * In this sendResultProcessCmd(), the non-root-node fetch a line from sdram,
- * split it into several MCPL and send them as MCPL_SEND_PIXELS_DATA packets.
- */
-
-/* This is the obsolete method: using line as the parameter...
-void sendResultProcessCmd(uint line, uint null)
-{
-	//io_printf(IO_BUF, "Got MCPL_SEND_PIXELS_CMD line-%d\n", line);
-	// first, check if the line is within our block
-	if(line>=workers.blkStart && line<=workers.blkEnd) {
-#if(DEBUG_LEVEL>1)
-		io_printf(IO_STD, "respond to MCPL_SEND_PIXELS_CMD, will send line-%d\n", line); //sark_delay_us(1000);
-#endif
-		// fetch from sdram
-		uchar *imgOut;
-		imgOut  = (uchar *)getSdramResultAddr();
-		// shift to the current line
-		imgOut += (line-workers.blkStart)*workers.wImg;
-
-		uint dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
-		dmaImgFromSDRAMdone = 0;	// will be altered in hDMA
-		do {
-			dmaTID = spin1_dma_transfer(dmatag, (void *)imgOut,
-										(void *)resImgBuf, DMA_READ, workers.wImg);
-		} while(dmaTID==0);
-
-		// wait until dma is completed
-		while(dmaImgFromSDRAMdone==0) {
-		}
-
-		// split and send as MCPL packets
-		int rem;	// it might be negative
-		uint mcplBuf;
-		rem = workers.wImg;
-		uchar *resPtr = resImgBuf;
-
-		//ushort debuggingCntr = 0;
-
-		do {
-			spin1_memcpy((void *)&mcplBuf, resPtr, 4);
-			spin1_send_mc_packet(MCPL_SEND_PIXELS_DATA, mcplBuf, WITH_PAYLOAD);
-			// without delay, there might be packet drop since congestion
-			sark_delay_us(MCPL_DELAY_FACTOR);	// FUTURE: can we optimize this?
-
-			resPtr += 4;
-			rem -= 4;
-		} while(rem > 0);
-	}
-}
-*/
 
 /* In this version, we use block-ID as the parameter */
 void sendResultProcessCmd(uint blockID, uint null)
@@ -598,23 +559,6 @@ void sendResultProcessCmd(uint blockID, uint null)
 
 
 
-// notifyDestDone() is executed by <0,0,leadAp> only
-void notifyDestDone(uint arg0, uint arg1)
-{
-	perf.tTotal /= blkInfo->maxBlock;
-#if (DESTINATION==DEST_HOST)
-	resultMsg.srce_addr = elapse;
-	resultMsg.srce_port = SDP_SRCE_NOTIFY_PORT;
-	resultMsg.length = sizeof(sdp_hdr_t);
-	spin1_send_sdp_msg(&resultMsg, 10);
-#if (DEBUG_LEVEL > 1)
-	io_printf(IO_STD, "SDP_SRCE_NOTIFY_PORT is sent!\nProcessing with %d-nodes is done. Elapse %d-ms, tclk = %u\n",
-			  blkInfo->maxBlock, elapse, perf.tTotal);
-#endif
-#elif (DESTINATION==DEST_FPGA)
-
-#endif
-}
 
 
 

@@ -374,31 +374,31 @@ void processGrayScaling(uint arg0, uint arg1)
 		blkInfo->dmaToken_pxStore++;
 */
 
-	uint dmaDone, tg;
+	uint dmaSent, tg;
 	do {
 		tg = (myCoreID << 16) | DMA_TAG_STORE_R_PIXELS;
-		dmaDone = spin1_dma_transfer(tg, blkInfo->imgRIn+offset,
+		dmaSent = spin1_dma_transfer(tg, blkInfo->imgRIn+offset,
 									 rpxbuf, DMA_WRITE, pxBuffer.pxLen);
-	} while(dmaDone==0);
+	} while(dmaSent==0);
 
 	do {
 		tg = (myCoreID << 16) | DMA_TAG_STORE_G_PIXELS;
-		dmaDone = spin1_dma_transfer(tg, blkInfo->imgGIn+offset,
+		dmaSent = spin1_dma_transfer(tg, blkInfo->imgGIn+offset,
 									 gpxbuf, DMA_WRITE, pxBuffer.pxLen);
-	} while(dmaDone==0);
+	} while(dmaSent==0);
 
 	do {
 		tg = (myCoreID << 16) | DMA_TAG_STORE_B_PIXELS;
-		dmaDone = spin1_dma_transfer(tg, blkInfo->imgBIn+offset,
+		dmaSent = spin1_dma_transfer(tg, blkInfo->imgBIn+offset,
 									 bpxbuf, DMA_WRITE, pxBuffer.pxLen);
-	} while(dmaDone==0);
+	} while(dmaSent==0);
 
 
 	do {
 		tg = (myCoreID << 16) | DMA_TAG_STORE_Y_PIXELS;
-		dmaDone = spin1_dma_transfer(tg, blkInfo->imgOut1+offset,
+		dmaSent = spin1_dma_transfer(tg, blkInfo->imgOut1+offset,
 									 ypxbuf, DMA_WRITE, pxBuffer.pxLen);
-	} while(dmaDone==0);
+	} while(dmaSent==0);
 
 
 	//io_printf(IO_BUF, "dmaToken_pxStore = %d\n", blkInfo->dmaToken_pxStore);
@@ -524,15 +524,15 @@ void collectGrayPixels(uint arg0, uint arg1)
 	// io_printf(IO_BUF, "Collecting gray pixels...\n");
 
 	uint offset = pxBuffer.pxSeq*DEF_PXLEN_IN_CHUNK;
-	uint dmaDone;
+	uint dmaSent;
 	// via dma or direct copy?
 	// I think we don't need to use token here, the processing in root-node must
 	// take some time before the next core-broadcasting takes place
 	do {
-		dmaDone = spin1_dma_transfer(DMA_TAG_STORE_Y_PIXELS+myCoreID,
+		dmaSent = spin1_dma_transfer(DMA_TAG_STORE_Y_PIXELS+myCoreID,
 									 blkInfo->imgOut1+offset,
 									 ypxbuf, DMA_WRITE, pxBuffer.pxLen);
-	} while(dmaDone==0);
+	} while(dmaSent==0);
 
 	// coba dengan manual copy: hasilnya? SEMPURNA !!!!
 	// sark_mem_cpy((void *)blkInfo->imgOut1+offset, (void *)ypxbuf, pxBuffer.pxLen);

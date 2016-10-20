@@ -6,15 +6,15 @@
 #include "SpiNNVid.h"
 
 void hMCPL_streamer(uint key, uint pl);
-void hDMA_streamer(uint tag, uint tid);
+void hDMA_streamer(uint tid, uint tag);
 void streamout(uint startAddr, uint None);
-extern uint giveDelay(uint delVal);
+extern volatile uint giveDelay(uint delVal);
 
 uint sdpDelay = 900;	// save value for initial == 5.7MBps
 ushort wImg;
 ushort hImg;
 sdp_msg_t streamerMsg;
-uint dmaDone;
+volatile uchar dmaDone;
 
 void c_main()
 {
@@ -29,13 +29,17 @@ void c_main()
 	}
 
 	// prepare the sdp
+	io_printf(IO_BUF, "[STREAMER] Preparing SDP...\n");
 	streamerMsg.flags = 0x07;
 	streamerMsg.tag = SDP_TAG_RESULT;
 	streamerMsg.dest_port = PORT_ETH;
 	streamerMsg.dest_addr = sv->eth_addr;
 
+	io_printf(IO_BUF, "[STREAMER] Preparing callbacks...\n");
 	spin1_callback_on(MCPL_PACKET_RECEIVED, hMCPL_streamer, PRIORITY_MCPL);
 	spin1_callback_on(DMA_TRANSFER_DONE, hDMA_streamer, PRIORITY_DMA);
+
+	io_printf(IO_BUF, "[STREAMER] Running...\n");
 	spin1_start(SYNC_NOWAIT);	// timer2-nya jadi ndak jalan!!!
 }
 
@@ -53,8 +57,9 @@ void hMCPL_streamer(uint key, uint pl)
 		spin1_schedule_callback(streamout, pl, NULL, PRIORITY_PROCESSING);
 	}
 	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_SZIMG) {
-		hImg == pl & 0xFFFF;
-		wImg == pl >> 16;
+		hImg = pl & 0xFFFF;
+		wImg = pl >> 16;
+		io_printf(IO_BUF, "[STREAMER] Got size %d x %d\n", wImg, hImg);
 	}
 	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_DEL) {
 		io_printf(IO_BUF, "[STREAMER] sdpDelay = %d\n", pl);
@@ -62,11 +67,23 @@ void hMCPL_streamer(uint key, uint pl)
 	}
 }
 
-void hDMA_streamer(uint tag, uint tid)
+void hDMA_streamer(uint tid, uint tag)
 {
-
+	uint key = tag & 0xFFFF;
+	uint core = tag >> 16;
+#if(DEBUG_LEVEL>2)
+	io_printf(IO_BUF, "dma tid-0x%x, tag-0x%x: key==0x%x, core==%d\n",
+				  tid, tag, key, core);
+#endif
+	if(key == DMA_FETCH_IMG_TAG && core == STREAMER_CORE) {
+#if(DEBUG_LEVEL>2)
+		io_printf(IO_BUF, "Fetching done!\n");
+#endif
+		dmaDone = TRUE;
+	}
 }
 
+#if(DESTINATION==DEST_HOST)
 void streamout(uint startAddr, uint None)
 {
 	/*
@@ -82,7 +99,7 @@ void streamout(uint startAddr, uint None)
 	// TODO: Other idea: what if we notify the host earlier (before sending the frame)?
 
 	uchar *imgOut = (uchar *)startAddr;
-	uint dmaTID, dmatag = DMA_FETCH_IMG_TAG | (STREAMER_CORE << 16);
+	uint dmaID, dmatag = DMA_FETCH_IMG_TAG | (STREAMER_CORE << 16);
 	uchar *ptrBuf = (uchar *)&streamerMsg.cmd_rc;
 	uint rem, sz;
 
@@ -92,17 +109,24 @@ void streamout(uint startAddr, uint None)
 	streamerMsg.srce_addr = sv->p2p_addr;
 	do {
 		sz = rem > 272 ? 272 : rem;
+#if(DEBUG_LEVEL > 0)
+		io_printf(IO_BUF, "[STREAMER] Fetching via dma...\n");
+#endif
 		dmaDone = FALSE;	// will be altered in hDMA
 		do {
-			dmaTID = spin1_dma_transfer(dmatag, imgOut,
-										ptrBuf, DMA_READ, sz);
-		} while(dmaTID==0);
+			dmaID = spin1_dma_transfer(dmatag, imgOut, ptrBuf, DMA_READ, sz);
+		} while(dmaID==0);
 
 		// wait until dma is completed
-		while(dmaDone==FALSE);
+		while(dmaDone==FALSE) {
+		}
 
+#if(DEBUG_LEVEL > 0)
+		io_printf(IO_BUF, "[STREAMER] Sending sdp...\n");
+#endif
 		streamerMsg.length = sizeof(sdp_hdr_t) + sz;
 		spin1_send_sdp_msg(&streamerMsg, 10);
+
 		// give a delay
 		giveDelay(sdpDelay);
 
@@ -112,12 +136,37 @@ void streamout(uint startAddr, uint None)
 
 	} while(rem > 0);
 
+#if(DEBUG_LEVEL > 0)
+		io_printf(IO_BUF, "[STREAMER] Notify target...\n");
+#endif
 	// then notify target done
 	streamerMsg.srce_port = SDP_SRCE_NOTIFY_PORT;
 	streamerMsg.length = sizeof(sdp_hdr_t);
 	spin1_send_sdp_msg(&streamerMsg, 10);
 #if(DEBUG_LEVEL>0)
-	io_printf(IO_BUF, "[STREAMER] SDP_SRCE_NOTIFY_PORT sent!\n");
+	io_printf(IO_BUF, "[STREAMER] Done!\n");
 #endif
 }
+#endif	// if(DESTINATION==DEST_HOST)
+
+#if(DESTINATION==DEST_FPGA)
+void sendImgChunkViaFR(ushort y, uchar * pxbuf)
+{
+	uint key;
+	uchar px;
+	ushort x;
+
+	for(x=0; x<workers.wImg; x++) {
+		px = *(pxbuf+x);
+		key = (((uint)x << 16) | y) & 0x7FFF7FFF;
+		spin1_send_fr_packet(key, px, WITH_PAYLOAD);
+		//giveDelay(DEF_FR_DELAY);
+	}
+}
+
+void streamout(uint startAddr, uint None)
+{
+
+}
+#endif	// if(DESTINATION==DEST_FPGA)
 
