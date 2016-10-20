@@ -10,7 +10,8 @@ SOURCES += main.c \
     process.c \
     profiler.c \
     isr.c \
-    frameio.c
+    frameio.c \
+    streamer.c
 
 INCLUDEPATH += /opt/spinnaker_tools_134/include
 
@@ -29,7 +30,8 @@ DISTFILES += \
     ../../../HOW.DOES.IT.WORK \
     Makefile.common \
     Makefile.profiler \
-    ../../Logs/Buffering_mechanism.log
+    ../../Logs/Buffering_mechanism.log \
+    Makefile.streamer
 
 HEADERS += \
     SpiNNVid.h \

@@ -53,6 +53,7 @@
 // for the profiler. TODO: check all leadAp usage!!!
 #define PROF_CORE					1	// profiler
 #define LEAD_CORE                   2	// lead core for SpiNNVid
+#define STREAMER_CORE				17
 #define N_CORE_FOR_EOF			1
 
 // how many cores are used for pixel propagation (and histogram calculation)?
@@ -296,7 +297,9 @@
 #define MCPL_SEND_PIXELS_BLOCK_DONE	0x3a030000	// to leadAp-root from other leadAps
 #define MCPL_SEND_PIXELS_BLOCK_MASK	0xFFFF0000
 #define MCPL_SEND_PIXELS_BLOCK_PREP	0x3a040000	// leadAp-root prepares its workers
-
+#define MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_SZIMG	0x3a050000	// tell "streamer" about image size
+#define MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_DEL	0x3a060000	// tell "Streamer" about delay factor
+#define MCPL_SEND_PIXELS_BLOCK_GO_STREAMER		0x3a070000	// tell "streamer" to go!
 //#define MCPL_SEND_PIXELS_BLOCK_DELAY	40		// works great with 320x240
 #define MCPL_SEND_PIXELS_BLOCK_DELAY	60		// works for all
 

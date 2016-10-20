@@ -351,7 +351,6 @@ void initRouter()
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
 	/*----------------- keys for sending result using buffering ------------------*/
-
 	// key type-1: from leadAp-root to its own workers
 	//if(blkInfo->nodeBlockID == 0) { // -> nodeBlockID is not available during this init()!!!!
 	if(sv->p2p_addr == 0) {
@@ -446,6 +445,14 @@ void initRouter()
 	else					dest = leader;
 	rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_DONE, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
 
+	// key type-8: tell the streamer to start streamout
+	if(sv->p2p_addr==0) {
+		e = rtr_alloc(3);
+		dest = 1 << (STREAMER_CORE + 6);
+		rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_GO_STREAMER, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
+		rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_SZIMG, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
+		rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_DEL, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
+	}
 
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/

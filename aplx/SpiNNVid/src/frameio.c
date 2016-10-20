@@ -17,12 +17,16 @@
  * Normally, it it the last task before taskList got cleared (in this case, the
  * taskList will be cleared in sendResultChain() by calling notifyTaskDone().
  *
- * The sendResult() will trigger the chain mechanism by first scheduling
- * sendResultChain(). The sendResultChain() will be re-scheduled everytime
- * until all blocks have sent their part.
- *
  * In this version, the root-node will buffer all pixel before sending out to the
- * target (host-pc or fpga).
+ * target (host-pc or fpga). While buffering, it also starts the streamer by
+ * sending MCPL_SEND_PIXELS_BLOCK_GO_STREAMER to the streamer,
+ * and the streamer will start streaming out immediately, assuming that block-0
+ * data is ready. While streaming, other nodes are sending data to root-node.
+ *
+ * The sendResult() triggers the chain mechanism by scheduling sendResultChain().
+ * The sendResultChain() will be re-scheduled everytime until all blocks
+ * have sent their part.
+ *
  *
  * There are two similar subroutine sendResultToTarget and sendResultToTargetFromRoot:
  * - sendResultToTargetFromRoot is dedicated for the root-node and is executed before:
@@ -618,22 +622,6 @@ void notifyDestDone(uint arg0, uint arg1)
 
 // helper function
 
-// debugSDP() displays the sdp content and introduce long delay (1s)
-void debugSDP(ushort line, uchar chunkID, ushort nData)
-{
-	/*
-	io_printf(IO_STD, "SDP(hex): ");
-	uchar c;
-	for(ushort i=0; i<nData; i++) {
-		sark_mem_cpy(&c, addr, 1); addr += 1;
-		io_printf(IO_STD, "%x ", c);
-	}
-	io_printf(IO_STD, "\n");
-	*/
-	//io_printf(IO_STD, "Sending: %d-%d-%d:%d\n",
-	//		  blkInfo->nodeBlockID, line, chunkID, nData);
-	//sark_delay_us(10000);		// delay 1s
-}
 
 /* sendImgChunkViaSDP() is the routine for sending pixels.
  * Before using it, the resultMsg must be filled in with data.

@@ -98,6 +98,9 @@ profiler.o: profiler.c profiler.h defSpiNNVid.h
 isr.o: isr.c profiler.h defSpiNNVid.h
 	$(CA) $(CFLAGS) $< -o $(BUILD_DIR)$@
 
+streamer.o: streamer.c SpiNNVid.h defSpiNNVid.h
+	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)$@
+
 #-------------------------------------------------------------------------------
 
 prep_dir:

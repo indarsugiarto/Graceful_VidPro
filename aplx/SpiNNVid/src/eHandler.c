@@ -64,6 +64,9 @@ void configure_network(uint mBox)
 	sdpDelayFactorSpin = msg->srce_port * DEF_DEL_VAL;
 	// io_printf(IO_STD, "delVal = %d --> %d\n", msg->srce_port, sdpDelayFactorSpin);
 
+	// also tell streamer about this delay factor:
+	spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_DEL, sdpDelayFactorSpin, WITH_PAYLOAD);
+
 	// broadcasting for nodes configuration
 	// convention: chip<0,0> must be root, it has the ETH
 	if(sv->p2p_addr==0) blkInfo->nodeBlockID = 0;
@@ -690,6 +693,9 @@ void hSDP(uint mBox, uint port)
 			// will only send wImg (in arg1.high) and hImg (in arg1.low)
 			blkInfo->wImg = msg->arg1 >> 16;
 			blkInfo->hImg = msg->arg1 & 0xFFFF;
+
+			// and tell streamer about it:
+			spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER, msg->arg1, WITH_PAYLOAD);
 
 #if (DEBUG_LEVEL>0)
 		io_printf(IO_STD, "[SpiNNVid] Frame: %d x %d\n", blkInfo->wImg, blkInfo->hImg);
