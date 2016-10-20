@@ -246,7 +246,7 @@ void worker_recv_result(uint line, uint arg1)
 	// return;
 
 	uint key = MCPL_SEND_PIXELS_BLOCK_CORES_NEXT | (myCoreID << 16);
-	spin1_send_mc_packet(key, 0, WITH_PAYLOAD);
+	spin1_send_mc_packet(key, 0, NO_PAYLOAD);
 }
 
 

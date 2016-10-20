@@ -209,10 +209,9 @@ void hMC_SpiNNVid(uint key, uint None)
 {
 	uint key_hdr = 0xFFFF0000 & key;
 	uint key_arg = 0xFFFF & key;
-	/*------------------------------------------------------------------------------------*/
-	/*------------------------------- Whole key section ----------------------------------*/
-
-
+	if((key_hdr & 0xFF000000) == MCPL_SEND_PIXELS_BLOCK_CORES_NEXT) {
+		flag_SendResultCont = TRUE;
+	}
 }
 
 void hMCPL_SpiNNVid(uint key, uint payload)
@@ -223,6 +222,7 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	/*----------------------------------------------------------------------------*/
 	/*---------------------------- Worker's part ---------------------------------*/
 	if(key==MCPL_BCAST_INFO_KEY) {
+		if(myCoreID==LEAD_CORE) return;
 		// leadAp sends "0" for ping, workers reply with its core
 		if(payload==0)
 			spin1_send_mc_packet(MCPL_PING_REPLY, myCoreID, WITH_PAYLOAD);
@@ -502,6 +502,7 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 
 	// LEAD_CORE will broadcast MCPL_IGNORE_END_OF_FRAME when it enters the Loop
 	else if(key==MCPL_IGNORE_END_OF_FRAME) {
+		if(myCoreID==LEAD_CORE) return;
 		taskList.EOF_flag = (int)payload;	// node, each core has taskList variable
 											// but not fully used
 	}
@@ -596,9 +597,6 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		sendResultInfo.nReceived_MCPL_SEND_PIXELS = 0;
 		sendResultInfo.pxBufPtr = resImgBuf;
 		// at this point, 4-byte aligned resImgBuf should already exist
-	}
-	else if((key_hdr & 0xFF000000) == MCPL_SEND_PIXELS_BLOCK_CORES_NEXT) {
-		flag_SendResultCont = TRUE;
 	}
 /*
 #if(DEBUG_LEVEL > 1)

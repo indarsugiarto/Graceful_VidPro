@@ -116,37 +116,31 @@ void allocateImgBuf()
 
 
 
-
-/* initRouter() initialize MCPL routing table by leadCore. Normally, there are two keys:
- * MCPL_BCAST_KEY and MCPL_TO_LEADER
- * */
+/* See the previously working initRouter() in museum */
+// TODO: we might move this initRouter() to the profiler to save ITCM
 void initRouter()
 {
-	uint allRoute = 0xFFFF80;			// excluding core-0 and external links
-	uint profiler = (1 << (PROF_CORE+6));
-	uint leader = (1 << (myCoreID+6));	// only for leadAp
-	uint workers = allRoute & ~leader;	// for other workers in the chip
-	workers &= (~profiler);				// exclude profiler
-	allRoute &= (~profiler);				// exclude profiler
+	uint inner = 0xFFFF80;			// excluding core-0 and external links
+	uint profiler = 1 << (PROF_CORE+6);
+	uint leader = 1 << (LEAD_CORE+6);
+	uint streamer = 1 << (STREAMER_CORE+6);
+	uint workers = inner & ~profiler & ~streamer;	// for all workers in the chip
 	uint key, dest;
 	uint x, y, d, c;
-
-
-
 
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
 	/*----------------------- keys for intra-chip routing ------------------------*/
-	// first, set individual destination, assuming all 17-cores are available
-	uint e = rtr_alloc(17);
+	// first, set individual destination, assuming all 15 worker cores are available
+	uint e = rtr_alloc(15);
 	if(e==0) {
 		terminate_SpiNNVid(IO_STD, "initRouter err for intra-chip!\n", RTE_ABORT);
 	} else {
-		// each destination core might have its own key association
-		// so that leadAp can tell each worker, which region is their part
-		for(uint i=0; i<17; i++)
-			// starting from core-1 up to core-17
-			rtr_mc_set(e+i, i+1, 0xFFFFFFFF, (MC_CORE_ROUTE(i+1)));
+		// ignore profiler and streamer
+		for(uint i=LEAD_CORE; i<STREAMER_CORE; i++) {
+			// starting from core-2 up to core-16
+			rtr_mc_set(e, i, 0xFFFFFFFF, MC_CORE_ROUTE(i)); e++;
+		}
 	}
 	// other broadcasting keys
 	e = rtr_alloc(6);
@@ -156,7 +150,7 @@ void initRouter()
 	} else {
 		rtr_mc_set(e, MCPL_BCAST_INFO_KEY,	0xFFFFFFFF, workers);	e++;
 		rtr_mc_set(e, MCPL_PING_REPLY,		0xFFFFFFFF, leader);	e++;
-		rtr_mc_set(e, MCPL_BCAST_GET_WLOAD, 0xFFFFFFFF, allRoute);	e++;
+		rtr_mc_set(e, MCPL_BCAST_GET_WLOAD, 0xFFFFFFFF, workers);	e++;
 		rtr_mc_set(e, MCPL_EDGE_DONE,		0xFFFFFFFF, leader);	e++;
 		rtr_mc_set(e, MCPL_FILT_DONE,		0xFFFFFFFF, leader);	e++;
 		rtr_mc_set(e, MCPL_REPORT_HIST2LEAD, MCPL_REPORT_HIST2LEAD_MASK, leader); e++;
@@ -203,12 +197,11 @@ void initRouter()
 		rtr_mc_set(e, MCPL_BCAST_NODES_INFO,	0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_OP_INFO,		0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_FRAME_INFO,	0xFFFFFFFF, dest); e++;
-		//rtr_mc_set(e, MCPL_BCAST_SEND_RESULT,	0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_RESET_NET,		0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BCAST_NET_DISCOVERY, 0xFFFFFFFF, dest); e++;
 	}
 
-	// special for MCPL_BLOCK_DONE
+	// special for MCPL_BLOCK_DONE_???
 	// this is for sending toward core <0,0,leadAp>
 	if (x>0 && y>0)			dest = (1 << 4);	// south-west
 	else if(x>0 && y==0)	dest = (1 << 3);	// west
@@ -219,7 +212,6 @@ void initRouter()
 	{
 		terminate_SpiNNVid(IO_STD, "initRouter err for special keys!\n", RTE_ABORT);
 	} else {
-		//rtr_mc_set(e, MCPL_BLOCK_DONE, 0xFFFFFFFF, dest); e++;
 		rtr_mc_set(e, MCPL_BLOCK_DONE_TEDGE,	0xFFFF0000, dest); e++;
 		rtr_mc_set(e, MCPL_BLOCK_DONE_TFILT,	0xFFFF0000, dest); e++;
 		rtr_mc_set(e, MCPL_RECV_END_OF_FRAME,	0xFFFF0000, dest); e++;
@@ -233,7 +225,7 @@ void initRouter()
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
 	/*------------------------ keys for forwarding pixels ------------------------*/
-	dest = allRoute;
+	dest = workers;
 #if(USING_SPIN==5)
 	if(x==y) {
 		if(x<7)
@@ -272,7 +264,7 @@ void initRouter()
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
 	/*------------------------- keys for all routing -----------------------------*/
-	dest = allRoute;
+	dest = workers;
 #if(USING_SPIN==5)
 	if(x==y) {
 		if(x<7)
@@ -314,7 +306,7 @@ void initRouter()
 	//if(blkInfo->nodeBlockID == 0) { // -> nodeBlockID is not available during this init()!!!!
 	if(sv->p2p_addr == 0) {
 		e = rtr_alloc(1);
-		dest = allRoute;
+		dest = workers;
 		rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_PREP, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
 	}
 
@@ -346,7 +338,7 @@ void initRouter()
 
 	// key type-3: from the leadAp to workers
 	e = rtr_alloc(1);
-	dest = allRoute;
+	dest = workers;
 	rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_CORES, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
 
 	// key type-4: from worker to its leadAp

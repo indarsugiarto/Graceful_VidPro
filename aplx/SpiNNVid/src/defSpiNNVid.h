@@ -212,8 +212,7 @@
 #define MCPL_BCAST_FRAME_INFO		0xbca50005
 #define MCPL_BCAST_ALL_REPORT		0xbca50006	// the payload might contain specific reportType
 #define MCPL_BCAST_START_PROC		0xbca50007
-//#define MCPL_BCAST_SEND_RESULT		0xbca50008	// trigger the node to send the result to dest
-#define MCPL_BCAST_RESET_NET        0xbca50009  // reset the network
+#define MCPL_BCAST_RESET_NET        0xbca50008  // reset the network
 
 // mechanism for controlling the image processing
 #define MCPL_EDGE_DONE				0x1ead0004
