@@ -16,15 +16,17 @@ void c_main()
 	if(myCoreID != PROF_CORE) {
 		io_printf(IO_STD, "Invalid core! Put me in core-%d!\n", PROF_CORE);
 	} else {
-		initProfiler();
+		//initProfiler();
 		initProfilerSDP();
 
 
 		// experiment: let's use 250MHz for the root-node:
+		/*
 		if(sv->p2p_addr==0){
 			io_printf(IO_STD, "[PROFILER] Set freq to 235MHz!\n");
 			changeFreq(235);
 		}
+		*/
 		spin1_schedule_callback(readPLL, 1, 0, PRIORITY_PROCESSING);
 		/* Result:
 		 * 1 with 240MHz, root-node seems work just fine: BUT just once!
@@ -425,8 +427,8 @@ char *get_FR_str(uchar fr)
 
 void readPLL(uint chip_addr, uint null)
 {
-	char *stream;
-	if(chip_addr==0) stream = IO_STD; else stream = IO_BUF;
+	char *stream = IO_BUF;
+	//if(chip_addr==0) stream = IO_STD; else stream = IO_BUF;
 
 	uint r20 = sc[SC_PLL1];
 	uint r21 = sc[SC_PLL2];

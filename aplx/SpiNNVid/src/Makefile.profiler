@@ -1,9 +1,6 @@
 APP = profiler
-#The following is not important BUT required:
-SPINN_ID := 3
 
 OBJECTS = profiler.o
-
 
 include Makefile.common
 

@@ -1,9 +1,6 @@
 APP = streamer
-#The following is not important BUT required:
-SPINN_ID := 3
 
 OBJECTS = streamer.o util.o
-
 
 include Makefile.common
 
