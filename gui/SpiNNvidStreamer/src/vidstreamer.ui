@@ -6,58 +6,32 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>300</width>
-    <height>746</height>
+    <width>540</width>
+    <height>560</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
-    <width>270</width>
-    <height>110</height>
+    <width>540</width>
+    <height>560</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
-    <width>300</width>
-    <height>800</height>
+    <width>540</width>
+    <height>560</height>
    </size>
   </property>
   <property name="windowTitle">
    <string>vidStreamer</string>
   </property>
-  <widget class="QPushButton" name="pbVideo">
-   <property name="geometry">
-    <rect>
-     <x>10</x>
-     <y>500</y>
-     <width>91</width>
-     <height>27</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Load Video</string>
-   </property>
-  </widget>
-  <widget class="QPushButton" name="pbPause">
-   <property name="geometry">
-    <rect>
-     <x>10</x>
-     <y>530</y>
-     <width>91</width>
-     <height>29</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Pause</string>
-   </property>
-  </widget>
   <widget class="QFrame" name="frame">
    <property name="geometry">
     <rect>
      <x>10</x>
      <y>10</y>
      <width>281</width>
-     <height>481</height>
+     <height>421</height>
     </rect>
    </property>
    <property name="frameShape">
@@ -70,7 +44,7 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>280</y>
+      <y>253</y>
       <width>131</width>
       <height>21</height>
      </rect>
@@ -83,7 +57,7 @@
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>440</y>
+      <y>380</y>
       <width>151</width>
       <height>31</height>
      </rect>
@@ -106,7 +80,7 @@
     <property name="geometry">
      <rect>
       <x>190</x>
-      <y>440</y>
+      <y>380</y>
       <width>71</width>
       <height>29</height>
      </rect>
@@ -122,7 +96,7 @@
     <property name="geometry">
      <rect>
       <x>190</x>
-      <y>280</y>
+      <y>250</y>
       <width>81</width>
       <height>31</height>
      </rect>
@@ -224,7 +198,7 @@
      <property name="geometry">
       <rect>
        <x>30</x>
-       <y>30</y>
+       <y>25</y>
        <width>81</width>
        <height>22</height>
       </rect>
@@ -240,7 +214,7 @@
      <property name="geometry">
       <rect>
        <x>140</x>
-       <y>30</y>
+       <y>25</y>
        <width>81</width>
        <height>22</height>
       </rect>
@@ -253,57 +227,11 @@
      </property>
     </widget>
    </widget>
-   <widget class="QComboBox" name="cbFreq">
-    <property name="geometry">
-     <rect>
-      <x>190</x>
-      <y>250</y>
-      <width>81</width>
-      <height>31</height>
-     </rect>
-    </property>
-    <property name="currentIndex">
-     <number>0</number>
-    </property>
-    <item>
-     <property name="text">
-      <string>0</string>
-     </property>
-    </item>
-    <item>
-     <property name="text">
-      <string>100</string>
-     </property>
-    </item>
-    <item>
-     <property name="text">
-      <string>200</string>
-     </property>
-    </item>
-    <item>
-     <property name="text">
-      <string>250</string>
-     </property>
-    </item>
-   </widget>
-   <widget class="QLabel" name="label_3">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>250</y>
-      <width>131</width>
-      <height>21</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>#SpiNNaker freq:</string>
-    </property>
-   </widget>
    <widget class="QLineEdit" name="ipAddr">
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>410</y>
+      <y>350</y>
       <width>151</width>
       <height>27</height>
      </rect>
@@ -351,7 +279,7 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>313</y>
+      <y>284</y>
       <width>171</width>
       <height>21</height>
      </rect>
@@ -364,7 +292,7 @@
     <property name="geometry">
      <rect>
       <x>190</x>
-      <y>310</y>
+      <y>280</y>
       <width>81</width>
       <height>31</height>
      </rect>
@@ -386,7 +314,7 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>344</y>
+      <y>314</y>
       <width>171</width>
       <height>21</height>
      </rect>
@@ -399,7 +327,7 @@
     <property name="geometry">
      <rect>
       <x>190</x>
-      <y>340</y>
+      <y>310</y>
       <width>81</width>
       <height>31</height>
      </rect>
@@ -415,41 +343,6 @@
     </property>
     <property name="value">
      <number>15</number>
-    </property>
-   </widget>
-   <widget class="QLabel" name="label_7">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>374</y>
-      <width>171</width>
-      <height>21</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Expected fps</string>
-    </property>
-   </widget>
-   <widget class="QSpinBox" name="exFPS">
-    <property name="geometry">
-     <rect>
-      <x>190</x>
-      <y>370</y>
-      <width>81</width>
-      <height>31</height>
-     </rect>
-    </property>
-    <property name="minimum">
-     <number>1</number>
-    </property>
-    <property name="maximum">
-     <number>30</number>
-    </property>
-    <property name="singleStep">
-     <number>1</number>
-    </property>
-    <property name="value">
-     <number>25</number>
     </property>
    </widget>
    <widget class="QGroupBox" name="groupBox_3">
@@ -468,7 +361,7 @@
      <property name="geometry">
       <rect>
        <x>30</x>
-       <y>30</y>
+       <y>25</y>
        <width>81</width>
        <height>22</height>
       </rect>
@@ -484,7 +377,7 @@
      <property name="geometry">
       <rect>
        <x>140</x>
-       <y>30</y>
+       <y>25</y>
        <width>81</width>
        <height>22</height>
       </rect>
@@ -498,26 +391,13 @@
     </widget>
    </widget>
   </widget>
-  <widget class="QPushButton" name="pbImage">
-   <property name="geometry">
-    <rect>
-     <x>110</x>
-     <y>500</y>
-     <width>91</width>
-     <height>27</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Load Image</string>
-   </property>
-  </widget>
   <widget class="QFrame" name="frame_2">
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>620</y>
-     <width>281</width>
-     <height>111</height>
+     <y>500</y>
+     <width>521</width>
+     <height>51</height>
     </rect>
    </property>
    <property name="frameShape">
@@ -529,9 +409,9 @@
    <widget class="QComboBox" name="cbTest">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>30</y>
-      <width>261</width>
+      <x>90</x>
+      <y>10</y>
+      <width>241</width>
       <height>31</height>
      </rect>
     </property>
@@ -589,9 +469,9 @@
    <widget class="QPushButton" name="pbTest">
     <property name="geometry">
      <rect>
-      <x>90</x>
-      <y>70</y>
-      <width>93</width>
+      <x>340</x>
+      <y>10</y>
+      <width>71</width>
       <height>29</height>
      </rect>
     </property>
@@ -613,56 +493,345 @@
     </property>
    </widget>
   </widget>
-  <widget class="QPushButton" name="pbSendImage">
+  <widget class="QFrame" name="frame_3">
    <property name="geometry">
     <rect>
-     <x>110</x>
-     <y>530</y>
-     <width>91</width>
-     <height>27</height>
+     <x>310</x>
+     <y>10</y>
+     <width>221</width>
+     <height>231</height>
     </rect>
    </property>
-   <property name="text">
-    <string>Send Image</string>
+   <property name="frameShape">
+    <enum>QFrame::StyledPanel</enum>
    </property>
+   <property name="frameShadow">
+    <enum>QFrame::Raised</enum>
+   </property>
+   <widget class="QPushButton" name="pbVideo">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>80</y>
+      <width>101</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Load Video</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pbPause">
+    <property name="geometry">
+     <rect>
+      <x>120</x>
+      <y>82</y>
+      <width>91</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Pause</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="cbSimultStreaming">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>180</y>
+      <width>191</width>
+      <height>26</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Simultaneous streaming</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_7">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>150</y>
+      <width>171</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Expected fps</string>
+    </property>
+   </widget>
+   <widget class="QSpinBox" name="exFPS">
+    <property name="geometry">
+     <rect>
+      <x>130</x>
+      <y>140</y>
+      <width>81</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="minimum">
+     <number>1</number>
+    </property>
+    <property name="maximum">
+     <number>100</number>
+    </property>
+    <property name="singleStep">
+     <number>1</number>
+    </property>
+    <property name="value">
+     <number>25</number>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="cbForceVGA">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>200</y>
+      <width>191</width>
+      <height>26</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Force vga resolution</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pbAnim">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>110</y>
+      <width>101</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Animation</string>
+    </property>
+   </widget>
+   <widget class="QFrame" name="frame_6">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>201</width>
+      <height>61</height>
+     </rect>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Raised</enum>
+    </property>
+    <widget class="QLabel" name="label_8">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>20</y>
+       <width>91</width>
+       <height>17</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Average fps:</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="avgFPS">
+     <property name="geometry">
+      <rect>
+       <x>110</x>
+       <y>4</y>
+       <width>81</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>48</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>00</string>
+     </property>
+     <property name="textFormat">
+      <enum>Qt::PlainText</enum>
+     </property>
+    </widget>
+   </widget>
   </widget>
-  <widget class="QPushButton" name="pbShowHideTest">
+  <widget class="QFrame" name="frame_4">
    <property name="geometry">
     <rect>
-     <x>0</x>
-     <y>600</y>
-     <width>300</width>
-     <height>10</height>
+     <x>310</x>
+     <y>250</y>
+     <width>221</width>
+     <height>51</height>
     </rect>
    </property>
-   <property name="text">
-    <string/>
+   <property name="frameShape">
+    <enum>QFrame::StyledPanel</enum>
    </property>
+   <property name="frameShadow">
+    <enum>QFrame::Raised</enum>
+   </property>
+   <widget class="QPushButton" name="pbImage">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>91</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Load Image</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pbSendImage">
+    <property name="geometry">
+     <rect>
+      <x>120</x>
+      <y>10</y>
+      <width>91</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Send Image</string>
+    </property>
+   </widget>
   </widget>
-  <widget class="QPushButton" name="pbAnim">
-   <property name="geometry">
-    <rect>
-     <x>210</x>
-     <y>500</y>
-     <width>81</width>
-     <height>27</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Animation</string>
-   </property>
-  </widget>
-  <widget class="QCheckBox" name="cbSimultStreaming">
+  <widget class="QFrame" name="frame_5">
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>570</y>
-     <width>191</width>
-     <height>26</height>
+     <y>440</y>
+     <width>521</width>
+     <height>51</height>
+    </rect>
+   </property>
+   <property name="frameShape">
+    <enum>QFrame::StyledPanel</enum>
+   </property>
+   <property name="frameShadow">
+    <enum>QFrame::Raised</enum>
+   </property>
+   <widget class="QLabel" name="label_3">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>14</y>
+      <width>131</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Governor:</string>
+    </property>
+   </widget>
+   <widget class="QComboBox" name="cbFreq">
+    <property name="geometry">
+     <rect>
+      <x>90</x>
+      <y>10</y>
+      <width>241</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="currentIndex">
+     <number>0</number>
+    </property>
+    <item>
+     <property name="text">
+      <string>UserSpace</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Performance</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Powersave</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>OnDemand</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Conservative</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Graceful</string>
+     </property>
+    </item>
+   </widget>
+   <widget class="QSpinBox" name="sbFreq">
+    <property name="geometry">
+     <rect>
+      <x>340</x>
+      <y>12</y>
+      <width>71</width>
+      <height>26</height>
+     </rect>
+    </property>
+    <property name="minimum">
+     <number>10</number>
+    </property>
+    <property name="maximum">
+     <number>250</number>
+    </property>
+    <property name="value">
+     <number>200</number>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_9">
+    <property name="geometry">
+     <rect>
+      <x>420</x>
+      <y>14</y>
+      <width>67</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>MHz</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QPlainTextEdit" name="plainTextEdit">
+   <property name="geometry">
+    <rect>
+     <x>310</x>
+     <y>330</y>
+     <width>221</width>
+     <height>101</height>
+    </rect>
+   </property>
+   <property name="plainText">
+    <string>- We don't use graphics accelerator, hence the screen rendering speed is limited!
+- For Spin3, SDP delay factor (host) can go as low as 450 and SDP delay multiplier (spinn) can ca as low as 15. But for Spin5, the &quot;working&quot; value is 550 and 30.</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_10">
+   <property name="geometry">
+    <rect>
+     <x>310</x>
+     <y>310</y>
+     <width>67</width>
+     <height>21</height>
     </rect>
    </property>
    <property name="text">
-    <string>Simultaneous streaming</string>
+    <string>Notes:</string>
    </property>
   </widget>
  </widget>

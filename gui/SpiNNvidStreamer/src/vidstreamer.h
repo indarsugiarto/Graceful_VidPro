@@ -28,6 +28,7 @@ public:
     cDecoder *decoder;
     VideoState *is;
     QTimer *refresh;
+	QTimer *avgfpsT;
 	cScreen *screen;
 	cScreen *edge;
     cSpiNNcomm *spinn;
@@ -44,7 +45,6 @@ public slots:
 	void pbSendImageClicked();
     void pbConfigureClicked();
     void pbTestClicked();
-    void pbShowHideTestClicked();
     void newChipsNum();
     void refreshUpdate();
 	void videoFinish();
@@ -54,11 +54,15 @@ public slots:
 	void frameSent();
 	void spinnSendFrame();
 	void edgeRenderingDone();		// useful only for video, not image processing
+	void screenRenderingDone();
+
+	void changeGovernor(int idx);
 
 	void pbAnimClicked();
 	void exFPSChanged(int val);
 	quint64 getElapse_ns();
 	double get_fps();
+	void avgfpsT_tick();
 
 private:
     bool isPaused;
@@ -75,6 +79,7 @@ private:
 	bool _bRefresherUpdated;
 	bool _spinIsReady;	// will on when spin send result
 	int _exFPS;
+	int nRecvFrame;
 
 protected:
 	void closeEvent(QCloseEvent *event);

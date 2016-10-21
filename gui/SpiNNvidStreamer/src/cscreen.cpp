@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QtGui>
 #include <QtCore>
+#include <QGLWidget>
 
 cScreen::cScreen(QWidget *parent) : QWidget(parent)
 {
@@ -17,6 +18,7 @@ cScreen::cScreen(QWidget *parent) : QWidget(parent)
 
 	QVBoxLayout layout;
 	viewPort = new QGraphicsView();
+	viewPort->setViewport(new QGLWidget(QGLFormat(QGL::SampleBuffers)));
 	scene = new QGraphicsScene();
 
 	viewPort->setScene(scene);
