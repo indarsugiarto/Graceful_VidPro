@@ -212,6 +212,11 @@ void hMC_SpiNNVid(uint key, uint None)
 	if((key_hdr & 0xFF000000) == MCPL_SEND_PIXELS_BLOCK_CORES_NEXT) {
 		flag_SendResultCont = TRUE;
 	}
+	else if((key_hdr & 0xFF000000) == MCPL_SEND_PIXELS_BLOCK_CORES_INIT) {
+		sendResultInfo.nReceived_MCPL_SEND_PIXELS = 0;
+		sendResultInfo.pxBufPtr = resImgBuf;
+		sendResultInfo.cl = key_arg;
+	}
 }
 
 void hMCPL_SpiNNVid(uint key, uint payload)
@@ -561,15 +566,23 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 	}
 	// if the core receives pixels data from other nodes with the same coreID
 	else if((key_hdr & 0xFF000000) == MCPL_SEND_PIXELS_BLOCK_CORES_DATA) {
-//#if(DEBUG_LEVEL > 1)
-//		io_printf(IO_BUF, "Got key-0x%x, pay-0x%x\n", key, payload);
-//#endif
-		sark_mem_cpy(sendResultInfo.pxBufPtr, &payload, 4);
+#if(DEBUG_LEVEL>2)
+		io_printf(IO_BUF, "For line-%d got key-0x%x, pl-0x%x\n", sendResultInfo.cl, key, payload);
+#endif
+		// first, copy the first 2 pixels in the key part
+		ushort firstPart = key_arg;
+		sark_mem_cpy(sendResultInfo.pxBufPtr, (void *)&firstPart, 2);
+		sendResultInfo.pxBufPtr +=2;
+		// then, copy the next 4 pixels in the payload
+		sark_mem_cpy(sendResultInfo.pxBufPtr, (void *)&payload, 4);
 		sendResultInfo.pxBufPtr += 4;
-		sendResultInfo.nReceived_MCPL_SEND_PIXELS += 4;
+		sendResultInfo.nReceived_MCPL_SEND_PIXELS += 6;
+
 		if(sendResultInfo.nReceived_MCPL_SEND_PIXELS >= workers.wImg)
-			//io_printf(IO_BUF, "Got the line!\n");
-			spin1_schedule_callback(worker_recv_result, key_arg, 0, PRIORITY_PROCESSING);
+#if(DEBUG_LEVEL>2)
+			io_printf(IO_BUF, "Got the line!\n");
+#endif
+			spin1_schedule_callback(worker_recv_result, 0, 0, PRIORITY_PROCESSING);
 	}
 	// MCPL_SEND_PIXELS_BLOCK_CORES is  sent from leadAp to its workers
 	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK_CORES) {
@@ -592,12 +605,14 @@ void hMCPL_SpiNNVid(uint key, uint payload)
 		nBlockDone++;
 		spin1_schedule_callback(sendResultChain, nBlockDone, 0, PRIORITY_PROCESSING);
 	}
+	/* We disable MCPL_SEND_PIXELS_BLOCK_PREP in this wBufferingOptim
 	// MCPL_SEND_PIXELS_BLOCK_PREP is sent by root-leadAp to prepare its workers
 	else if(key_hdr == MCPL_SEND_PIXELS_BLOCK_PREP) {
 		sendResultInfo.nReceived_MCPL_SEND_PIXELS = 0;
 		sendResultInfo.pxBufPtr = resImgBuf;
 		// at this point, 4-byte aligned resImgBuf should already exist
 	}
+	*/
 /*
 #if(DEBUG_LEVEL > 1)
 	else {

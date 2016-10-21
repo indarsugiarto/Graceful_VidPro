@@ -24,6 +24,7 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	decoderIsActive(false),
 	tictoc(0),
 	currDir("../../../../Graceful_VidPro_Media/images"),
+	_spinIsReady(true),
     ui(new Ui::vidStreamer)
 {
     ui->setupUi(this);
@@ -75,8 +76,14 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	connect(spinn, SIGNAL(frameOut(const QImage &)), this, SLOT(spinnSendFrame()));
 
 	connect(spinn, SIGNAL(sendFrameDone()), this, SLOT(frameSent()));
-	connect(edge, SIGNAL(renderDone()), this, SLOT(edgeRenderingDone()));
 	connect(refresh, SIGNAL(timeout()), this, SLOT(refreshUpdate()));
+
+	// do this experiment: early refresh
+	// when we receive recvResultIsStarted from cspinncomm, let's stream frame to
+	// spinnaker immediately, not waiting for edgeRenderingDone
+	connect(spinn, SIGNAL(recvResultIsStarted()), this, SLOT(spinnSendFrame()));
+	// we need edgeRenderingDone for calculating fps
+	connect(edge, SIGNAL(renderDone()), this, SLOT(edgeRenderingDone()));
 
 	_exFPS = ui->exFPS->value();
 
@@ -152,8 +159,8 @@ void vidStreamer::cbSpiNNchanged(int idx)
 		ui->delFactorHost->setValue(10000);
 		ui->delFactorSpin->setValue(250);
 #else
-		ui->delFactorHost->setValue(475);
-		ui->delFactorSpin->setValue(20);
+		ui->delFactorHost->setValue(450);
+		ui->delFactorSpin->setValue(15);
 #endif
 	} else {
 		ui->sbNchips->setEnabled(true);
@@ -306,7 +313,13 @@ void vidStreamer::refreshUpdate()
 
 #if(DESTINATION==DEST_HOST)
 
-	if(!edgeRenderingInProgress && decoderIsActive) {
+	bool condition;
+	if(ui->cbSimultStreaming->isChecked())
+		condition = _spinIsReady && decoderIsActive;
+	else
+		condition = !edgeRenderingInProgress && decoderIsActive;
+
+	if(condition) {
 		//qDebug() << QString("Refresh encoder at-%1").arg(temp.tv_sec);
 		// clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &toc);
 		get_fps();
@@ -424,6 +437,9 @@ void vidStreamer::frameReady(const QImage &frameIn)
 #if(DEBUG_LEVEL>1)
 	qDebug() << "Got new frame from decoder...";
 #endif
+
+	// turn off notification that spin is ready
+	_spinIsReady = false;
 }
 
 void vidStreamer::pbTestClicked()
@@ -470,6 +486,10 @@ void vidStreamer::edgeRenderingDone()
 
 void vidStreamer::spinnSendFrame()
 {
+	// set spinIsReady to true so that decoder can send frame immediately
+	// while we receiving the result from spinnaker
+	_spinIsReady = true;
+
 #if(DEBUG_LEVEL>1)
 	qDebug() << "SpiNNVid send the frame";
 #endif

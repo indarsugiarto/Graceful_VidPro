@@ -43,7 +43,8 @@ uchar cSpiNNcomm::Y_CHIPS[48] = {0,0,1,1,0,1,2,2,2,0,1,2,3,3,3,3,0,1,2,3,4,4,4,4
 /*-------------------- Class Constructor and Destructor ---------------------*/
 cSpiNNcomm::cSpiNNcomm(QObject *parent): QObject(parent),
 	frResult(NULL),
-	frameID(0)	// start from-0
+	frameID(0),	// start from-0
+	_recvResultIsStarted(false)
 {
     // initialize nodes
     for(int i=0; i<MAX_CHIPS; i++) {
@@ -347,6 +348,10 @@ void cSpiNNcomm::readResult()
 	sdp_hdr_t h = get_hdr(ba);
 	// spinnaker finish sending the result?
 	if(h.srce_port == SDP_SRCE_NOTIFY_PORT) {
+
+		// first, turn off _recvResultIsStarted
+		_recvResultIsStarted = false;
+
 #if (DEBUG_LEVEL > 0)
 		qDebug() << "Got SDP_SRCE_NOTIFY_PORT...";
 #endif
@@ -368,6 +373,13 @@ void cSpiNNcomm::readResult()
 		//qDebug() << QString("Receiving %1 lines in ...-ms").arg(recvLineCntr);
 
 	} else {
+		// early inform vidstreamer about new result from spin
+		if(!_recvResultIsStarted) {
+			emit recvResultIsStarted();
+			// turn on _recvResultIsStarted
+			_recvResultIsStarted = true;
+		}
+
 		// for debugging:
 
 		// we don't send "line" information anymore!

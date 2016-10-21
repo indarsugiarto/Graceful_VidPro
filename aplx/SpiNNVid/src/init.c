@@ -302,6 +302,8 @@ void initRouter()
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
 	/*----------------- keys for sending result using buffering ------------------*/
+
+	// This is the previous version, leadAp instructs workers to be ready...
 	// key type-1: from leadAp-root to its own workers
 	//if(blkInfo->nodeBlockID == 0) { // -> nodeBlockID is not available during this init()!!!!
 	if(sv->p2p_addr == 0) {
@@ -347,8 +349,8 @@ void initRouter()
 	rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_CORES_DONE, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
 
 	// key type-5: from non-root-cores to root-cores
-	e = rtr_alloc(16);
-	for(c=2; c<=17; c++) {
+	e = rtr_alloc(30);	// 2 x 15 = 30
+	for(c=LEAD_CORE; c<STREAMER_CORE; c++) {
 		key = MCPL_SEND_PIXELS_BLOCK_CORES_DATA | (c << 16);
 		// this is for sending toward core <0,0,leadAp>
 		if (x>0 && y>0)			dest = (1 << 4);	// south-west
@@ -356,7 +358,11 @@ void initRouter()
 		else if(x==0 && y>0)	dest = (1 << 5);	// south
 		else					dest = 1 << (6+c);
 		rtr_mc_set(e, key, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
+		// in addition to type-5, we also use "initial" message
+		key = MCPL_SEND_PIXELS_BLOCK_CORES_INIT | (c << 16);
+		rtr_mc_set(e, key, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
 	}
+
 
 	// key type-6: from root-cores to non-root-cores
 	e = rtr_alloc(16);

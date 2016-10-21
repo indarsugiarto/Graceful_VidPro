@@ -88,6 +88,12 @@ signals:
 	void gotReply(const QByteArray &data);
 	void gotDebug(const QByteArray &data);
 	void frameOut(const QImage &frame);
+	// we can try to detect if a new result from spin just arrive
+	// when we receive this, we can "signal" out so that vidstreamer
+	// can alter _bRefresherUpdated immediately and the decoder
+	// start streaming while vidstreamer receiving frame from spin
+	void recvResultIsStarted();
+
 
 private:
 	QUdpSocket *sdpResult;
@@ -121,6 +127,8 @@ private:
 	uchar *rArray, *gArray, *bArray;	// line container
 
 	qint32 frameID;	// this to tell SpiNN, which frame is being sent
+
+	bool _recvResultIsStarted;
 
 	// helper functions & variables
 	void giveDelay(quint32 ns);	// in nanoseconds

@@ -269,6 +269,7 @@ typedef struct send_result_info {
 	uint nReceived_MCPL_SEND_PIXELS;
 	uchar *pxBufPtr;
 	// regarding buffering mechanism
+	ushort cl;					// current line
 } send_result_info_t;
 send_result_info_t sendResultInfo;
 
@@ -394,7 +395,7 @@ void sendResultChain(uint nextBlock, uint unused);
 uint getSdramResultAddr();
 uint getSdramBlockResultAddr();	// similar to getSdramResultAddr but used ONLY by root-node
 void worker_send_result(uint arg0, uint arg1);
-void worker_recv_result(uint line, uint arg1);
+void worker_recv_result(uint arg0, uint arg1);
 
 
 

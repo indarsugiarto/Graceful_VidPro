@@ -251,6 +251,9 @@
 // with buffering technique:
 #define MCPL_SEND_PIXELS_BLOCK		0x3a010000	// to all leadAps NOT in the root-node
 #define MCPL_SEND_PIXELS_BLOCK_CORES 0x3a020000	// to all workers in a chip
+// the worker in other node first sends MCPL_SEND_PIXELS_BLOCK_CORES_INIT
+// as MC to its partner in root-node. This key contains the line number
+#define MCPL_SEND_PIXELS_BLOCK_CORES_INIT	0x3d000000	// to core in root-node
 #define MCPL_SEND_PIXELS_BLOCK_CORES_DATA	0x3b000000	// the base key
 #define MCPL_SEND_PIXELS_BLOCK_CORES_DATA02	0x3b020000	// to core-2 in the root-node
 #define MCPL_SEND_PIXELS_BLOCK_CORES_DATA03 0x3b030000	// to core-3 in the root-node
@@ -292,8 +295,7 @@
 #define MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_SZIMG	0x3a050000	// tell "streamer" about image size
 #define MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_DEL	0x3a060000	// tell "Streamer" about delay factor
 #define MCPL_SEND_PIXELS_BLOCK_GO_STREAMER		0x3a070000	// tell "streamer" to go!
-//#define MCPL_SEND_PIXELS_BLOCK_DELAY	40		// works great with 320x240
-#define MCPL_SEND_PIXELS_BLOCK_DELAY	60		// works for all
+#define MCPL_SEND_PIXELS_BLOCK_DELAY	50		// works for all
 
 // The lower part of the key is the line that is expected to be sent. The node which has
 // that line will then respond by sending the pixels.

@@ -54,6 +54,7 @@ public slots:
 	void frameSent();
 	void spinnSendFrame();
 	void edgeRenderingDone();		// useful only for video, not image processing
+
 	void pbAnimClicked();
 	void exFPSChanged(int val);
 	quint64 getElapse_ns();
@@ -72,6 +73,7 @@ private:
 
 	bool _bEdgeRenderingDone;
 	bool _bRefresherUpdated;
+	bool _spinIsReady;	// will on when spin send result
 	int _exFPS;
 
 protected:

@@ -52,7 +52,9 @@ void sendResult(uint unused, uint arg1)
 #if(DEBUG_LEVEL>1)
 	io_printf(IO_STD, "Tell root-workers to prepare sendResult...\n");
 #endif
-	spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_PREP, 0, WITH_PAYLOAD);
+	// spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_PREP, 0, WITH_PAYLOAD);
+	// NOTE: no need for MCPL_SEND_PIXELS_BLOCK_PREP, since the "init" signal
+	// will be sent by the sender
 
 	// second, start the chain
 	nBlockDone = 1;	// root node has finished its part
@@ -175,35 +177,55 @@ void worker_send_result(uint arg0, uint arg1)
 	uchar *imgOut;
 	uint dmatag;
 	uint key;
-	uint *ptrPx;
+	uchar *ptrPx;
 	int rem;	// might goes into negative region
 
 	imgOut = (uchar *)getSdramResultAddr();
 	dmatag = DMA_FETCH_IMG_TAG | (myCoreID << 16);
+	ushort key_arg;
+	uint key_hdr = MCPL_SEND_PIXELS_BLOCK_CORES_DATA | (myCoreID << 16);
+	uint pl;
 
 	for(l = workers.startLine; l <= workers.endLine; l++) {
+
+		// first, tell receiver that we're going to burst pixels for line-l
+		key = MCPL_SEND_PIXELS_BLOCK_CORES_INIT | (myCoreID << 16) | l;
+		spin1_send_mc_packet(key, 0, NO_PAYLOAD);
+
 #if(DEBUG_LEVEL>1)
 		io_printf(IO_BUF, "Sending line-%d from addr-0x%x...\n", l, (uint)imgOut);
 #endif
-		key = MCPL_SEND_PIXELS_BLOCK_CORES_DATA | (myCoreID << 16) | l;
+		key = MCPL_SEND_PIXELS_BLOCK_CORES_DATA | (myCoreID << 16);
 		dmaImgFromSDRAMdone = 0;
 		do {
 			dmaTID = spin1_dma_transfer(dmatag, imgOut, resImgBuf, DMA_READ, workers.wImg);
 		} while(dmaTID==0);
 		while(dmaImgFromSDRAMdone==0);
 
-		ptrPx = (uint *)resImgBuf;
+		ptrPx = resImgBuf;
 		flag_SendResultCont = FALSE;
 		rem = workers.wImg;
 		do {
-#if(DEBUG_LEVEL > 0)
-			// io_printf(IO_BUF, "Sending key-0x%x, pay-0x%x\n", key, *ptrPx);
-#endif
-			//sark_delay_us(MCPL_SEND_PIXELS_BLOCK_DELAY);
+			// copy to key_arg
+			sark_mem_cpy((void *)&key_arg, (void *)ptrPx, 2);
+			key = key_hdr | key_arg;
+			//key = key_hdr | 0xFFFF;	// all white
+			rem -= 2;
+			ptrPx += 2;
+			sark_mem_cpy((void *)&pl, (void *)ptrPx, 4);
+			spin1_send_mc_packet(key, pl, WITH_PAYLOAD);
+
+			//spin1_send_mc_packet(key, (uint)*ptrPx, WITH_PAYLOAD);	// this creates "zebra" strips
+			//spin1_send_mc_packet(key, 0xFFFFFFFF, WITH_PAYLOAD);		// all white
+#if(DEBUG_LEVEL==0)
 			giveDelay(MCPL_SEND_PIXELS_BLOCK_DELAY);
-			spin1_send_mc_packet(key, *ptrPx, WITH_PAYLOAD);
-			ptrPx++;
+#else
+			io_printf(IO_BUF, "Send key-0x%x, pl-0x%x\n", key,(uint)*ptrPx);
+			sark_delay_us(10000);
+#endif
+			ptrPx += 4;
 			rem -= 4;
+
 		} while(rem > 0);
 		while(flag_SendResultCont == FALSE);
 		imgOut += workers.wImg;
@@ -213,37 +235,40 @@ void worker_send_result(uint arg0, uint arg1)
 
 // worker_recv_result() is called when a worker in the root-node receives the complete
 // line from other node and it will send MCPL_SEND_PIXELS_BLOCK_CORES_NEXT
-void worker_recv_result(uint line, uint arg1)
+void worker_recv_result(uint arg0, uint arg1)
 {
 	// step-0: determine the address of the line
 	uchar *imgAddr = (uchar *)getSdramBlockResultAddr();
-	uchar *lineAddr = imgAddr + line*workers.wImg;
+	uchar *lineAddr = imgAddr + sendResultInfo.cl*workers.wImg;
 
 	// pause di sini, mau lihat apakah alamatnya sama:
+#if(DEBUG_LEVEL>2)
 	io_printf(IO_BUF, "imgAddr = 0x%x, lineAddr = 0x%x\n", imgAddr, lineAddr);
 	// return; // --> OK!, after revising the computeWLoad() in process.c
+#endif
 
 	// step-1: put into sdram
 	uint dmatag = DMA_STORE_IMG_TAG | (myCoreID << 16);
 	do {
 		dmaTID = spin1_dma_transfer(dmatag, lineAddr, resImgBuf,
 									DMA_WRITE, workers.wImg);
+#if(DEBUG_LEVEL>0)
 		if(dmaTID==0)
 			io_printf(IO_BUF, "Dma full! Retry...\n");
+#endif
 	} while(dmaTID==0);
 
 	// step-2: reset counter
+	/*
 	sendResultInfo.nReceived_MCPL_SEND_PIXELS = 0;
 	sendResultInfo.pxBufPtr = resImgBuf;
-
+	*/
 
 	// step-3: send "next" signal
 #if(DEBUG_LEVEL > 2)
 	//io_printf(IO_BUF, "Sending NEXT to core-%d\n", myCoreID);
 	io_printf(IO_BUF, "DMA done! Ready to send NEXT to core-%d\n", myCoreID);
 #endif
-	// Indar: debugging, stop dulu di sini:
-	// return;
 
 	uint key = MCPL_SEND_PIXELS_BLOCK_CORES_NEXT | (myCoreID << 16);
 	spin1_send_mc_packet(key, 0, NO_PAYLOAD);
