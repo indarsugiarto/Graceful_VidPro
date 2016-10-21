@@ -1,0 +1,5 @@
+What we want to do:
+1. Optim the MCPL so that it carries more pixels
+2. Send notification to host prior to sending the resulting frame
+3. Overclock? First, fix the profiler on 3.0.1
+
