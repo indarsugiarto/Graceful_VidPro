@@ -5,7 +5,7 @@
 #include <QtCore>
 #include <QGLWidget>
 
-cScreen::cScreen(QWidget *parent) : QWidget(parent)
+cScreen::cScreen(QString title, QWidget *parent) : QWidget(parent)
 {
 
 	 QRect rec = QApplication::desktop()->screenGeometry();
@@ -27,7 +27,7 @@ cScreen::cScreen(QWidget *parent) : QWidget(parent)
 	viewPort->setBackgroundBrush(QBrush(Qt::black));
 	layout.addWidget(viewPort);
 	this->setLayout(&layout);
-
+	this->setWindowTitle(title);
 	// test
 	//viewPort->show();
 }
@@ -38,7 +38,7 @@ cScreen::~cScreen()
 	delete viewPort;
 }
 
-
+/*
 void cScreen::drawFrame()
 {
 	QPixmap pixmap;
@@ -47,7 +47,7 @@ void cScreen::drawFrame()
 	scene->addPixmap(pixmap);
 	emit renderDone();
 }
-
+*/
 void cScreen::putFrame(const QImage &frameku)
 {
 	frame = frameku;
@@ -77,11 +77,6 @@ void cScreen::setSize(int w, int h){
 		viewPort->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 		viewPort->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 	}
-}
-
-void cScreen::getImgSpiNN(const QByteArray &data)
-{
-	// collect data before constructing QImage from data
 }
 
 void cScreen::clear()

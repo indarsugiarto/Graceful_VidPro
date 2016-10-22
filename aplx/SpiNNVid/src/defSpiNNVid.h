@@ -7,7 +7,7 @@
 #define DEFSPINNVID_H
 
 #define MAJOR_VERSION               2
-#define MINOR_VERSION               1
+#define MINOR_VERSION               2
 
 // Version log
 // 0.1 Sending frame to SpiNNaker at 10MBps
@@ -17,6 +17,7 @@
 // 1.1 Send to FPGA via FR directly (without SDP)
 // 2.0 Implement task scheduling and DVS emulation
 // 2.1 Implement buffering
+// 2.2 Implement optimized buffering and better GUI
 
 
 #define ADAPTIVE_FREQ               FALSE
@@ -295,7 +296,8 @@
 #define MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_SZIMG	0x3a050000	// tell "streamer" about image size
 #define MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_DEL	0x3a060000	// tell "Streamer" about delay factor
 #define MCPL_SEND_PIXELS_BLOCK_GO_STREAMER		0x3a070000	// tell "streamer" to go!
-#define MCPL_SEND_PIXELS_BLOCK_DELAY	50		// works for all
+//#define MCPL_SEND_PIXELS_BLOCK_DELAY	40
+#define MCPL_SEND_PIXELS_BLOCK_DELAY	60
 
 // The lower part of the key is the line that is expected to be sent. The node which has
 // that line will then respond by sending the pixels.

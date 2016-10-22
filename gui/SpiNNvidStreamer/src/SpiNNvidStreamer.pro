@@ -16,13 +16,17 @@ SOURCES += main.cpp\
         vidstreamer.cpp \
     cdecoder.cpp \
     cscreen.cpp \
-    cspinncomm.cpp
+    cspinncomm.cpp \
+    cImgViewer.cpp \
+    cPixViewer.cpp
 
 HEADERS  += vidstreamer.h \
     cdecoder.h \
     viddef.h \
     cscreen.h \
-    cspinncomm.h
+    cspinncomm.h \
+    cImgViewer.h \
+    cPixViewer.h
 
 FORMS    += vidstreamer.ui
 

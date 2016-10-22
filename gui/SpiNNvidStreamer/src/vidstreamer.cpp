@@ -15,14 +15,6 @@
 #include <QFileDialog>
 #include <QDesktopWidget>	// needed for QApplication::desktop()->screenGeometry();
 
-// For GUI testing, we don't need SpiNNaker:
-#define BYPASS_SPIN
-
-// fps can be computed from decoder output or spinnaker output
-#ifndef BYPASS_SPIN
-#define USE_SPIN_OUTPUT_FOR_FPS
-#endif
-
 vidStreamer::vidStreamer(QWidget *parent) :
     QWidget(parent),
     worker(NULL),
@@ -55,11 +47,19 @@ vidStreamer::vidStreamer(QWidget *parent) :
 
     refresh = new QTimer(this);
 	avgfpsT = new QTimer(this);
-    screen = new cScreen();     // this is for displaying original frame
-	screen->setWindowTitle("Original Image/Frame");
-    edge = new cScreen();       // this is for displaying result
-	edge->setWindowTitle("Result Image/Frame");
 	spinn = new cSpiNNcomm(this);
+
+	// visualizer
+#if(RENDERING_ENGINE==USE_QGRAPHICSVIEW)	// it has scrollbar functionality
+	edge = new cScreen("Result Frame");
+	orgImg = new cScreen("Original Frame");
+#elif(RENDERING_ENGINE==USE_QGLWIDGET)
+	edge = new cImgViewer("Result Frame");
+	orgImg = new cImgViewer("Original Frame");
+#else
+	edge = new cPixViewer("Result Frame");
+	orgImg = new cPixViewer("Original Frame");
+#endif
 
 	// let's "tile" the widgets
 	QRect rec = QApplication::desktop()->screenGeometry();
@@ -81,19 +81,16 @@ vidStreamer::vidStreamer(QWidget *parent) :
 
 	connect(ui->sbNchips, SIGNAL(editingFinished()), this, SLOT(newChipsNum()));
 	connect(ui->pbTest, SIGNAL(pressed()), this, SLOT(pbTestClicked()));
-	connect(spinn, SIGNAL(frameOut(const QImage &)), edge, SLOT(putFrame(const QImage &)));
-	connect(spinn, SIGNAL(frameOut(const QImage &)), this, SLOT(spinnSendFrame()));
 
-	connect(spinn, SIGNAL(sendFrameDone()), this, SLOT(frameSent()));
+	connect(ui->cbSimultStreaming, SIGNAL(clicked(bool)), this, SLOT(updateSpinConnection()));
+
+	updateSpinConnection();
+
 	connect(refresh, SIGNAL(timeout()), this, SLOT(refreshUpdate()));
 
-	// do this experiment: early refresh
-	// when we receive recvResultIsStarted from cspinncomm, let's stream frame to
-	// spinnaker immediately, not waiting for edgeRenderingDone
-	connect(spinn, SIGNAL(recvResultIsStarted()), this, SLOT(spinnSendFrame()));
 	// we need edgeRenderingDone for calculating fps
 	connect(edge, SIGNAL(renderDone()), this, SLOT(edgeRenderingDone()));
-	connect(screen, SIGNAL(renderDone()), this, SLOT(screenRenderingDone()));
+	connect(orgImg, SIGNAL(renderDone()), this, SLOT(screenRenderingDone()));
 
 	// expected FPS value
 	_exFPS = ui->exFPS->value();
@@ -105,7 +102,6 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	//refresh->setInterval(50);   // which produces roughly 20fps
 	//refresh->setInterval(40);   // which produces roughly 25fps
 	//refresh->setInterval(20);   // which produces roughly 50fps
-	refresh->start();
 
 	avgfpsT->setInterval(1000);		// it should tick every 1s
 	connect(avgfpsT, SIGNAL(timeout()), this, SLOT(avgfpsT_tick()));
@@ -121,10 +117,6 @@ vidStreamer::vidStreamer(QWidget *parent) :
 
 	//ui->pbConfigure->click();
 	//pbTestClicked();
-	/*
-	spinn->setHost(1);	//1=spin5
-	spinn->configSpin(1, 350, 350);
-	*/
 
 	experiment = 0;
 
@@ -162,10 +154,26 @@ vidStreamer::~vidStreamer()
 {
 	delete spinn;
 	delete edge;
-	delete screen;
+	delete orgImg;
 	delete ui;
 }
 
+void vidStreamer::updateSpinConnection()
+{
+	connect(spinn, SIGNAL(frameOut(const QImage &)), edge, SLOT(putFrame(const QImage &)));
+	connect(spinn, SIGNAL(sendFrameDone()), this, SLOT(frameSent()));
+
+	if(ui->cbSimultStreaming->isChecked()) {
+		// when we receive recvResultIsStarted from cspinncomm, let's stream frame to
+		// spinnaker immediately, not waiting for edgeRenderingDone
+		connect(spinn, SIGNAL(recvResultIsStarted()), this, SLOT(spinnSendFrame()));
+	} else {
+		// otherwise, wait until spinn finish transfering the frame
+		connect(spinn, SIGNAL(frameOut(const QImage &)), this, SLOT(spinnSendFrame()));
+	}
+
+
+}
 
 void vidStreamer::cbSpiNNchanged(int idx)
 {
@@ -196,7 +204,7 @@ void vidStreamer::cbSpiNNchanged(int idx)
 
 void vidStreamer::pbConfigureClicked()
 {
-    screen->hide();
+	orgImg->hide();
     edge->hide();
     ui->pbVideo->setEnabled(true);
     ui->pbImage->setEnabled(true);
@@ -265,6 +273,8 @@ void vidStreamer::errorString(QString err)
 
 void vidStreamer::pbVideoClicked()
 {
+	currDir = "../../../../Graceful_VidPro_Media/videos";
+
 	QString fName = QFileDialog::getOpenFileName(this, "Open Video File", currDir, "*");
     if(fName.isEmpty())
         return;
@@ -274,28 +284,40 @@ void vidStreamer::pbVideoClicked()
 	decoder = new cDecoder(this);
 
 	decoder->moveToThread(worker);
-	connect(decoder, SIGNAL(error(QString)), this, SLOT(errorString(QString)));
 	connect(worker, SIGNAL(started()), decoder, SLOT(started()));
-	connect(decoder, SIGNAL(finished()), worker, SLOT(quit()));
-	connect(decoder, SIGNAL(finished()), decoder, SLOT(deleteLater()));
-	connect(worker, SIGNAL(finished()), worker, SLOT(deleteLater()));
-	connect(worker, SIGNAL(finished()), decoder, SLOT(deleteLater()));
-	connect(decoder, SIGNAL(newFrame(const QImage &)), screen, SLOT(putFrame(const QImage &)));
+	connect(worker, SIGNAL(finished()), this, SLOT(cleanUpVideo()));
+	//connect(decoder, SIGNAL(finished()), worker, SLOT(quit()));
+	//connect(decoder, SIGNAL(finished()), decoder, SLOT(deleteLater()));
+	//connect(worker, SIGNAL(finished()), worker, SLOT(deleteLater()));
+	//connect(worker, SIGNAL(finished()), decoder, SLOT(deleteLater()));
 
-	// use the following to send the image from decoder to spinnaker
+	connect(decoder, SIGNAL(newFrame(const QImage &)), orgImg, SLOT(putFrame(const QImage &)));
+#ifndef BYPASS_SPIN
 	connect(decoder, SIGNAL(newFrame(const QImage &)), spinn, SLOT(frameIn(const QImage &)));
-	connect(decoder, SIGNAL(newFrame(const QImage &)), this, SLOT(frameReady(const QImage &)));
+#endif
+	connect(decoder, SIGNAL(newFrame(const QImage &)), this, SLOT(frameReady()));
 
 	// for debugging only: send the image from decoder to edge-screener
 	// connect(decoder, SIGNAL(newFrame(QImage)), edge, SLOT(putFrame(QImage)));
 
 	connect(decoder, SIGNAL(gotPicSz(int,int)), this, SLOT(setSize(int,int)));
 	connect(decoder, SIGNAL(finished()), this, SLOT(videoFinish()));
+	connect(decoder, SIGNAL(error(QString)), this, SLOT(errorString(QString)));
+
+	orgImg->show();
+#ifndef BYPASS_SPIN
+	edge->show();
+#endif
 
 	decoder->filename = fName;
-	worker->start();
 	decoderIsActive = true;
 	nRecvFrame = 0;
+	ui->pbVideo->setEnabled(false);
+	ui->pbAnim->setEnabled(false);
+
+	refresh->start();
+
+	worker->start();
 }
 
 void vidStreamer::refreshUpdate()
@@ -320,12 +342,21 @@ void vidStreamer::refreshUpdate()
 #endif
 
 	bool condition;
-	if(ui->cbSimultStreaming->isChecked())
+	if(ui->cbSimultStreaming->isChecked()) {
 		condition = _spinIsReady && decoderIsActive;
-	else
+		//qDebug() << "Using _spinIsReady";
+	}
+	else {
 		condition = !edgeRenderingInProgress && decoderIsActive;
+		//qDebug() << "not Using _spinIsReady";
+	}
 
 	if(condition) {
+#ifndef BYPASS_SPIN
+		if(ui->cbSimultStreaming->isChecked()) {
+			giveDelay(simultDelVal);
+		}
+#endif
 		get_fps();
 		decoder->refresh();
 	}
@@ -340,13 +371,17 @@ void vidStreamer::refreshUpdate()
 
 void vidStreamer::setSize(int w, int h)
 {
-	screen->setSize(w,h);
+	orgImg->setSize(w, h);
 	if(ui->cbForceVGA->isChecked())
 		edge->setSize(640,480);
 	else
 		edge->setSize(w,h);
     // then tell spinnaker to start initialization
+#ifndef BYPASS_SPIN
     spinn->frameInfo(w, h);
+#endif
+	// calculate delay value for simultaneous buffering
+	simultDelVal = (h/240)*ui->delFactorHost->value()*3;
 }
 
 void vidStreamer::closeEvent(QCloseEvent *event)
@@ -354,17 +389,45 @@ void vidStreamer::closeEvent(QCloseEvent *event)
 	refresh->stop();
     if(worker != NULL && worker->isRunning())
         worker->quit();
-	screen->close();
+	//screen->close();
+	orgImg->close();
 	edge->close();
 	event->accept();
 }
 
 void vidStreamer::videoFinish()
 {
-    if(worker != NULL && worker->isRunning())
-        worker->quit();
+	qDebug() << "Video ends";
+
+	// disconnect signals
+	disconnect(decoder, SIGNAL(newFrame(const QImage &)), orgImg, SLOT(putFrame(const QImage &)));
+#ifndef BYPASS_SPIN
+	disconnect(decoder, SIGNAL(newFrame(const QImage &)), spinn, SLOT(frameIn(const QImage &)));
+#endif
+	disconnect(decoder, SIGNAL(newFrame(const QImage &)), this, SLOT(frameReady()));
+	disconnect(decoder, SIGNAL(gotPicSz(int,int)), this, SLOT(setSize(int,int)));
+	disconnect(decoder, SIGNAL(finished()), this, SLOT(videoFinish()));
+	disconnect(decoder, SIGNAL(error(QString)), this, SLOT(errorString(QString)));
+
+	if(worker != NULL && worker->isRunning())
+		worker->exit(0);
 	decoderIsActive = false;
 	refresh->stop();
+	orgImg->hide();
+#ifndef BYPASS_SPIN
+	edge->hide();
+#endif
+}
+
+void vidStreamer::cleanUpVideo()
+{
+	qDebug() << "Clean-up video memory";
+	if(!worker->isRunning()) {
+		delete decoder;
+		delete worker;
+	}
+	ui->pbVideo->setEnabled(true);
+	ui->pbAnim->setEnabled(true);
 }
 
 void vidStreamer::pbImageClicked()
@@ -393,19 +456,18 @@ void vidStreamer::pbImageClicked()
     currDir = QFileInfo(imgFilename).path(); // store path for next time
 
 	if(experiment == 0)
-		screen->show();
+		//screen->show();
+		orgImg->show();
 
     ui->pbSendImage->setEnabled(true);
 
     loadedImage.load(imgFilename);
 
-	// send image size to widgets and SpiNNaker:
 	setSize(loadedImage.width(), loadedImage.height());
-	// the widgets will be shown up!!!
 
 	// for the "screen" widget, display the image immediately:
-	screen->putFrame(loadedImage);
-	screen->hide(); screen->show();	// this is a trick to make the widget properly showing the image
+	orgImg->putFrame(loadedImage);
+	orgImg->show();
 }
 
 void vidStreamer::pbSendImageClicked()
@@ -417,16 +479,16 @@ void vidStreamer::pbSendImageClicked()
 
 	// disable the button to see if the image is sent
     ui->pbSendImage->setEnabled(false);
-	edge->clear();
+	edge->show();
 
     // send the frame to spinn
-	frameReady(loadedImage);
+	frameReady();
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tic);
 	spinn->frameIn(loadedImage);
 }
 
 // frameReady() is called when the decoder has a new frame ready to be sent to spinn
-void vidStreamer::frameReady(const QImage &frameIn)
+void vidStreamer::frameReady()
 {
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tic);
 
@@ -436,9 +498,6 @@ void vidStreamer::frameReady(const QImage &frameIn)
 
 	// for DEBUGGING: the following directly-to-edge-widget works:
 	// edge->putFrame(frameIn);
-
-	//loadedImage = frameIn;
-	//spinn->frameIn(frameIn);
 
 #if(DEBUG_LEVEL>1)
 	qDebug() << "Got new frame from decoder...";
@@ -494,6 +553,7 @@ void vidStreamer::spinnSendFrame()
 	// set spinIsReady to true so that decoder can send frame immediately
 	// while we receiving the result from spinnaker
 	_spinIsReady = true;
+	// qDebug() << "SpiNN is ready!";
 
 #if(DEBUG_LEVEL>1)
 	qDebug() << "SpiNNVid send the frame";
@@ -523,16 +583,27 @@ void vidStreamer::pbAnimClicked()
 
 	//p.fillRect(img.rect(), Qt::white);
 
+	ui->pbVideo->setEnabled(false);
+
 	// prepare avgfps counter
 	nRecvFrame = 0;
 
+	refresh->start();
+
+	orgImg->show();
+#ifndef BYPASS_SPIN
+	edge->show();
+#endif
+
 	for(i=0; i<1000; i++) {
 		p.drawText(img.rect(), Qt::AlignCenter | Qt::AlignVCenter, QString("%1").arg(i));
-		screen->putFrame(img);
+		orgImg->putFrame(img);
 		_bEdgeRenderingDone = false;
 		_bRefresherUpdated = false;
 		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tic);
+#ifndef BYPASS_SPIN
 		spinn->frameIn(img);
+#endif
 		while (1) {
 			qApp->processEvents();
 
@@ -549,13 +620,18 @@ void vidStreamer::pbAnimClicked()
 			if(condition) break;
 
 		}
+#ifndef BYPASS_SPIN
+		if(ui->cbSimultStreaming->isChecked()) {
+			giveDelay(simultDelVal);
+		}
+#endif
 		get_fps();
 		p.eraseRect(img.rect());
 		//p.fillRect(img.rect(), Qt::white);
-		//screen->putFrame(img);
 	}
-	spinn->frameIn(img);
 
+	refresh->stop();
+	ui->pbVideo->setEnabled(true);
 	return;
 
 	/* The following is the old version...
@@ -623,6 +699,10 @@ quint64 vidStreamer::getElapse_ns()
 
 double vidStreamer::get_fps()
 {
+	return 0;
+
+	// bypass...
+
 	double fps;
 	// note: tic must be collected when sending frame to spinnaker
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &toc);
@@ -652,5 +732,34 @@ void vidStreamer::screenRenderingDone()
 {
 #ifndef USE_SPIN_OUTPUT_FOR_FPS
 	nRecvFrame++;
+	//qDebug() << "Done rendering org";
 #endif
+}
+
+
+quint64 vidStreamer::elapsed(timespec start, timespec end)
+{
+	quint64 result;
+	timespec temp;
+	if ((end.tv_nsec-start.tv_nsec)<0) {
+		temp.tv_sec = end.tv_sec-start.tv_sec-1;
+		temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+	} else {
+		temp.tv_sec = end.tv_sec-start.tv_sec;
+		temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+	}
+	result = temp.tv_sec*1000000000+temp.tv_nsec;
+	return result;
+}
+
+void vidStreamer::giveDelay(quint32 ns)
+{
+	timespec ts, te;
+	volatile quint32 dif;
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
+	do {
+		qApp->processEvents();
+		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &te);
+		dif = elapsed(ts, te);
+	} while(dif < ns);
 }

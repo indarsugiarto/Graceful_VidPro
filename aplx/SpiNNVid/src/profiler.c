@@ -16,9 +16,13 @@ void c_main()
 	if(myCoreID != PROF_CORE) {
 		io_printf(IO_STD, "Invalid core! Put me in core-%d!\n", PROF_CORE);
 	} else {
-		//initProfiler();
+		initProfiler();
 		initProfilerSDP();
 
+		/* Result: cannot go 200Mhz
+		io_printf(IO_BUF, "[PROFILER] Use 200MHz for AHB and router!\n");
+		changePLL(2);
+		*/
 
 		// experiment: let's use 250MHz for the root-node:
 		/*
@@ -27,6 +31,12 @@ void c_main()
 			changeFreq(235);
 		}
 		*/
+
+		/*
+		io_printf(IO_STD, "[PROFILER] Set freq to 250MHz!\n");
+		changeFreq(250);
+		*/
+
 		spin1_schedule_callback(readPLL, 1, 0, PRIORITY_PROCESSING);
 		/* Result:
 		 * 1 with 240MHz, root-node seems work just fine: BUT just once!
@@ -166,6 +176,8 @@ uint initProfiler()
 	// read the current spiNNaker frequency
 	_freq = readSpinFreqVal();
 	io_printf(IO_BUF, "[PROFILER] Current frequency = %d-MHz!\n", _freq);
+
+	return _freq;
 
 	// initialize idle process counter and stuffs
 	for(uint _idleCntr=0; _idleCntr<18; _idleCntr++)

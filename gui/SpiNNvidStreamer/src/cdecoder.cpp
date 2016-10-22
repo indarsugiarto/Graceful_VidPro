@@ -140,6 +140,7 @@ void cDecoder::started()
 						// Publish the result
 						frame = getFrame();
 						emit newFrame(frame);
+						// qDebug() << QString("[DECODER] New frame %1 x %2").arg(frame.width()).arg(frame.height());
 						go = false; // wait until refresh timer fire-up
 
 					}
@@ -163,6 +164,7 @@ void cDecoder::started()
 		}
 	}
 
+	qDebug() << "[DECODER] End!";
     emit finished();
 	// Free the RGB image
 	av_free(buffer);
