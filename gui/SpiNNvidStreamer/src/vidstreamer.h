@@ -28,7 +28,7 @@
 #define USE_QGRAPHICSVIEW	1
 #define USE_QGLWIDGET		2	// problematic with vga-size video
 #define USE_PIXMAP			3	// runs OK with BYPASS_SPIN
-#define RENDERING_ENGINE	USE_QGRAPHICSVIEW
+#define RENDERING_ENGINE	USE_PIXMAP
 
 #define DELAY_SIMULT_BUFFERING	(450*3)
 
@@ -93,17 +93,21 @@ public slots:
 	double get_fps();
 	void avgfpsT_tick();
 	void updateSpinConnection();
+	void runAnimation();
+	void updateSimultDelFactor(int newVal) {_iSimultDelFactor = newVal;}
 
 private:
     bool isPaused;
 	bool edgeRenderingInProgress;
 	bool decoderIsActive;
 
+	int _iSimultDelFactor;
 	int tictoc;
 	timespec tic, toc;
 
 	QString currDir;
 
+	volatile bool _bAnimIsRunning;
 	bool _bEdgeRenderingDone;
 	bool _bRefresherUpdated;
 	bool _spinIsReady;	// will on when spin send result

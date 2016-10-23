@@ -22,6 +22,7 @@ vidStreamer::vidStreamer(QWidget *parent) :
     isPaused(false),
 	edgeRenderingInProgress(false),
 	decoderIsActive(false),
+	_bAnimIsRunning(false),
 	tictoc(0),
 	currDir("../../../../Graceful_VidPro_Media/images"),
 	_spinIsReady(true),
@@ -43,6 +44,9 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	ui->cbTest->setEnabled(false);
 	ui->pbTest->setEnabled(false);
 	ui->pbAnim->setEnabled(false);
+	ui->cbForceVGA->setEnabled(false);
+	ui->sbSimultDelFactor->setEnabled(true);
+	_iSimultDelFactor = ui->sbSimultDelFactor->value();
 
 
     refresh = new QTimer(this);
@@ -83,6 +87,7 @@ vidStreamer::vidStreamer(QWidget *parent) :
 	connect(ui->pbTest, SIGNAL(pressed()), this, SLOT(pbTestClicked()));
 
 	connect(ui->cbSimultStreaming, SIGNAL(clicked(bool)), this, SLOT(updateSpinConnection()));
+	connect(ui->sbSimultDelFactor, SIGNAL(valueChanged(int)), this, SLOT(updateSimultDelFactor(int)));
 
 	updateSpinConnection();
 
@@ -164,10 +169,12 @@ void vidStreamer::updateSpinConnection()
 	connect(spinn, SIGNAL(sendFrameDone()), this, SLOT(frameSent()));
 
 	if(ui->cbSimultStreaming->isChecked()) {
+		ui->sbSimultDelFactor->setEnabled(true);
 		// when we receive recvResultIsStarted from cspinncomm, let's stream frame to
 		// spinnaker immediately, not waiting for edgeRenderingDone
 		connect(spinn, SIGNAL(recvResultIsStarted()), this, SLOT(spinnSendFrame()));
 	} else {
+		ui->sbSimultDelFactor->setEnabled(false);
 		// otherwise, wait until spinn finish transfering the frame
 		connect(spinn, SIGNAL(frameOut(const QImage &)), this, SLOT(spinnSendFrame()));
 	}
@@ -213,6 +220,7 @@ void vidStreamer::pbConfigureClicked()
     ui->cbTest->setEnabled(true);
     ui->pbTest->setEnabled(true);
 	ui->pbAnim->setEnabled(true);
+	ui->cbForceVGA->setEnabled(true);
 
     // then send information to spinn
     quint8 spinIdx = ui->cbSpiNN->currentIndex();
@@ -372,16 +380,17 @@ void vidStreamer::refreshUpdate()
 void vidStreamer::setSize(int w, int h)
 {
 	orgImg->setSize(w, h);
-	if(ui->cbForceVGA->isChecked())
-		edge->setSize(640,480);
-	else
-		edge->setSize(w,h);
+	edge->setSize(w,h);
     // then tell spinnaker to start initialization
 #ifndef BYPASS_SPIN
     spinn->frameInfo(w, h);
 #endif
+
 	// calculate delay value for simultaneous buffering
-	simultDelVal = (h/240)*ui->delFactorHost->value()*3;
+
+	simultDelVal = ui->delFactorHost->value()*3;
+	if(h>240) simultDelVal *= _iSimultDelFactor*100;
+
 }
 
 void vidStreamer::closeEvent(QCloseEvent *event)
@@ -560,9 +569,8 @@ void vidStreamer::spinnSendFrame()
 #endif
 }
 
-void vidStreamer::pbAnimClicked()
+void vidStreamer::runAnimation()
 {
-
 	// let's try with qimage
 	int wImg, hImg;
 	if(ui->cbForceVGA->isChecked()) {
@@ -596,6 +604,9 @@ void vidStreamer::pbAnimClicked()
 #endif
 
 	for(i=0; i<1000; i++) {
+
+		if(!_bAnimIsRunning) break;
+
 		p.drawText(img.rect(), Qt::AlignCenter | Qt::AlignVCenter, QString("%1").arg(i));
 		orgImg->putFrame(img);
 		_bEdgeRenderingDone = false;
@@ -604,6 +615,7 @@ void vidStreamer::pbAnimClicked()
 #ifndef BYPASS_SPIN
 		spinn->frameIn(img);
 #endif
+
 		while (1) {
 			qApp->processEvents();
 
@@ -617,6 +629,12 @@ void vidStreamer::pbAnimClicked()
 			else
 				condition = _bEdgeRenderingDone && _bRefresherUpdated;
 
+			/*
+			if(ui->cbSimultStreaming->isChecked())
+				condition = _spinIsReady;
+			else
+				condition = _bEdgeRenderingDone;
+			*/
 			if(condition) break;
 
 		}
@@ -671,6 +689,21 @@ void vidStreamer::pbAnimClicked()
 	}
 	spinn->frameIn(loadedImage);
 	*/
+}
+
+void vidStreamer::pbAnimClicked()
+{
+
+	if(!_bAnimIsRunning) {
+		ui->pbAnim->setText("Stop");
+		_bAnimIsRunning = true;
+		runAnimation();
+	}
+	else {
+		ui->pbAnim->setText("Animation");
+		_bAnimIsRunning = false;
+	}
+
 }
 
 void vidStreamer::exFPSChanged(int val)
