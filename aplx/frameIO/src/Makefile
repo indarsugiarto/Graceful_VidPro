@@ -1,0 +1,145 @@
+APP = frameIO
+
+OBJECTS := main.o util.o
+
+ifndef SPINN_ID
+    SPINN_ID := 3
+endif
+
+# First, define SPINN_DIRS and the correct library
+#SPINN_DIRS := /opt/spinnaker_tools_134
+SPINN_DIRS := /opt/spinnaker_tools_3.0.1
+SPINN_TOOLS := $(SPINN_DIRS)/tools
+
+LIBRARY := $(SPINN_DIRS)/lib/libspin1_api.a
+
+#In old version, doesn't support C++:
+#SCRIPT = $(SPINN_DIRS)/tools/sark-134.lnk
+
+#Now, it seems it supports C++:
+SCRIPT = $(SPINN_DIRS)/tools/sark.lnk
+
+ifndef GNUBIN
+    #GNUBIN := /opt/arm-2013.05/bin
+    #GNUBIN := /opt/gcc-arm-none-eabi-5_4-2016q2/bin
+    GNUBIN := /opt/gcc-arm-none-eabi-5_4-2016q3/bin
+endif
+
+# We mainly use GNU toolchain
+GNU := 1
+
+# Prefix for GNU tool binaries
+GP  := $(GNUBIN)/arm-none-eabi
+
+INC_DIR := $(SPINN_DIRS)/include
+BUILD_DIR = ../build/
+OUTPUT_DIR := ../../binaries/
+
+#-------------------------------------------------------------------------------
+
+# Set up the various compile/link options for GNU tools
+OSPACE := -Os
+OTIME := -O3 -Ofast #-Ofast
+
+AS := $(GP)-as --defsym GNU=1 -mthumb-interwork -march=armv5te
+CC := $(GP)-gcc -c $(OTIME) -mthumb-interwork -march=armv5te -std=gnu99 -I $(INC_DIR) -mthumb -DTHUMB -DUSING_SPIN=$(SPINN_ID)
+CA := $(GP)-gcc -c $(OTIME) -mthumb-interwork -march=armv5te -std=gnu99 -I $(INC_DIR) -DUSING_SPIN=$(SPINN_ID)
+
+#LD := $(GP)-gcc -T$(SCRIPT) -Wl,-e,cpu_reset -Wl,--gc-sections -Wl,--use-blx
+LD := $(GP)-gcc -T$(SCRIPT) -Wl,-e,cpu_reset -Wl,-static -fdata-sections -ffunction-sections -Wl,--gc-sections -Wl,--use-blx -nostartfiles -static
+
+AR := $(GP)-ar -rcs
+OC := $(GP)-objcopy
+OD := $(GP)-objdump -dxt > $(BUILD_DIR)$(APP).txt
+NM := $(GP)-nm
+
+
+
+CAT := cat
+RM  := rm -f
+LS  := ls -l
+RM  := rm -f
+MKDIR := mkdir -p
+CP  := cp -rf
+
+#-------------------------------------------------------------------------------
+
+# Build the application
+
+# Primary target is an APLX file - built from the ELF
+$(APP).aplx: prep_dir $(APP).bin $(APP).nm
+ifeq ($(GNU),1)
+	$(OC) -O binary -j RO_DATA $(BUILD_DIR)$(APP).elf $(BUILD_DIR)RO_DATA.bin
+	$(OC) -O binary -j RW_DATA $(BUILD_DIR)$(APP).elf $(BUILD_DIR)RW_DATA.bin
+	$(SPINN_TOOLS)/mkbin $(BUILD_DIR)RO_DATA.bin $(BUILD_DIR)RW_DATA.bin > $(BUILD_DIR)$(APP).bin
+else
+	$(OC) --bin --output $(APP).bin $(APP).elf
+endif
+	$(SPINN_TOOLS)/mkaplx $(BUILD_DIR)$(APP).nm | $(CAT) - $(BUILD_DIR)$(APP).bin > $(BUILD_DIR)$(APP).aplx
+	@echo "[FINAL] Copying the APLXs to the output directory..."
+	@$(CP) $(BUILD_DIR)$(APP).aplx $(OUTPUT_DIR)
+	@$(LS) $(OUTPUT_DIR)$(APP).aplx
+
+# Create a list of the objects in the file using nm
+$(APP).nm: $(APP).elf
+	$(NM) $(BUILD_DIR)$< > $(BUILD_DIR)$@
+
+
+# Create a binary file which is the concatenation of RO and RW sections
+$(APP).bin: $(APP).elf
+ifeq ($(GNU),1)
+	$(OC) -O binary -j RO_DATA $(BUILD_DIR)$(APP).elf $(BUILD_DIR)RO_DATA.bin
+	$(OC) -O binary -j RW_DATA $(BUILD_DIR)$(APP).elf $(BUILD_DIR)RW_DATA.bin
+	$(SPINN_TOOLS)/mkbin $(BUILD_DIR)RO_DATA.bin $(BUILD_DIR)RW_DATA.bin > $(BUILD_DIR)$@
+	$(RM) $(BUILD_DIR)RO_DATA.bin $(BUILD_DIR)RW_DATA.bin
+else
+	$(OC) --bin --output $@ $<
+endif
+
+
+# Build the ELF file
+$(APP).elf: $(OBJECTS) $(SCRIPT) $(LIBRARY)
+	$(SPINN_TOOLS)/mkbuild $(APP) > $(BUILD_DIR)sark_build.c
+	$(CC) $(BUILD_DIR)sark_build.c -o $(BUILD_DIR)sark_build.o
+	$(LD) $(LFLAGS) $(addprefix $(BUILD_DIR),$(OBJECTS)) $(BUILD_DIR)sark_build.o $(LIBRARY) -o $(BUILD_DIR)$(APP).elf
+	$(OD) $(BUILD_DIR)$(APP).elf
+
+
+# Build the object files.
+util.o: util.c SpiNNVid.h
+	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)$@
+
+process.o: process.c SpiNNVid.h
+	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)$@
+
+eHandler.o: eHandler.c SpiNNVid.h
+	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)$@
+
+init.o: init.c SpiNNVid.h
+	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)$@
+
+main.o: main.c SpiNNVid.h
+	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)$@
+
+frameio.o: frameio.c SpiNNVid.h
+	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)$@
+
+profiler.o: profiler.c profiler.h defSpiNNVid.h
+	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)$@
+
+isr.o: isr.c profiler.h defSpiNNVid.h
+	$(CA) $(CFLAGS) $< -o $(BUILD_DIR)$@
+
+streamer.o: streamer.c SpiNNVid.h defSpiNNVid.h
+	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)$@
+
+#-------------------------------------------------------------------------------
+
+prep_dir:
+	@$(MKDIR) $(BUILD_DIR)
+	@$(MKDIR) $(OUTPUT_DIR)
+
+clean:
+	@$(RM) $(BUILD_DIR)*
+	@$(RM) $(OUTPUT_DIR)$(APP).aplx
+

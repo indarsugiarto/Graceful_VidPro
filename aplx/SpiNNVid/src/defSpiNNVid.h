@@ -132,10 +132,10 @@
 #define SDP_PORT_R_IMG_DATA			1	// port for sending R-channel
 #define SDP_PORT_G_IMG_DATA			2	// port for sending G-channel
 #define SDP_PORT_B_IMG_DATA			3	// port for sending B-channel
-#define SDP_PORT_FRAME_END			4   // instruct spinn to start decoding
+#define SDP_PORT_FRAME_INFO			4   // tell spin frame size or EOF
 //#define SDP_PORT_FRAME_INFO			5   // will be used to send the basic info about frame
-#define SDP_PORT_FPGA_OUT			5
-#define SDP_PORT_HISTO				6
+#define SDP_PORT_HISTO				5
+#define SDP_PORT_MISC				6	// misc. functions, eq. debug, reset
 #define SDP_PORT_CONFIG				7	// for sending image/frame info
 #define SDP_PORT_PROFILER_RPT		7
 
@@ -147,8 +147,8 @@
 #define SDP_CMD_CONFIG_NETWORK  	1   // for setting up the network
 #define SDP_CMD_GIVE_REPORT			2
 #define SDP_CMD_RESET_NETWORK   	3   // will be sent so that all chips will have ID 0xFF
-#define SDP_CMD_FRAME_INFO			4
-#define SDP_CMD_SEND_PX_FPGA    	5   // for sending pixels to FPGA board
+#define SDP_CMD_FRAME_INFO_SIZE		4
+#define SDP_CMD_FRAME_INFO_EOF		5
 #define SDP_CMD_REPORT_HIST     	6   // for sending histogram to parent node
 #define SDP_CMD_END_VIDEO			7	// tell SpiNNaker, the video is over. Clean the memory!!!
 
@@ -159,6 +159,8 @@
 
 
 #define SPINNVID_APP_ID				16
+#define PROFILER_APP_ID				17
+#define FRAMEIO_APP_ID					18
 
 // From my experiment with test_sdp_stream_to_host:
 // for sending chunks to spinnaker:

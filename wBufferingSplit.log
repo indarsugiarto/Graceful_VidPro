@@ -1,0 +1,8 @@
+What we want to do:
+1. Use chip 0,0 exclusively for IO
+2. Split 3 channels IO:
+   core 2-6 for the first channel, recv sdp only
+   core 7-11 for the second channel, recv sdp only
+   core 12-16 for the third channel, recv mcpl only
+   Note: core-17 is the streamer
+
