@@ -13,6 +13,10 @@ void c_main()
 
 	myCoreID = sark_core_id();
 
+	// TODO: gracefully allocate, how many cores will be used per pipeline
+	// at the moment, let's fix it:
+	nCorePerPipe = 5;
+
 #if (DESTINATION==DEST_FPGA)
 	if(sv->p2p_addr==0)
 		rtr_fr_set(1 << 4);	// send to link-4, where FPGA is connected to

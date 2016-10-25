@@ -6,3 +6,31 @@ What we want to do:
    core 12-16 for the third channel, recv mcpl only
    Note: core-17 is the streamer
 
+3. Implement Histogram Normalization in frameIO
+   In the beginning, LEAD_CORE allocated sysram 256*4 bytes for holding
+   the counter (each pixels has 32-bit histogram value).
+   LEAD_CORE also allocated 272*5 bytes for holding temporary gray pixels
+   after processing by core 2-6, and will be fetch by core 7-11.
+   The core 7-11 has their own histogram counter in its DTCM.
+   During frame info sending, core 2 tells core 7-11 so that they know
+   their pixel region.
+
+   Core 2-6 receives RGB chunk, compute gray, puts the result on sysram, and 
+   tell core 7-11 to fetch them along with the info about the chunkID.
+   Core 7-11 fetch from sysram, count histogram in its part, 
+   and put in sdram image buffer buffer (core 7-11 use chunkID to locate
+   properly in the sdram).
+   ...
+   When EOF is received, core 2 tells core 7 to start the chain:
+   Core 7 fetch the histogram table from sysram, merge with its own
+   histogram table (in DTCM), store back the result into sysram, and
+   then tell core 8 to continue. Core 8 then fetch the histogram table
+   from sysram, merge with its own, store back to sysram, and then tell
+   core 9 to continue. This continues until core 11 receives notification
+   from core 10. When it does, core 11 fetch the histogram table from sysram,
+   merge with its table, put back the result into sysram and tell core 7 to
+   10 that the table is finish. Then core 7-10 fetch the table from sysram.
+   Core 7-11 computes the normalization factor, fetches their pixel part
+   from sdram, normalize its pixel, and broadcast the pixels.
+
+   --> Hence, we define special MCPL keys only for this frameIO

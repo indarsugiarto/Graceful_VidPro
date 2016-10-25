@@ -11,6 +11,22 @@
 #include <stdfix.h>
 #include "../../SpiNNVid/src/defSpiNNVid.h"
 
+// how many cores are allocated for each pipeline: sdpRecv, pxFwdr, and mcplRecv
+uint nCorePerPipe;
+
+/* In this version: implementing Histogram Equalization in frameIO
+ *
+ * */
+
+#define MCPL_FRAMEIO_MASK			0xFFFF0000	// so it contains header and arg
+#define MCPL_FRAMEIO_SZFRAME		0xF2A10000	// from LEAD_CORE to core 7-11 and 17
+#define MCPL_FRAMEIO_NEWGRAY		0xF2A20000	// from sdpRecv to pxFwdr
+#define MCPL_FRAMEIO_EOF_INT		0xF2A30000	// from LEAD_CORE to pxFwdr
+#define MCPL_FRAMEIO_HIST_CNTR_NEXT	0xF2A40000	// within pxFwdr
+#define MCPL_FRAMEIO_HIST_RDY		0xF2A50000	// from last core in pxFwdr to pxFwdr
+#define MCPL_FRAMEIO_EOF_EXT_RDY	0xF2A60000	// within pxFwdr
+#define MCPL_FRAMEIO_EOF_EXT		0xF2A70000	// from last core in pxFwdr to external
+
 /*------------------------ Struct, Enum, Type definition ----------------------------*/
 
 

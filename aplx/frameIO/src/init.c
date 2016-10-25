@@ -5,19 +5,75 @@
 // TODO: we might move this initRouter() to the profiler to save ITCM
 void initRouter()
 {
+	uint e, key, mask, dest, i;
+
+	uint sdpRecv = 0x1FF << 8;
+	uint pxFwdr = 0x1FF << 13;
+	uint mcplRecv = 0x1FF << 18;
+	uint streamer = 1 << 23;
+
+	// key-1: send frame info to core 7-11 and 17 (streamer)
+	e = rtr_alloc(1);
+	key = MCPL_FRAMEIO_SZFRAME;
+	mask = MCPL_FRAMEIO_MASK;
+	//dest = 0x83E000;	// 1 00000 11111 00000 00 000000
+	dest = pxFwdr | streamer;
+	rtr_mc_set(e, key, mask, dest); e++;
+
+	// key-2: sdpRecv cores tell pxFwdr where to fetch new gray pixels
+	e = rtr_alloc(nCorePerPipe);
+	for(i=0; i<nCorePerPipe; i++) {
+		key = MCPL_FRAMEIO_NEWGRAY | (i + LEAD_CORE);
+		dest = 1 << (i + 8 + nCorePerPipe);
+		rtr_mc_set(e, key, mask, dest); e++;
+	}
+
+	// key-3: LEAD_CORE detect EOF, tell pxFwdr to normalize and/or fwd pixels
+	// especially for core "7", it will continue with histogram chain
+	e = rtr_alloc(1);
+	key = MCPL_FRAMEIO_EOF_INT;
+	dest = pxFwdr;
+	rtr_mc_set(e, key, mask, dest); e++;
+
+	// key-4: pxFwdr tells its next kin to fetch
+	// always 1 core less than nCorePerPipe
+	// eq: core 7 tells core 8, core 8 tells core 9, etc until core 11
+	e = rtr_alloc(nCorePerPipe - 1);
+	for(i=0; i<nCorePerPipe - 1; i++) {
+		key = MCPL_FRAMEIO_HIST_CNTR_NEXT | (i + LEAD_CORE + nCorePerPipe);
+		dest = 1 << (i + 8 + nCorePerPipe + 1);
+		rtr_mc_set(e, key, mask, dest); e++;
+	}
+
+	// key-5: the last core in pxFwdr tells its group than histogram is ready
+	e = rtr_alloc(1);
+	key = MCPL_FRAMEIO_HIST_RDY;
+	dest = pxFwdr;
+	rtr_mc_set(e, key, mask, dest); e++;
+
+	// key-6: pxFwdr tells its next kin that it has finished the bcasting
+	// the last key responsible to broadcast EOF to external nodes
+	e = rtr_alloc(nCorePerPipe);
+	for(i=0; i<nCorePerPipe - 1; i++) {
+		key = MCPL_FRAMEIO_EOF_EXT_RDY | (i + LEAD_CORE + nCorePerPipe);
+		dest = 1 << (i + 8 + nCorePerPipe + 1);
+		rtr_mc_set(e, key, mask, dest); e++;
+	}
+	key = MCPL_FRAMEIO_EOF_EXT;
+	dest = 0x3F;	// to external links
+	rtr_mc_set(e, key, mask, dest); e++;
+
 	uint inner = 0xFFFF80;			// excluding core-0 and external links
 	uint profiler = 1 << (PROF_CORE+6);
 	uint leader = 1 << (LEAD_CORE+6);
-	uint streamer = 1 << (STREAMER_CORE+6);
 	uint workers = inner & ~profiler & ~streamer;	// for all workers in the chip
-	uint key, dest;
 	uint x, y, d, c;
 
 	/*----------------------------------------------------------------------------*/
 	/*----------------------------------------------------------------------------*/
 	/*----------------------- keys for intra-chip routing ------------------------*/
 	// first, set individual destination, assuming all 15 worker cores are available
-	uint e = rtr_alloc(15);
+	e = rtr_alloc(15);
 	if(e==0) {
 		terminate_SpiNNVid(IO_STD, "initRouter err for intra-chip!\n", RTE_ABORT);
 	} else {

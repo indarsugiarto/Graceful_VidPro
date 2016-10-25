@@ -18,8 +18,8 @@ void hSDP(uint mBox, uint port)
 	else if(port==SDP_PORT_FRAME_INFO) {
 		if(msg->cmd_rc==SDP_CMD_FRAME_INFO_SIZE) {
 			// will only send wImg (in arg1.high) and hImg (in arg1.low)
-			// and tell streamer about it:
-			spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_SZIMG,
+			// and tell core 7-11 and the streamer about it:
+			spin1_send_mc_packet(MCPL_FRAMEIO_SZFRAME,
 								 msg->arg1, WITH_PAYLOAD);
 
 			// send frame info to other nodes
