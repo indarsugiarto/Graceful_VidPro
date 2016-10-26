@@ -2,6 +2,16 @@
 #include "frameIO.h"
 #include <stdlib.h>	// need for abs()
 
+void distributeWID(uint arg0, uint arg1)
+{
+	uint key;
+	for(uchar i=0; i<nCorePerPipe; i++) {
+		key = MCPL_FRAMEIO_FWD_WID | i;
+		spin1_send_mc_packet(key, 0, NO_PAYLOAD);
+	}
+}
+
+
 /* processGrayScaling() is called when the blue-channel chunk is received. Assuming
  * that the other channels' chunks are received as well.*/
 void processGrayScaling(uint arg0, uint arg1)
@@ -58,8 +68,17 @@ void processGrayScaling(uint arg0, uint arg1)
 
 }
 
+// LEAD_CORE broadcasts MCPL_FRAMEIO_SZFRAME to pxFwdr, streamer, and extLink
+void computeWload(uint szFrame, uint arg1)
+{
+	hImg = szFrame & 0xFFFF;
+	wImg = szFrame >> 16;
 
-
+	// if I'm pxFwdr, calculate working region
+	if(myCoreID != STREAMER_CORE) {
+		Jadi gimana caranya core tahu dia wID-nya berapa?
+	}
+}
 
 
 

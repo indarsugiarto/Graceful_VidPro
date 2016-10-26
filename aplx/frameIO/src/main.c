@@ -64,11 +64,15 @@ void c_main()
 		// nodeCntr = 0;
 		initRouter();
 		initIPTag();
+
+		// then distribute the working id to pxFwdr
+		spin1_schedule_callback(distributeWID, 0, 0, PRIORITY_PROCESSING);
 	}
 
 	// Enable performance measurement timer
 	ENABLE_TIMER();
 
-	spin1_start(SYNC_NOWAIT);
+	// wait until all cores are ready
+	spin1_start(SYNC_WAIT);
 }
 

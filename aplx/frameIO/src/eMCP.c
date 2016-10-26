@@ -6,6 +6,31 @@
 /*------------------- Sub functions called by main handler ---------------------*/
 
 
+void hMC(uint key, uint None)
+{
+	uint key_hdr = key & 0xFFFF0000;
+	uint key_arg = key & 0xFFFF;
+	if(key_hdr==MCPL_FRAMEIO_FWD_WID)
+		pxFwdr_wID = key_arg;
+}
+
+/* Rule: MCPL always contains key_hdr and key_arg
+ * */
+void hMCPL(uint key, uint pload)
+{
+	uint key_hdr = key & 0xFFFF0000;
+	uint key_arg = key & 0xFFFF;
+
+	// if frame size is broadcasted by LEAD_CORE
+	if(key_hdr==MCPL_FRAMEIO_SZFRAME) {
+		// at this point, nCorePerPipe must already be valid
+		// either pre-defined, or detected (see main.c)
+		spin1_schedule_callback(computeWload, pload, 0, PRIORITY_PROCESSING);
+	}
+}
+
+
+
 void reportHistToLeader(uint arg0, uint arg1)
 {
 	if(myCoreID==LEAD_CORE) return;
@@ -70,7 +95,7 @@ void leaderUpdateHist(uint arg0, uint arg1)
 /*----------------------------------------------------------------*/
 /*------------------- Main handler functions ---------------------*/
 
-void hMC(uint key, uint None)
+void hMC_SpiNNVid(uint key, uint None)
 {
 	uint key_hdr = 0xFFFF0000 & key;
 	uint key_arg = 0xFFFF & key;
@@ -84,7 +109,7 @@ void hMC(uint key, uint None)
 	}
 }
 
-void hMCPL(uint key, uint payload)
+void hMCPL_SpiNNVid(uint key, uint payload)
 {
 	uint key_hdr = 0xFFFF0000 & key;
 	uint key_arg = 0xFFFF & key;

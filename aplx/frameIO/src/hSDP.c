@@ -18,12 +18,9 @@ void hSDP(uint mBox, uint port)
 	else if(port==SDP_PORT_FRAME_INFO) {
 		if(msg->cmd_rc==SDP_CMD_FRAME_INFO_SIZE) {
 			// will only send wImg (in arg1.high) and hImg (in arg1.low)
-			// and tell core 7-11 and the streamer about it:
+			// and tell core 7-11, the streamer, and SpiNNVid-nodes about it:
 			spin1_send_mc_packet(MCPL_FRAMEIO_SZFRAME,
 								 msg->arg1, WITH_PAYLOAD);
-
-			// send frame info to other nodes
-			spin1_send_mc_packet(MCPL_BCAST_FRAME_INFO, msg->arg1, WITH_PAYLOAD);
 
 		}
 		// NOTE: EOF can be detected if pxBuffer.pxSeq == 0xFFFF, or, alternatively

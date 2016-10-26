@@ -11,8 +11,6 @@ void streamout(uint startAddr, uint None);
 extern volatile uint giveDelay(uint delVal);
 
 uint sdpDelay = 900;	// save value for initial == 5.7MBps
-ushort wImg;
-ushort hImg;
 sdp_msg_t streamerMsg;
 volatile uchar dmaDone;
 

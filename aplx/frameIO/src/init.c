@@ -7,20 +7,34 @@ void initRouter()
 {
 	uint e, key, mask, dest, i;
 
+	uint extLink = 0x3F;
 	uint sdpRecv = 0x1FF << 8;
 	uint pxFwdr = 0x1FF << 13;
 	uint mcplRecv = 0x1FF << 18;
 	uint streamer = 1 << 23;
 
-	// key-1: send frame info to core 7-11 and 17 (streamer)
+	mask = MCPL_FRAMEIO_MASK;
+	//dest :              ST mcplR fwd   sdpR     extL
+	//dest = 0x83E000;	// 1 00000 11111 00000 00 000000
+
+	// key-1: LEAD_CORE inform pxFwdr about their wID
+	e = rtr_alloc(nCorePerPipe);
+	for(i=0; i<nCorePerPipe; i++) {
+		key = MCPL_FRAMEIO_FWD_WID | i;
+		dest = 1 << (8 + nCorePerPipe);
+		rtr_mc_set(e, key, mask, dest); e++;
+	}
+
+	// key-2: send frame info to core 7-11, 17 (streamer),
+	// and extern (SpiNNVid needs to compute workload)
 	e = rtr_alloc(1);
 	key = MCPL_FRAMEIO_SZFRAME;
-	mask = MCPL_FRAMEIO_MASK;
-	//dest = 0x83E000;	// 1 00000 11111 00000 00 000000
-	dest = pxFwdr | streamer;
+	dest = pxFwdr | streamer | extLink;
 	rtr_mc_set(e, key, mask, dest); e++;
+	// NOTE: number of nCorePerPipe must be included in the key_hdr
+	// receiving this, then pxFwdr cores compute its workload
 
-	// key-2: sdpRecv cores tell pxFwdr where to fetch new gray pixels
+	// key-3: sdpRecv cores tell pxFwdr where to fetch new gray pixels
 	e = rtr_alloc(nCorePerPipe);
 	for(i=0; i<nCorePerPipe; i++) {
 		key = MCPL_FRAMEIO_NEWGRAY | (i + LEAD_CORE);
@@ -28,14 +42,14 @@ void initRouter()
 		rtr_mc_set(e, key, mask, dest); e++;
 	}
 
-	// key-3: LEAD_CORE detect EOF, tell pxFwdr to normalize and/or fwd pixels
+	// key-4: LEAD_CORE detect EOF, tell pxFwdr to normalize and/or fwd pixels
 	// especially for core "7", it will continue with histogram chain
 	e = rtr_alloc(1);
 	key = MCPL_FRAMEIO_EOF_INT;
 	dest = pxFwdr;
 	rtr_mc_set(e, key, mask, dest); e++;
 
-	// key-4: pxFwdr tells its next kin to fetch
+	// key-5: pxFwdr tells its next kin to fetch
 	// always 1 core less than nCorePerPipe
 	// eq: core 7 tells core 8, core 8 tells core 9, etc until core 11
 	e = rtr_alloc(nCorePerPipe - 1);
@@ -45,13 +59,17 @@ void initRouter()
 		rtr_mc_set(e, key, mask, dest); e++;
 	}
 
-	// key-5: the last core in pxFwdr tells its group than histogram is ready
+	// key-6: the last core in pxFwdr tells its group than histogram is ready
 	e = rtr_alloc(1);
 	key = MCPL_FRAMEIO_HIST_RDY;
 	dest = pxFwdr;
 	rtr_mc_set(e, key, mask, dest); e++;
+	// then each core fetch and compute the hitogram normalizer
+	// each core fetch image data from sdram, apply the histogram and
+	// broadcast it
 
-	// key-6: pxFwdr tells its next kin that it has finished the bcasting
+
+	// key-7: pxFwdr tells its next kin that it has finished the bcasting
 	// the last key responsible to broadcast EOF to external nodes
 	e = rtr_alloc(nCorePerPipe);
 	for(i=0; i<nCorePerPipe - 1; i++) {
@@ -64,6 +82,12 @@ void initRouter()
 	rtr_mc_set(e, key, mask, dest); e++;
 
 	So, kapan broadcast pixel-nya? Lihat DEFSPINNVID_H
+
+
+
+
+
+
 
 
 

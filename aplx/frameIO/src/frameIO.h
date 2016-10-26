@@ -19,13 +19,15 @@ uint nCorePerPipe;
  * */
 
 #define MCPL_FRAMEIO_MASK			0xFFFF0000	// so it contains header and arg
-#define MCPL_FRAMEIO_SZFRAME		0xF2A10000	// from LEAD_CORE to core 7-11 and 17
-#define MCPL_FRAMEIO_NEWGRAY		0xF2A20000	// from sdpRecv to pxFwdr
-#define MCPL_FRAMEIO_EOF_INT		0xF2A30000	// from LEAD_CORE to pxFwdr
-#define MCPL_FRAMEIO_HIST_CNTR_NEXT	0xF2A40000	// within pxFwdr
-#define MCPL_FRAMEIO_HIST_RDY		0xF2A50000	// from last core in pxFwdr to pxFwdr
-#define MCPL_FRAMEIO_EOF_EXT_RDY	0xF2A60000	// within pxFwdr
-#define MCPL_FRAMEIO_EOF_EXT		0xF2A70000	// from last core in pxFwdr to external
+
+#define MCPL_FRAMEIO_FWD_WID		0xF2A10000	// from LEAD_CORE to pxFwdr
+#define MCPL_FRAMEIO_SZFRAME		0xF2A20000	// from LEAD_CORE to core 7-11 and 17
+#define MCPL_FRAMEIO_NEWGRAY		0xF2A30000	// from sdpRecv to pxFwdr
+#define MCPL_FRAMEIO_EOF_INT		0xF2A40000	// from LEAD_CORE to pxFwdr
+#define MCPL_FRAMEIO_HIST_CNTR_NEXT	0xF2A50000	// within pxFwdr
+#define MCPL_FRAMEIO_HIST_RDY		0xF2A60000	// from last core in pxFwdr to pxFwdr
+#define MCPL_FRAMEIO_EOF_EXT_RDY	0xF2A70000	// within pxFwdr
+#define MCPL_FRAMEIO_EOF_EXT		0xF2A80000	// from last core in pxFwdr to external
 
 /*------------------------ Struct, Enum, Type definition ----------------------------*/
 
@@ -99,6 +101,14 @@ send_result_info_t sendResultInfo;
 /*-----------------------------------------------------------------------------------*/
 /*-------------------------- Global/Static Variables --------------------------------*/
 
+
+// image/frame size
+uchar pxFwdr_wID;
+ushort wImg;
+ushort hImg;
+
+
+
 // flags for communication between nodes
 volatile uchar flag_SendResultCont;			// wait the "continue" signal from root-node
 
@@ -154,6 +164,8 @@ void hDMA(uint tag, uint tid);
 void hSDP(uint mBox, uint port);
 
 // Misc. functions
+void distributeWID(uint arg0, uint arg1);
+void computeWload(uint szFrame, uint arg1);
 void configure_network(uint mBox);
 
 
