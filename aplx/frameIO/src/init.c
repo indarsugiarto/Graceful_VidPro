@@ -63,6 +63,13 @@ void initRouter()
 	dest = 0x3F;	// to external links
 	rtr_mc_set(e, key, mask, dest); e++;
 
+	So, kapan broadcast pixel-nya? Lihat DEFSPINNVID_H
+
+
+
+
+
+
 	uint inner = 0xFFFF80;			// excluding core-0 and external links
 	uint profiler = 1 << (PROF_CORE+6);
 	uint leader = 1 << (LEAD_CORE+6);
