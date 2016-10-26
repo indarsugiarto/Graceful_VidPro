@@ -22,19 +22,25 @@ void c_main()
 		rtr_fr_set(1 << 4);	// send to link-4, where FPGA is connected to
 #endif
 
-	/*  allocate ?pxbuf
-	 *	?pxbuf is used to contain a chunk of image pixels (up to 272 pixels),
-	 *	initially sent via SDP and later broadcasted using MCPL */
-	pxBuffer.rpxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, 1); // for red chunk
-	pxBuffer.gpxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, 1); // for green chunk
-	pxBuffer.bpxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, 1); // for blue chunk
-	pxBuffer.ypxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, 1); // for gray chunk
 
-
-	/*  dtcmImgBuf and resImgBuf are used in DMA fetch/store
-		to speed up, these two buffers are allocated in computeWLoad() */
-	// resImgBuf is used to store one image line from DTCM to SDRAM
-	resImgBuf = NULL;
+	/* Only sdpRecv cores need to allocate pxBuffer and sysram Buffer */
+	if((myCoreID >= LEAD_CORE) && (myCoreID < (LEAD_CORE+nCorePerPipe))) {
+		/*  allocate ?pxbuf
+		 *	?pxbuf is used to contain a chunk of image pixels (up to 272 pixels),
+		 *	initially sent via SDP and later broadcasted using MCPL */
+		pxBuffer.rpxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, 1); // for red chunk
+		pxBuffer.gpxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, 1); // for green chunk
+		pxBuffer.bpxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, 1); // for blue chunk
+		pxBuffer.ypxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, 1); // for gray chunk
+		uint memTag = SDPRECV_SYSRAM_ALLOC_TAG | myCoreID;
+		pxBuffer.imgBufSYSRAM = sark_xalloc(sv->sysram_heap, 272, memTag, ALLOC_LOCK);
+		if(pxBuffer.imgBufSYSRAM==NULL) {
+			io_printf(IO_STD, "[sdpRecv] Sysram alloc error!\n"); rt_error(RTE_ABORT);
+		} else {
+			spin1_schedule_callback(sdpRecv_infom_pxFwdr, (uint)pxBuffer.imgBufSYSRAM,
+									0, PRIORITY_PROCESSING);
+		}
+	}
 
 	/*----------------------------------------------------------------------------*/
 	/*--------------------------- register callbacks -----------------------------*/
@@ -49,21 +55,14 @@ void c_main()
 
 	initSDP();
 
-	// Currently, we fix to core-2 as the leader (LEAD_CORE)
-	//            since core-1 will be used for the profiler
 	if(myCoreID==LEAD_CORE) {
 
-		// only leadAp: prepare chip-level image block information
-		blkInfo = sark_xalloc(sv->sysram_heap, sizeof(block_info_t),
-							  XALLOC_TAG_BLKINFO, ALLOC_LOCK);
-		if(blkInfo==NULL) {
-			io_printf(IO_STD, "[FRAMEIO] blkInfo alloc error!\n");
-			rt_error(RTE_ABORT);
-		}
-
-		// nodeCntr = 0;
 		initRouter();
 		initIPTag();
+
+		// init global SDRAM image buffer
+		frameIO_SDRAM_img_buf1 = NULL;
+		frameIO_SDRAM_img_buf2 = NULL;
 
 		// then distribute the working id to pxFwdr
 		spin1_schedule_callback(distributeWID, 0, 0, PRIORITY_PROCESSING);

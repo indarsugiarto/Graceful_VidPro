@@ -10,8 +10,12 @@ void hMC(uint key, uint None)
 {
 	uint key_hdr = key & 0xFFFF0000;
 	uint key_arg = key & 0xFFFF;
-	if(key_hdr==MCPL_FRAMEIO_FWD_WID)
-		pxFwdr_wID = key_arg;
+	if(key_hdr==MCPL_FRAMEIO_FWD_WID) {
+		pxFwdr.wID = key_arg;
+		// init buffers
+		pxFwdr.imgBufDTCM = NULL;
+		pxFwdr.imgBufSDRAM = NULL;
+	}
 }
 
 /* Rule: MCPL always contains key_hdr and key_arg
@@ -22,12 +26,47 @@ void hMCPL(uint key, uint pload)
 	uint key_arg = key & 0xFFFF;
 
 	// if frame size is broadcasted by LEAD_CORE
-	if(key_hdr==MCPL_FRAMEIO_SZFRAME) {
+	if(key_hdr==MCPL_FRAMEIO_OP_INFO) {
+		// if I'm the streamer
+		if(myCore==STREAMER_CORE) {
+			sdpDelayFactorSpin = (pload >> 16) * DEF_DEL_VAL;
+		}
+		// otherwise, I'm the pxFwdr
+		else {
+			pxFwdr.withSharpening = pload & 0x3;
+		}
+	}
+	else if(key_hdr==MCPL_FRAMEIO_SDRAM_BUF_ADDR) {
+		if(key_arg==SDRAM_BUFF_1_ID)
+			// pxFwdr needs this address info:
+			pxFwdr.imgBufSDRAM = (uchar *)pload;
+		else if(key_arg==SDRAM_BUFF_2_ID)
+			// mcplRecv and streamer needs this address info:
+			mcplRecv.imgBufSDRAM = (uchar *)pload;
+	}
+	else if(key_hdr==MCPL_FRAMEIO_SYSRAM_BUF_ADDR) {
+		pxFwdr.imgBufSYSRAM = (uchar *)pload;
+	}
+	else if(key_hdr==MCPL_FRAMEIO_SZFRAME) {
 		// at this point, nCorePerPipe must already be valid
 		// either pre-defined, or detected (see main.c)
 		spin1_schedule_callback(computeWload, pload, 0, PRIORITY_PROCESSING);
 	}
+	else if(key_hdr==MCPL_FRAMEIO_NEWGRAY) {
+		// sdpRecv send the size pixel to fetch
+		spin1_schedule_callback(fetch_new_graypx, pload, 0, PRIORITY_PROCESSING);
+	}
 }
+
+
+
+
+
+
+
+
+
+
 
 
 

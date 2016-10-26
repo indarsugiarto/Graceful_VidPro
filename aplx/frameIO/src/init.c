@@ -12,6 +12,7 @@ void initRouter()
 	uint pxFwdr = 0x1FF << 13;
 	uint mcplRecv = 0x1FF << 18;
 	uint streamer = 1 << 23;
+	uint profiler = 1 << (6 + PROF_CORE);
 
 	mask = MCPL_FRAMEIO_MASK;
 	//dest :              ST mcplR fwd   sdpR     extL
@@ -25,6 +26,13 @@ void initRouter()
 		rtr_mc_set(e, key, mask, dest); e++;
 	}
 
+
+	// key-2: send sdram image buffer address to pxFwdr, mcplRecv, and streamer
+	e = rtr_alloc(1);
+	key = MCPL_FRAMEIO_SDRAM_BUF_ADDR;
+	dest = streamer | mcplRecv | pxFwdr;
+	rtr_mc_set(e, key, mask, dest);
+
 	// key-2: send frame info to core 7-11, 17 (streamer),
 	// and extern (SpiNNVid needs to compute workload)
 	e = rtr_alloc(1);
@@ -34,11 +42,13 @@ void initRouter()
 	// NOTE: number of nCorePerPipe must be included in the key_hdr
 	// receiving this, then pxFwdr cores compute its workload
 
-	// key-3: sdpRecv cores tell pxFwdr where to fetch new gray pixels
-	e = rtr_alloc(nCorePerPipe);
+	// key-3: sdpRecv cores tell pxFwdr where to fetch and how much new gray pixels
+	e = rtr_alloc(2*nCorePerPipe);
 	for(i=0; i<nCorePerPipe; i++) {
 		key = MCPL_FRAMEIO_NEWGRAY | (i + LEAD_CORE);
 		dest = 1 << (i + 8 + nCorePerPipe);
+		rtr_mc_set(e, key, mask, dest); e++;
+		key = MCPL_FRAMEIO_SYSRARM_BUF | (i + LEAD_CORE);
 		rtr_mc_set(e, key, mask, dest); e++;
 	}
 
@@ -81,6 +91,14 @@ void initRouter()
 	dest = 0x3F;	// to external links
 	rtr_mc_set(e, key, mask, dest); e++;
 
+
+	// key-8: tell profiler, pxFwdr, streamer and extLink about op_info
+	e = rtr_alloc(1);
+	key = MCPL_FRAMEIO_OP_INFO;
+	dest = profiler | pxFwdr | streamer | extLink;
+	rtr_mc_set(e, key, mask, dest);
+
+
 	So, kapan broadcast pixel-nya? Lihat DEFSPINNVID_H
 
 
@@ -91,11 +109,7 @@ void initRouter()
 
 
 
-
-
-
 	uint inner = 0xFFFF80;			// excluding core-0 and external links
-	uint profiler = 1 << (PROF_CORE+6);
 	uint leader = 1 << (LEAD_CORE+6);
 	uint workers = inner & ~profiler & ~streamer;	// for all workers in the chip
 	uint x, y, d, c;

@@ -1,5 +1,26 @@
 #include "frameIO.h"
 
+void resizeSDRAMbuf()
+{
+	// release if already exist
+	if(frameIO_SDRAM_img_buf != NULL) {
+		sark_xfree(sv->sdram_heap, frameIO_SDRAM_img_buf1, ALLOC_LOCK);
+		sark_xfree(sv->sdram_heap, frameIO_SDRAM_img_buf2, ALLOC_LOCK);
+	}
+	// create and check if available
+	uint sz = hImg * wImg;
+	uint allocTag = FRAMEIO_SDRAM_ALLOC_TAG | 1;
+	frameIO_SDRAM_img_buf1 = sark_xalloc(sv->sdram_heap, sz,
+										allocTag, ALLOC_LOCK);
+	allocTag = FRAMEIO_SDRAM_ALLOC_TAG | 2;
+	frameIO_SDRAM_img_buf2 = sark_xalloc(sv->sdram_heap, sz,
+										 allocTag, ALLOC_LOCK);
+	if(frameIO_SDRAM_img_buf1==NULL || frameIO_SDRAM_img_buf2==NULL) {
+		io_printf(IO_STD, "[FRAMEIO] SDRAM img buffer error!\n");
+		rt_error(RTE_ABORT);
+	}
+}
+
 void hSDP(uint mBox, uint port)
 {
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
@@ -17,8 +38,19 @@ void hSDP(uint mBox, uint port)
 
 	else if(port==SDP_PORT_FRAME_INFO) {
 		if(msg->cmd_rc==SDP_CMD_FRAME_INFO_SIZE) {
-			// will only send wImg (in arg1.high) and hImg (in arg1.low)
-			// and tell core 7-11, the streamer, and SpiNNVid-nodes about it:
+			// first, resize SDRAM image buffer
+			hImg = msg->arg1 & 0xFFFF;
+			wImg = msg->arg1 >> 16;
+			resizeSDRAMbuf();
+
+			// second, tell pxFwdr where to store/fetch into it
+			uint key = MCPL_FRAMEIO_SDRAM_BUF_ADDR | SDRAM_BUFF_1_ID;
+			spin1_send_mc_packet(key, (uint)frameIO_SDRAM_img_buf1, WITH_PAYLOAD);
+			key = MCPL_FRAMEIO_SDRAM_BUF_ADDR | SDRAM_BUFF_2_ID;
+			spin1_send_mc_packet(key, (uint)frameIO_SDRAM_img_buf2, WITH_PAYLOAD);
+
+			// third, send wImg (in arg1.high) and hImg (in arg1.low)
+			// to core pxFwdr, the streamer, and SpiNNVid-nodes about it:
 			spin1_send_mc_packet(MCPL_FRAMEIO_SZFRAME,
 								 msg->arg1, WITH_PAYLOAD);
 
@@ -113,20 +145,28 @@ void configure_network(uint mBox)
 	//       seq = (freq << 8) | (opType << 4) | (wFilter << 2) | wHistEq;
 	//		 srce_port = sdp_del_factor (i.e., sdpDelayFactorSpin)
 
+	/* TODO: should be handle by LEAD_CORE in SpiNNVid nodes:
 	// for safety, reset the network:
 	spin1_send_mc_packet(MCPL_BCAST_RESET_NET, 0, WITH_PAYLOAD);
+	*/
 
+	// tell own-profiler, pxFwdr, streamer, and extLink about the op:
+	payload = (msg->srce_port << 16) | msg->seq;
+	spin1_send_mc_packet(MCPL_FRAMEIO_OP_INFO, payload, WITH_PAYLOAD);
+
+	/* The above MCPL_FRAMEIO_OP_INFO summarizes the following:
 	// tell own-profiler about the governor strategy:
 	freq = (msg->seq >> 8) | PROF_MSG_SET_FREQ;
 	spin1_send_mc_packet(MCPL_TO_OWN_PROFILER, freq, WITH_PAYLOAD);
 
-	// then tell the other nodes about this op-freq info
-	spin1_send_mc_packet(MCPL_BCAST_OP_INFO, msg->seq, WITH_PAYLOAD);
+	// then tell pxFwdr and other nodes about this op-freq info
+	spin1_send_mc_packet(MCPL_FRAMEIO_OP_INFO, msg->seq, WITH_PAYLOAD);
 
 	// tell streamer about sdpDelayFactorSpin:
 	sdpDelayFactorSpin = msg->srce_port * DEF_DEL_VAL;
 	spin1_send_mc_packet(MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_DEL,
 						 sdpDelayFactorSpin, WITH_PAYLOAD);
+	*/
 
 	// broadcasting for nodes configuration:
 	// cmd_rc contains the pre-defined number of nodes

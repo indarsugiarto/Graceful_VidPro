@@ -18,18 +18,49 @@ uint nCorePerPipe;
  *
  * */
 
+#define SDRAM_BUFF_1_ID				1
+#define SDRAM_BUFF_2_ID				2
+
 #define MCPL_FRAMEIO_MASK			0xFFFF0000	// so it contains header and arg
 
 #define MCPL_FRAMEIO_FWD_WID		0xF2A10000	// from LEAD_CORE to pxFwdr
-#define MCPL_FRAMEIO_SZFRAME		0xF2A20000	// from LEAD_CORE to core 7-11 and 17
-#define MCPL_FRAMEIO_NEWGRAY		0xF2A30000	// from sdpRecv to pxFwdr
-#define MCPL_FRAMEIO_EOF_INT		0xF2A40000	// from LEAD_CORE to pxFwdr
-#define MCPL_FRAMEIO_HIST_CNTR_NEXT	0xF2A50000	// within pxFwdr
-#define MCPL_FRAMEIO_HIST_RDY		0xF2A60000	// from last core in pxFwdr to pxFwdr
-#define MCPL_FRAMEIO_EOF_EXT_RDY	0xF2A70000	// within pxFwdr
-#define MCPL_FRAMEIO_EOF_EXT		0xF2A80000	// from last core in pxFwdr to external
+#define MCPL_FRAMEIO_SDRAM_BUF_ADDR	0xF2A20000	// from LEAD_CORE to pxFwdr, mcplRecv, streamer
+#define MCPL_FRAMEIO_SZFRAME		0xF2A30000	// from LEAD_CORE to core 7-11 and 17
+#define MCPL_FRAMEIO_SYSRAM_BUF_ADDR	0xF2A40000	// from sdpRecv to pxFwdr
+#define MCPL_FRAMEIO_NEWGRAY		0xF2A50000	// from sdpRecv to pxFwdr
+#define MCPL_FRAMEIO_EOF_INT		0xF2A60000	// from LEAD_CORE to pxFwdr
+#define MCPL_FRAMEIO_HIST_CNTR_NEXT	0xF2A70000	// within pxFwdr
+#define MCPL_FRAMEIO_HIST_RDY		0xF2A80000	// from last core in pxFwdr to pxFwdr
+#define MCPL_FRAMEIO_EOF_EXT_RDY	0xF2A90000	// within pxFwdr
+#define MCPL_FRAMEIO_EOF_EXT		0xF2AA0000	// from last core in pxFwdr to extL
+#define MCPL_FRAMEIO_OP_INFO		0xF2AB0000	// from LEAD_CORE to pxFwdr and extL
+
+#define MAX_CORE_PER_PIPE			5
+
+#define FRAMEIO_SDRAM_ALLOC_TAG		0xF2F10000
+#define SDPRECV_SYSRAM_ALLOC_TAG	0xF2F20000
+#define DMA_STORE_IMG_TAG			0xF2F30000
+#define DMA_FETCH_IMG_TAG			0xF2F40000
 
 /*------------------------ Struct, Enum, Type definition ----------------------------*/
+
+typedef struct pxFwdr_s {
+	uchar wID;
+	ushort nLinesPerBlock;
+	ushort blkStart;
+	ushort blkEnd;
+	uint szBlk;
+	uchar *imgBufDTCM;
+	uchar *imgBufSDRAM;
+	uchar *imgBufSYSRAM;
+	uchar withSharpening;
+} pxFwdr_t;
+pxFwdr_t pxFwdr;		// will be used only by pxFwdr
+
+typedef struct mcplRecv_s {
+	uchar *imgBufSDRAM;
+} mcplRecv_t;
+mcplRecv_t mcplRecv;	// will be used by both mcplRecv and streamer
 
 
 // Coba cara baru, multiple cores receive frames consecutively. This way, each core
@@ -46,6 +77,9 @@ typedef struct pxBuf {
 	uchar *gpxbuf;
 	uchar *bpxbuf;
 	uchar *ypxbuf;
+	uchar *imgBufSYSRAM;
+
+	volatile uchar dmaDone;
 
 	uchar newFrameRecv;	// new frame received flag
 
@@ -103,7 +137,8 @@ send_result_info_t sendResultInfo;
 
 
 // image/frame size
-uchar pxFwdr_wID;
+uchar *frameIO_SDRAM_img_buf1;	// will be used by pxFwdr
+uchar *frameIO_SDRAM_img_buf2;	// will be used by mcplRecv and streamer
 ushort wImg;
 ushort hImg;
 
@@ -131,7 +166,6 @@ sdp_msg_t resultMsg;			// prepare the result data
 sdp_msg_t histMsg;              // for propagating histogram data
 uint sdpDelayFactorSpin;
 
-block_info_t *blkInfo;			// general frame info stored in sysram, to be shared with workers
 w_info_t workers;				// specific info each core should hold individually
 uchar needSendDebug;
 uint myCoreID;
@@ -167,7 +201,8 @@ void hSDP(uint mBox, uint port);
 void distributeWID(uint arg0, uint arg1);
 void computeWload(uint szFrame, uint arg1);
 void configure_network(uint mBox);
-
+void sdpRecv_infom_pxFwdr(uint sysramAddr, uint arg1);
+void fetch_new_graypx(uint pxLen, uint None);
 
 uchar get_Nworkers();			// leadAp might want to know, how many workers are active
 
