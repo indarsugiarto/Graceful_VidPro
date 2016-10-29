@@ -1,19 +1,40 @@
 #include "frameIO.h"
 
+// TODO: how can we detect how many cores are running frameIO?
+// solution: load frameIO.aplx on cores 3-17 first, then on core 2
+// then LEAD_CORE (core 2) will be able to count properly
+void getNumCorePerPipe(uint *nC, uint *sC)
+{
+	// at the moment, let's just keep this:
+	*nC = 5;
+	*sC = 17;
+}
 
-/* See the previously working initRouter() in museum */
-// TODO: we might move this initRouter() to the profiler to save ITCM
+// NOTE: SpiNNVid has its own initRouter!
 void initRouter()
 {
 	uint e, key, mask, dest, i;
 
 	uint extLink = 0x3F;
-	uint sdpRecv = 0x1FF << 8;
-	uint pxFwdr = 0x1FF << 13;
-	uint mcplRecv = 0x1FF << 18;
-	uint streamer = 1 << 23;
 	uint profiler = 1 << (6 + PROF_CORE);
+	uint streamer = 1 << (nCorePerPipe + streamerCore);
 
+	uint sdpRecv, pxFwdr, mcplRecv;
+
+	uchar sdpRecvStart = 8;
+	uchar pxFwdrStart = 8+nCorePerPipe;
+	uchar mcplRecvStart = 8+2*nCorePerPipe;
+
+	// How many cores are assigned for sdpRecv, pxFwdr, and mcplRecv?
+	e = 0;
+	for(i=0; i<nCorePerPipe; i++)
+		e |= (1 << i);
+
+	sdpRecv = e << sdpRecvStart;
+	pxFwdr = 0x1FF << pxFwdrStart;
+	mcplRecv = 0x1FF << mcplRecvStart;
+
+	// default mask
 	mask = MCPL_FRAMEIO_MASK;
 	//dest :              ST mcplR fwd   sdpR     extL
 	//dest = 0x83E000;	// 1 00000 11111 00000 00 000000
@@ -22,16 +43,20 @@ void initRouter()
 	e = rtr_alloc(nCorePerPipe);
 	for(i=0; i<nCorePerPipe; i++) {
 		key = MCPL_FRAMEIO_FWD_WID | i;
-		dest = 1 << (8 + nCorePerPipe);
+		dest = 1 << (i + pxFwdrStart);
 		rtr_mc_set(e, key, mask, dest); e++;
 	}
+
 
 
 	// key-2: send sdram image buffer address to pxFwdr, mcplRecv, and streamer
 	e = rtr_alloc(1);
 	key = MCPL_FRAMEIO_SDRAM_BUF_ADDR;
+	// both mcplRecv and pxFwdr may receive this key, but they might ignore it
 	dest = streamer | mcplRecv | pxFwdr;
 	rtr_mc_set(e, key, mask, dest);
+
+
 
 	// key-2: send frame info to core 7-11, 17 (streamer),
 	// and extern (SpiNNVid needs to compute workload)
@@ -42,22 +67,30 @@ void initRouter()
 	// NOTE: number of nCorePerPipe must be included in the key_hdr
 	// receiving this, then pxFwdr cores compute its workload
 
-	// key-3: sdpRecv cores tell pxFwdr where to fetch and how much new gray pixels
+
+
+	// key-3: sdpRecv cores tell pxFwdr where and how much new gray pixels from SYSRAM
 	e = rtr_alloc(2*nCorePerPipe);
 	for(i=0; i<nCorePerPipe; i++) {
-		key = MCPL_FRAMEIO_NEWGRAY | (i + LEAD_CORE);
-		dest = 1 << (i + 8 + nCorePerPipe);
+		dest = 1 << (i + pxFwdrStart);
+		key = MCPL_FRAMEIO_SYSRAM_BUF_ADDR | (i + LEAD_CORE);
 		rtr_mc_set(e, key, mask, dest); e++;
-		key = MCPL_FRAMEIO_SYSRARM_BUF | (i + LEAD_CORE);
+		key = MCPL_FRAMEIO_NEWGRAY | (i + LEAD_CORE);
 		rtr_mc_set(e, key, mask, dest); e++;
 	}
 
-	// key-4: LEAD_CORE detect EOF, tell pxFwdr to normalize and/or fwd pixels
+
+
+
+	// key-4: LEAD_CORE detect EOF, tell all pxFwdr cores to normalize and/or fwd pixels
 	// especially for core "7", it will continue with histogram chain
 	e = rtr_alloc(1);
 	key = MCPL_FRAMEIO_EOF_INT;
 	dest = pxFwdr;
 	rtr_mc_set(e, key, mask, dest); e++;
+
+
+
 
 	// key-5: pxFwdr tells its next kin to fetch
 	// always 1 core less than nCorePerPipe
@@ -65,9 +98,12 @@ void initRouter()
 	e = rtr_alloc(nCorePerPipe - 1);
 	for(i=0; i<nCorePerPipe - 1; i++) {
 		key = MCPL_FRAMEIO_HIST_CNTR_NEXT | (i + LEAD_CORE + nCorePerPipe);
-		dest = 1 << (i + 8 + nCorePerPipe + 1);
+		dest = 1 << (i + pxFwdrStart + 1);
 		rtr_mc_set(e, key, mask, dest); e++;
 	}
+
+
+
 
 	// key-6: the last core in pxFwdr tells its group than histogram is ready
 	e = rtr_alloc(1);
@@ -77,6 +113,9 @@ void initRouter()
 	// then each core fetch and compute the hitogram normalizer
 	// each core fetch image data from sdram, apply the histogram and
 	// broadcast it
+	// NOTE: no need for storing the normalized image here, let SpiNNVid do it
+
+
 
 
 	// key-7: pxFwdr tells its next kin that it has finished the bcasting
@@ -84,7 +123,7 @@ void initRouter()
 	e = rtr_alloc(nCorePerPipe);
 	for(i=0; i<nCorePerPipe - 1; i++) {
 		key = MCPL_FRAMEIO_EOF_EXT_RDY | (i + LEAD_CORE + nCorePerPipe);
-		dest = 1 << (i + 8 + nCorePerPipe + 1);
+		dest = 1 << (i + pxFwdrStart + 1);
 		rtr_mc_set(e, key, mask, dest); e++;
 	}
 	key = MCPL_FRAMEIO_EOF_EXT;
@@ -92,347 +131,36 @@ void initRouter()
 	rtr_mc_set(e, key, mask, dest); e++;
 
 
+
+
+
 	// key-8: tell profiler, pxFwdr, streamer and extLink about op_info
+	// pxFwdr needs it to determine if histogram is required
+	// streamer needs it to compute sdpDelayFactorSpin
 	e = rtr_alloc(1);
 	key = MCPL_FRAMEIO_OP_INFO;
 	dest = profiler | pxFwdr | streamer | extLink;
 	rtr_mc_set(e, key, mask, dest);
 
 
-	So, kapan broadcast pixel-nya? Lihat DEFSPINNVID_H
-
-
-
-
-
-
-
-
-
-	uint inner = 0xFFFF80;			// excluding core-0 and external links
-	uint leader = 1 << (LEAD_CORE+6);
-	uint workers = inner & ~profiler & ~streamer;	// for all workers in the chip
-	uint x, y, d, c;
-
-	/*----------------------------------------------------------------------------*/
-	/*----------------------------------------------------------------------------*/
-	/*----------------------- keys for intra-chip routing ------------------------*/
-	// first, set individual destination, assuming all 15 worker cores are available
-	e = rtr_alloc(15);
-	if(e==0) {
-		terminate_SpiNNVid(IO_STD, "initRouter err for intra-chip!\n", RTE_ABORT);
-	} else {
-		// ignore profiler and streamer
-		for(uint i=LEAD_CORE; i<STREAMER_CORE; i++) {
-			// starting from core-2 up to core-16
-			rtr_mc_set(e, i, 0xFFFFFFFF, MC_CORE_ROUTE(i)); e++;
-		}
-	}
-	// other broadcasting keys
-	e = rtr_alloc(6);
-	if(e==0)
-	{
-		terminate_SpiNNVid(IO_STD, "initRouter err for intra-chip!\n", RTE_ABORT);
-	} else {
-		rtr_mc_set(e, MCPL_BCAST_INFO_KEY,	0xFFFFFFFF, workers);	e++;
-		rtr_mc_set(e, MCPL_PING_REPLY,		0xFFFFFFFF, leader);	e++;
-		rtr_mc_set(e, MCPL_BCAST_GET_WLOAD, 0xFFFFFFFF, workers);	e++;
-		rtr_mc_set(e, MCPL_EDGE_DONE,		0xFFFFFFFF, leader);	e++;
-		rtr_mc_set(e, MCPL_FILT_DONE,		0xFFFFFFFF, leader);	e++;
-		rtr_mc_set(e, MCPL_REPORT_HIST2LEAD, MCPL_REPORT_HIST2LEAD_MASK, leader); e++;
-	}
-
-
-
-
-	/*----------------------------------------------------------------------------*/
-	/*----------------------------------------------------------------------------*/
-	/*----------------------- keys for inter-chip routing ------------------------*/
-	x = CHIP_X(sv->p2p_addr);
-	y = CHIP_Y(sv->p2p_addr);
-
-	// broadcasting from root node like:
-	// MCPL_BCAST_SEND_RESULT, MCPL_BCAST_RESET_NET, etc
-	dest = leader;	// by default, go to leadAP, unless:
-#if(USING_SPIN==5)
-	if(x==y) {
-		if(x==0)
-			dest = 1 + (1 << 1) + (1 << 2);
-		else if(x<7)
-			dest += 1 + (1 << 1) + (1 << 2);
-	}
-	else if(x>y) {
-		d = x - y;
-		if(x<7 && d<4)
-			dest += 1;
-	}
-	else if(x<y) {
-		d = y - x;
-		if(d<3 && y<7)
-			dest += (1 << 2);
-	}
-#elif(USING_SPIN==3)
-	if(sv->p2p_addr==0)
-		dest = 1 + (1<<1) + (1<<2);
-#endif
-	e = rtr_alloc(6);
-	if(e==0)
-	{
-		terminate_SpiNNVid(IO_STD, "initRouter err for inter-chip!\n", RTE_ABORT);
-	} else {
-		rtr_mc_set(e, MCPL_BCAST_NODES_INFO,	0xFFFFFFFF, dest); e++;
-		rtr_mc_set(e, MCPL_BCAST_OP_INFO,		0xFFFFFFFF, dest); e++;
-		rtr_mc_set(e, MCPL_BCAST_FRAME_INFO,	0xFFFFFFFF, dest); e++;
-		rtr_mc_set(e, MCPL_BCAST_RESET_NET,		0xFFFFFFFF, dest); e++;
-		rtr_mc_set(e, MCPL_BCAST_NET_DISCOVERY, 0xFFFFFFFF, dest); e++;
-	}
-
-	// special for MCPL_BLOCK_DONE_???
-	// this is for sending toward core <0,0,leadAp>
-	if (x>0 && y>0)			dest = (1 << 4);	// south-west
-	else if(x>0 && y==0)	dest = (1 << 3);	// west
-	else if(x==0 && y>0)	dest = (1 << 5);	// south
-	else					dest = leader;
-	e = rtr_alloc(5);
-	if(e==0)
-	{
-		terminate_SpiNNVid(IO_STD, "initRouter err for special keys!\n", RTE_ABORT);
-	} else {
-		rtr_mc_set(e, MCPL_BLOCK_DONE_TEDGE,	0xFFFF0000, dest); e++;
-		rtr_mc_set(e, MCPL_BLOCK_DONE_TFILT,	0xFFFF0000, dest); e++;
-		rtr_mc_set(e, MCPL_RECV_END_OF_FRAME,	0xFFFF0000, dest); e++;
-		rtr_mc_set(e, MCPL_IGNORE_END_OF_FRAME, 0xFFFFFFFF, workers); e++;
-		rtr_mc_set(e, MCPL_BCAST_NET_REPLY,		0xFFFFFFFF, dest); e++;
-	}
-
-
-
-
-	/*----------------------------------------------------------------------------*/
-	/*----------------------------------------------------------------------------*/
-	/*------------------------ keys for forwarding pixels ------------------------*/
-	dest = workers;
-#if(USING_SPIN==5)
-	if(x==y) {
-		if(x<7)
-			dest += 1 + (1 << 1) + (1 << 2);
-	}
-	else if(x>y) {
-		d = x - y;
-		if(x<7 && d<4)
-			dest += 1;
-	}
-	else if(x<y) {
-		d = y - x;
-		if(d<3 && y<7)
-			dest += (1 << 2);
-	}
-#elif(USING_SPIN==3)
-	if(sv->p2p_addr==0)
-		dest = 1 + (1<<1) + (1<<2);
-#endif
-	e = rtr_alloc(6);
-	if(e==0)
-	{
-		terminate_SpiNNVid(IO_STD, "initRouter err for pixel forwarding!\n", RTE_ABORT);
-	} else {
-		rtr_mc_set(e, MCPL_FWD_PIXEL_INFO,	MCPL_FWD_PIXEL_MASK, dest); e++;
-		rtr_mc_set(e, MCPL_FWD_PIXEL_RDATA, MCPL_FWD_PIXEL_MASK, dest); e++;
-		rtr_mc_set(e, MCPL_FWD_PIXEL_GDATA, MCPL_FWD_PIXEL_MASK, dest); e++;
-		rtr_mc_set(e, MCPL_FWD_PIXEL_BDATA, MCPL_FWD_PIXEL_MASK, dest); e++;
-		rtr_mc_set(e, MCPL_FWD_PIXEL_YDATA, MCPL_FWD_PIXEL_MASK, dest); e++;
-		rtr_mc_set(e, MCPL_FWD_PIXEL_EOF,	MCPL_FWD_PIXEL_MASK, dest); e++;
-	}
-
-
-
-
-	/*----------------------------------------------------------------------------*/
-	/*----------------------------------------------------------------------------*/
-	/*------------------------- keys for all routing -----------------------------*/
-	dest = workers;
-#if(USING_SPIN==5)
-	if(x==y) {
-		if(x<7)
-			dest += 1 + (1 << 1) + (1 << 2);
-	}
-	else if(x>y) {
-		d = x - y;
-		if(x<7 && d<4)
-			dest += 1;
-	}
-	else if(x<y) {
-		d = y - x;
-		if(d<3 && y<7)
-			dest += (1 << 2);
-	}
-#elif(USING_SPIN==3)
-	if(sv->p2p_addr==0)
-		dest += 1 + (1<<1) + (1<<2);
-#endif
-	e = rtr_alloc(4);
-	if(e==0)
-	{
-		terminate_SpiNNVid(IO_STD, "initRouter err for all-routing!\n", RTE_ABORT);
-	} else {
-		rtr_mc_set(e, MCPL_BCAST_ALL_REPORT, 0xFFFFFFFF, dest); e++;
-		rtr_mc_set(e, MCPL_BCAST_START_PROC, 0xFFFFFFFF, dest); e++;
-		// regarding histogram equalization
-		rtr_mc_set(e, MCPL_BCAST_REPORT_HIST, MCPL_BCAST_REPORT_HIST_MASK, dest); e++;
-		rtr_mc_set(e, MCPL_BCAST_HIST_RESULT, MCPL_BCAST_HIST_RESULT_MASK, dest); e++;
-	}
-
-
-
-
-	/*----------------------------------------------------------------------------*/
-	/*----------------------------------------------------------------------------*/
-	/*----------------- keys for sending result using buffering ------------------*/
-
-	// This is the previous version, leadAp instructs workers to be ready...
-	// key type-1: from leadAp-root to its own workers
-	//if(blkInfo->nodeBlockID == 0) { // -> nodeBlockID is not available during this init()!!!!
-	if(sv->p2p_addr == 0) {
-		e = rtr_alloc(1);
-		dest = workers;
-		rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_PREP, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
-	}
-
-	// key type-2: from the leadAp-root to other leadAps
+	// key for MCPL_BCAST_ALL_REPORT that goes everywhere
 	e = rtr_alloc(1);
-	dest = leader;
-#if(USING_SPIN==5)
-	if(x==y) {
-		if(x==0)
-			dest = 1 + (1 << 1) + (1 << 2);
-		else if(x<7)
-			dest += 1 + (1 << 1) + (1 << 2);
-	}
-	else if(x>y) {
-		d = x - y;
-		if(x<7 && d<4)
-			dest += 1;
-	}
-	else if(x<y) {
-		d = y - x;
-		if(d<3 && y<7)
-			dest += (1 << 2);
-	}
-#elif(USING_SPIN==3)
-	if(sv->p2p_addr==0)
-		dest = 1 + (1<<1) + (1<<2);
-#endif
-	rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
+	key = MCPL_BCAST_ALL_REPORT;
+	dest = profiler | sdpRecv | pxFwdr | mcplRecv | streamer | extLink;
+	rtr_mc_set(e, key, mask, dest);
 
-	// key type-3: from the leadAp to workers
+	// key for MCPL_BCAST_RESET_NET that goes to SpiNNVid
 	e = rtr_alloc(1);
-	dest = workers;
-	rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_CORES, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
+	key = MCPL_BCAST_RESET_NET;
+	dest = extLink;
+	rtr_mc_set(e, key, mask, dest);
 
-	// key type-4: from worker to its leadAp
-	e = rtr_alloc(1);
-	dest = (1 << LEAD_CORE+6);	// equal to dest = leader;
-	rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_CORES_DONE, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
-
-	// key type-5: from non-root-cores to root-cores
-	e = rtr_alloc(30);	// 2 x 15 = 30
-	for(c=LEAD_CORE; c<STREAMER_CORE; c++) {
-		key = MCPL_SEND_PIXELS_BLOCK_CORES_DATA | (c << 16);
-		// this is for sending toward core <0,0,leadAp>
-		if (x>0 && y>0)			dest = (1 << 4);	// south-west
-		else if(x>0 && y==0)	dest = (1 << 3);	// west
-		else if(x==0 && y>0)	dest = (1 << 5);	// south
-		else					dest = 1 << (6+c);
-		rtr_mc_set(e, key, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
-		// in addition to type-5, we also use "initial" message
-		key = MCPL_SEND_PIXELS_BLOCK_CORES_INIT | (c << 16);
-		rtr_mc_set(e, key, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
-	}
-
-
-	// key type-6: from root-cores to non-root-cores
-	e = rtr_alloc(16);
-	for(c=2; c<=17; c++) {
-		dest = 1 << (6+c);
-#if(USING_SPIN==5)
-		if(x==y) {
-			if(x==0)
-				dest = 1 + (1 << 1) + (1 << 2);
-			else if(x<7)
-				dest += 1 + (1 << 1) + (1 << 2);
-		}
-		else if(x>y) {
-			d = x - y;
-			if(x<7 && d<4)
-				dest += 1;
-		}
-		else if(x<y) {
-			d = y - x;
-			if(d<3 && y<7)
-				dest += (1 << 2);
-		}
-#elif(USING_SPIN==3)
-		if(sv->p2p_addr==0)
-			dest = 1 + (1<<1) + (1<<2);
-#endif
-		key = MCPL_SEND_PIXELS_BLOCK_CORES_NEXT | (c << 16);
-		rtr_mc_set(e, key, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
-	}
-
-	// key type-7: from node-leadAp to root-leadAp
-	e = rtr_alloc(1);
-	// this is for sending toward core <0,0,leadAp>
-	if (x>0 && y>0)			dest = (1 << 4);	// south-west
-	else if(x>0 && y==0)	dest = (1 << 3);	// west
-	else if(x==0 && y>0)	dest = (1 << 5);	// south
-	else					dest = leader;
-	rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_DONE, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
-
-	// key type-8: tell the streamer to start streamout
-	if(sv->p2p_addr==0) {
-		e = rtr_alloc(3);
-		dest = 1 << (STREAMER_CORE + 6);
-		rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_GO_STREAMER, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
-		rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_SZIMG, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
-		rtr_mc_set(e, MCPL_SEND_PIXELS_BLOCK_INFO_STREAMER_DEL, MCPL_SEND_PIXELS_BLOCK_MASK, dest); e++;
-	}
-
-	/*----------------------------------------------------------------------------*/
-	/*----------------------------------------------------------------------------*/
-	/*----------------------- other keys with special routing --------------------*/
-
-	// communication with the profiler:
-	// 1. all profilers:
-	// 2. internal profiler:
-	dest = profiler;
-#if(USING_SPIN==5)
-	if(x==y) {
-		if(x<7)
-			dest += 1 + (1 << 1) + (1 << 2);
-	}
-	else if(x>y) {
-		d = x - y;
-		if(x<7 && d<4)
-			dest += 1;
-	}
-	else if(x<y) {
-		d = y - x;
-		if(d<3 && y<7)
-			dest += (1 << 2);
-	}
-#elif(USING_SPIN==3)
-	if(sv->p2p_addr==0)
-		dest += 1 + (1 << 1) + (1 << 2);
-#endif
-	e = rtr_alloc(2);
-	if(e==0)
-	{
-		terminate_SpiNNVid(IO_STD, "initRouter err for other keys!\n", RTE_ABORT);
-	} else {
-		rtr_mc_set(e, MCPL_TO_ALL_PROFILER,	0xFFFFFFFF, dest); e++;
-		rtr_mc_set(e, MCPL_TO_OWN_PROFILER, 0xFFFFFFFF, profiler); e++;
-	}
+	// So, kapan broadcast pixel-nya? Lihat DEFSPINNVID_H
 }
+
+
+
+
 
 void initSDP()
 {
@@ -443,13 +171,6 @@ void initSDP()
 	resultMsg.dest_addr = sv->eth_addr;
 	//resultMsg.length = ??? --> need to be modified later
 
-	// and the histogram data
-	histMsg.flags = 0x07;
-	histMsg.tag = 0;
-	histMsg.srce_addr = sv->p2p_addr;
-	histMsg.srce_port = (SDP_PORT_HISTO << 5) + myCoreID;
-	histMsg.dest_port = (SDP_PORT_HISTO << 5) + 1;	// WARNING: assuming leadAp is core-1
-	histMsg.length = sizeof(sdp_hdr_t) + sizeof(cmd_hdr_t) + 256;
 }
 
 // TODO: iptags aren't set properly for different IP address
@@ -457,6 +178,7 @@ void initIPTag()
 {
 	// only chip <0,0>
 	if(sv->p2p_addr==0) {
+		// prepare the sdp packet
 		sdp_msg_t iptag;
 		iptag.flags = 0x07;	// no replay
 		iptag.tag = 0;		// internal

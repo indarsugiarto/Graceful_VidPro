@@ -1,26 +1,13 @@
 #include "frameIO.h"
 
-void resizeSDRAMbuf()
-{
-	// release if already exist
-	if(frameIO_SDRAM_img_buf != NULL) {
-		sark_xfree(sv->sdram_heap, frameIO_SDRAM_img_buf1, ALLOC_LOCK);
-		sark_xfree(sv->sdram_heap, frameIO_SDRAM_img_buf2, ALLOC_LOCK);
-	}
-	// create and check if available
-	uint sz = hImg * wImg;
-	uint allocTag = FRAMEIO_SDRAM_ALLOC_TAG | 1;
-	frameIO_SDRAM_img_buf1 = sark_xalloc(sv->sdram_heap, sz,
-										allocTag, ALLOC_LOCK);
-	allocTag = FRAMEIO_SDRAM_ALLOC_TAG | 2;
-	frameIO_SDRAM_img_buf2 = sark_xalloc(sv->sdram_heap, sz,
-										 allocTag, ALLOC_LOCK);
-	if(frameIO_SDRAM_img_buf1==NULL || frameIO_SDRAM_img_buf2==NULL) {
-		io_printf(IO_STD, "[FRAMEIO] SDRAM img buffer error!\n");
-		rt_error(RTE_ABORT);
-	}
-}
+// forward declarations
+void resizeSDRAMbuf();
+void configure_network(uint mBox);
 
+
+/*-----------------------------------------------------------------------------------*/
+/*-----------------------------------------------------------------------------------*/
+/*------------------------------ MAIN HANDLER FUNCTION ------------------------------*/
 void hSDP(uint mBox, uint port)
 {
 	sdp_msg_t *msg = (sdp_msg_t *)mBox;
@@ -43,7 +30,7 @@ void hSDP(uint mBox, uint port)
 			wImg = msg->arg1 >> 16;
 			resizeSDRAMbuf();
 
-			// second, tell pxFwdr where to store/fetch into it
+			// second, tell pxFwdr and mcplRecv where to store/fetch into it
 			uint key = MCPL_FRAMEIO_SDRAM_BUF_ADDR | SDRAM_BUFF_1_ID;
 			spin1_send_mc_packet(key, (uint)frameIO_SDRAM_img_buf1, WITH_PAYLOAD);
 			key = MCPL_FRAMEIO_SDRAM_BUF_ADDR | SDRAM_BUFF_2_ID;
@@ -94,7 +81,20 @@ void hSDP(uint mBox, uint port)
 		sark_mem_cpy(pxBuffer.bpxbuf, &msg->cmd_rc, pxBuffer.pxLen);
 
 		// process gray scalling and forward afterwards
-		spin1_schedule_callback(processGrayScaling, 0, 0, PRIORITY_PROCESSING);
+		spin1_schedule_callback(processGrayScaling, SDP_RGB_IMAGE, 0, PRIORITY_PROCESSING);
+	}
+	else if(port==SDP_PORT_Y_IMG_DATA){
+		pxBuffer.pxSeq = (msg->tag << 8) | msg->srce_port;
+		pxBuffer.pxLen = msg->length - 8;
+		uint dmatag = DMA_STORE_IMG_TAG | myCoreID;
+		pxBuffer.dmaDone = FALSE;
+		do {
+			dmatid = spin1_dma_transfer(dmatag, pxBuffer.imgBufSYSRAM, &msg->cmd_rc,
+									 DMA_WRITE, pxBuffer.pxLen);
+		} while(dmatid==0);
+
+		// process gray scalling and forward afterwards
+		spin1_schedule_callback(processGrayScaling, SDP_GRAY_IMAGE, 0, PRIORITY_PROCESSING);
 	}
 	// NOTE: EOF can be detected if pxBuffer.pxSeq == 0xFFFF, or, alternatively
 	// by sending empty message via SDP_PORT_FRAME_END
@@ -123,6 +123,34 @@ void hSDP(uint mBox, uint port)
 	// Note: variable msg might be released somewhere else
 	spin1_msg_free(msg);
 }
+
+
+
+
+/*-----------------------------------------------------------------------------------*/
+/*-----------------------------------------------------------------------------------*/
+/*------------------------------ IMPLEMENTATION DETAIL ------------------------------*/
+void resizeSDRAMbuf()
+{
+	// release if already exist
+	if(frameIO_SDRAM_img_buf1 != NULL) {
+		sark_xfree(sv->sdram_heap, frameIO_SDRAM_img_buf1, ALLOC_LOCK);
+		sark_xfree(sv->sdram_heap, frameIO_SDRAM_img_buf2, ALLOC_LOCK);
+	}
+	// create and check if available
+	uint sz = hImg * wImg;
+	uint allocTag = FRAMEIO_SDRAM_ALLOC_TAG | 1;	// for image from sdp
+	frameIO_SDRAM_img_buf1 = sark_xalloc(sv->sdram_heap, sz,
+										allocTag, ALLOC_LOCK);
+	allocTag = FRAMEIO_SDRAM_ALLOC_TAG | 2;			// for image from mcpl
+	frameIO_SDRAM_img_buf2 = sark_xalloc(sv->sdram_heap, sz,
+										 allocTag, ALLOC_LOCK);
+	if(frameIO_SDRAM_img_buf1==NULL || frameIO_SDRAM_img_buf2==NULL) {
+		io_printf(IO_STD, "[FRAMEIO] SDRAM img buffer error!\n");
+		rt_error(RTE_ABORT);
+	}
+}
+
 
 
 /* frameIO will decode the network configuration and broadcast it to all

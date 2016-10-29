@@ -14,14 +14,19 @@ void c_main()
 	myCoreID = sark_core_id();
 
 	// TODO: gracefully allocate, how many cores will be used per pipeline
-	// at the moment, let's fix it:
-	nCorePerPipe = 5;
+	getNumCorePerPipe(&nCorePerPipe, &streamerCore);
 
 #if (DESTINATION==DEST_FPGA)
 	if(sv->p2p_addr==0)
 		rtr_fr_set(1 << 4);	// send to link-4, where FPGA is connected to
 #endif
 
+	/*----------------------------------------------------------------------------*/
+	/*--------------------------- register callbacks -----------------------------*/
+	spin1_callback_on(MCPL_PACKET_RECEIVED, hMCPL, PRIORITY_MCPL);
+	spin1_callback_on(MC_PACKET_RECEIVED, hMC, PRIORITY_MC);
+	spin1_callback_on(DMA_TRANSFER_DONE, hDMA, PRIORITY_DMA);
+	spin1_callback_on(SDP_PACKET_RX, hSDP, PRIORITY_SDP);
 
 	/* Only sdpRecv cores need to allocate pxBuffer and sysram Buffer */
 	if((myCoreID >= LEAD_CORE) && (myCoreID < (LEAD_CORE+nCorePerPipe))) {
@@ -32,6 +37,8 @@ void c_main()
 		pxBuffer.gpxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, 1); // for green chunk
 		pxBuffer.bpxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, 1); // for blue chunk
 		pxBuffer.ypxbuf = sark_alloc(DEF_PXLEN_IN_CHUNK, 1); // for gray chunk
+
+		// then allocate buffer in sysram to contains a chunk (272) of pixels
 		uint memTag = SDPRECV_SYSRAM_ALLOC_TAG | myCoreID;
 		pxBuffer.imgBufSYSRAM = sark_xalloc(sv->sysram_heap, 272, memTag, ALLOC_LOCK);
 		if(pxBuffer.imgBufSYSRAM==NULL) {
@@ -42,18 +49,13 @@ void c_main()
 		}
 	}
 
-	/*----------------------------------------------------------------------------*/
-	/*--------------------------- register callbacks -----------------------------*/
-	spin1_callback_on(MCPL_PACKET_RECEIVED, hMCPL, PRIORITY_MCPL);
-	spin1_callback_on(MC_PACKET_RECEIVED, hMC, PRIORITY_MC);
-	spin1_callback_on(DMA_TRANSFER_DONE, hDMA, PRIORITY_DMA);
-	spin1_callback_on(SDP_PACKET_RX, hSDP, PRIORITY_SDP);
-
 
 	/*----------------------------------------------------------------------------*/
 	/*------------------------ other initializations -----------------------------*/
 
-	initSDP();
+	if(myCoreID==streamerCore) {
+		initSDP();
+	}
 
 	if(myCoreID==LEAD_CORE) {
 

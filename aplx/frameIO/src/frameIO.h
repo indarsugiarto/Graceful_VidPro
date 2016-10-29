@@ -14,12 +14,18 @@
 // how many cores are allocated for each pipeline: sdpRecv, pxFwdr, and mcplRecv
 uint nCorePerPipe;
 
+// who becomes the streamer that responsible for streaming out?
+uint streamerCore;
+
 /* In this version: implementing Histogram Equalization in frameIO
  *
  * */
 
-#define SDRAM_BUFF_1_ID				1
-#define SDRAM_BUFF_2_ID				2
+#define SDP_RGB_IMAGE				0			// host sends RGB image
+#define SDP_GRAY_IMAGE				1			// host sends gray image
+
+#define SDRAM_BUFF_1_ID				1			// buffer for image from sdp
+#define SDRAM_BUFF_2_ID				2			// buffer for image from mcpl
 
 #define MCPL_FRAMEIO_MASK			0xFFFF0000	// so it contains header and arg
 
@@ -185,6 +191,7 @@ uchar *dtcmImgFilt;				// similar with dtcmImgBuf, but fixed to 5 block instead 
 /*------------------------- Forward declarations ----------------------------*/
 
 // Initialization
+void getNumCorePerPipe(uint *nC, uint *sC);	// get nCorePerPipe and streamer
 void initRouter();
 void initSDP();
 void initIPTag();
@@ -200,7 +207,6 @@ void hSDP(uint mBox, uint port);
 // Misc. functions
 void distributeWID(uint arg0, uint arg1);
 void computeWload(uint szFrame, uint arg1);
-void configure_network(uint mBox);
 void sdpRecv_infom_pxFwdr(uint sysramAddr, uint arg1);
 void fetch_new_graypx(uint pxLen, uint None);
 
@@ -212,7 +218,7 @@ void releaseImgBuf();
 void allocateImgBuf();		// allocate image buffers in SDRAM, called for every new frame
 void allocateDtcmImgBuf();	// allocate image buffers in DTCM, called just once (during config only)
 
-void processGrayScaling(uint arg0, uint arg1);
+void processGrayScaling(uint rgbORgray, uint arg1);
 void recvFwdImgData(uint key, uint payload);
 void collectGrayPixels(uint arg0, uint arg1);
 

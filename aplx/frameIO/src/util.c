@@ -36,3 +36,4 @@ volatile uint giveDelay(uint delVal)
   }
   return dummy;
 }
+

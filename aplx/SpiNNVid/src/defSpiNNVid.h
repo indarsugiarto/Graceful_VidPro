@@ -132,9 +132,8 @@
 #define SDP_PORT_R_IMG_DATA			1	// port for sending R-channel
 #define SDP_PORT_G_IMG_DATA			2	// port for sending G-channel
 #define SDP_PORT_B_IMG_DATA			3	// port for sending B-channel
-#define SDP_PORT_FRAME_INFO			4   // tell spin frame size or EOF
-//#define SDP_PORT_FRAME_INFO			5   // will be used to send the basic info about frame
-#define SDP_PORT_HISTO				5
+#define SDP_PORT_Y_IMG_DATA			4	// port for sending Y-channel only
+#define SDP_PORT_FRAME_INFO			5   // tell spin frame size or EOF
 #define SDP_PORT_MISC				6	// misc. functions, eq. debug, reset
 #define SDP_PORT_CONFIG				7	// for sending image/frame info
 #define SDP_PORT_PROFILER_RPT		7
@@ -344,6 +343,8 @@
 #define IMG_DVS						3
 #define IMG_WITHOUT_FILTER			0
 #define IMG_WITH_FILTER				1
+#define IMG_WITHOUT_HISTEQ			0
+#define IMG_WITH_HISTEQ				1
 
 
 // Profiler message

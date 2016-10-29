@@ -12,9 +12,11 @@ void distributeWID(uint arg0, uint arg1)
 }
 
 
+// in the beginning, sdpRecv allocate buffers in sysram that needs
+// to be shared with pxFwdr
 void sdpRecv_infom_pxFwdr(uint sysramAddr, uint arg1)
 {
-	uint key = MCPL_FRAMEIO_SYSRARM_BUF | myCoreID;
+	uint key = MCPL_FRAMEIO_SYSRAM_BUF_ADDR | myCoreID;
 	spin1_send_mc_packet(key, sysramAddr, WITH_PAYLOAD);
 }
 
@@ -84,13 +86,17 @@ void computeWload(uint szFrame, uint arg1)
 }
 
 
-/* processGrayScaling() is called when the blue-channel chunk is received. Assuming
+/* in RGB scenario:
+ * processGrayScaling() is called when the blue-channel chunk is received. Assuming
  * that the other channels' chunks are received as well.
  *
  * When gray computation is finish, the sdpRecv core stores it in sysram and tells
  * its pxFwdr partner its address to fetch.
+ *
+ * in gray scenario:
+ * processGrayScaling() without conversion
  */
-void processGrayScaling(uint arg0, uint arg1)
+void processGrayScaling(uint rgbORgray, uint arg1)
 {
 	/* Problem with uchar and stdfix:
 	 * Somehow, uchar is treated weirdly by stdfix. For example, if rpxBuf[0]==255:
@@ -100,37 +106,40 @@ void processGrayScaling(uint arg0, uint arg1)
 	 * then printing (REAL)c = %k -> will produce 255.00000 !!!! WTF!!!
 	 * Solution: create temporary variable other than uchar
 	 * */
-	REAL tmp;
-	REAL v1,v2,v3;
-	uchar grVal;
-	for(ushort i=0; i<pxBuffer.pxLen; i++) {
-		v1 = (REAL)pxBuffer.rpxbuf[i];
-		v2 = (REAL)pxBuffer.gpxbuf[i];
-		v3 = (REAL)pxBuffer.bpxbuf[i];
+	if(rgbORgray==SDP_RGB_IMAGE) {	// only for RGB image
+		REAL tmp;
+		REAL v1,v2,v3;
+		uchar grVal;
+		for(ushort i=0; i<pxBuffer.pxLen; i++) {
+			v1 = (REAL)pxBuffer.rpxbuf[i];
+			v2 = (REAL)pxBuffer.gpxbuf[i];
+			v3 = (REAL)pxBuffer.bpxbuf[i];
 
-		tmp = roundr(v1*R_GRAY + v2*G_GRAY + v3*B_GRAY);
-		// why round first? because if not, it truncate to lower integer
+			tmp = roundr(v1*R_GRAY + v2*G_GRAY + v3*B_GRAY);
+			// why round first? because if not, it truncate to lower integer
 
-		grVal = (uchar)tmp;
+			grVal = (uchar)tmp;
 
-		//pxBuffer.ypxbuf[i] = grVal;
-		pxBuffer.ypxbuf[i] = grVal;
+			//pxBuffer.ypxbuf[i] = grVal;
+			pxBuffer.ypxbuf[i] = grVal;
+		}
+		// then store ypxbuf in sysram
+		uint dmatag = DMA_STORE_IMG_TAG | myCoreID;
+		uint dmatid;
+		pxBuffer.dmaDone = FALSE;
+		do {
+			dmatid = spin1_dma_transfer(dmatag, pxBuffer.imgBufSYSRAM, pxBuffer.ypxbuf,
+									 DMA_WRITE, pxBuffer.pxLen);
+		} while(dmatid==0);
 	}
 
-
-	// then store ypxbuf in sysram
-	uint dmatag = DMA_STORE_IMG_TAG | myCoreID;
-	uint dmatid;
-	pxBuffer.dmaDone = FALSE;
-	do {
-		dmatid = spin1_dma_transfer(dmatag, pxBuffer.imgBufSYSRAM, pxBuffer.ypxbuf,
-								 DMA_WRITE, pxBuffer.pxLen);
-	} while(dmatid==0);
-
-	// then wait until dma complete
+	// for both SDP_RGB_IMAGE and SDP_GRAY_IMAGE, continues from here:
+	// wait until dma complete
 	while(pxBuffer.dmaDone==FALSE);
 
 	// then tell its pxFwdr partner how many pixels to fetch it from Sysram
+	// at this point, pxFwdr should have known the SYSRAM buffer for this chunk
+	// see: sdpRecv_infom_pxFwdr()
 	uint key = MCPL_FRAMEIO_NEWGRAY | myCoreID;
 	uint pload = (pxBuffer.pxSeq << 16) | pxBuffer.pxLen;
 	spin1_send_mc_packet(key, pload, WITH_PAYLOAD);
@@ -163,10 +172,18 @@ void processGrayScaling(uint arg0, uint arg1)
 /* fetch_new_graypx() is triggered when sdpRecv tells pxFwdr.
  * pxFwdr will fetch from sysram buffer, do histogram counting if necessary,
  * and put into sdram buffer.
+ * At this point, pxFwdr should already have valid SYSRAM address.
  * */
 void fetch_new_graypx(uint pxLen, uint None)
 {
+	// Do we need the sharpening?
+	if(pxFwdr.withSharpening==IMG_WITH_HISTEQ) {
 
+	}
+	// if not, then just continue with broadcast
+	else {
+		Terakhir sampai sini...
+	}
 }
 
 
